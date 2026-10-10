@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from config import BASE, ENV_STATUS, OUTPUT_DIR, env, is_mock
 from videos import has_video_key
 from pipeline import build_quiz
+from questions import CATEGORY_LABELS
 from tts import VOICES
 
 app = FastAPI(title="Quiz Video Maker")
@@ -23,6 +24,7 @@ lock = threading.Lock()
 class GenerateRequest(BaseModel):
     questions: int = Field(default=5, ge=3, le=10)
     voice: str = Field(default="en-US-AriaNeural", max_length=60)
+    categories: list[int] = Field(default_factory=list, max_length=24)  # empty = mix of all
 
 
 def run_job(job_id: str, req: GenerateRequest):
@@ -33,7 +35,8 @@ def run_job(job_id: str, req: GenerateRequest):
         job["progress"] = round(frac, 3)
 
     try:
-        result = build_quiz(req.questions, req.voice, progress)
+        cats = [c for c in req.categories if c in CATEGORY_LABELS]
+        result = build_quiz(req.questions, req.voice, progress, cats)
         job.update(status="done", progress=1.0, message="Done!", video_url=f"/output/{result['file']}",
                    questions=result["questions"], duration=result["duration"])
     except Exception as e:
@@ -52,6 +55,7 @@ def config():
         "env_loaded_from": ENV_STATUS["loaded_from"],
         "claude_key": bool(env("ANTHROPIC_API_KEY")),
         "voices": [{"id": v, "label": label} for v, label in VOICES],
+        "categories": [{"id": i, "label": label} for i, label in CATEGORY_LABELS.items()],
     }
 
 

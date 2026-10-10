@@ -55,12 +55,6 @@ CATEGORY_QUERY = {
 }
 
 
-# Categories that tend to have obscure questions the average viewer can't answer.
-NICHE_CATEGORIES = {
-    "entertainment: japanese anime & manga", "entertainment: board games", "entertainment: comics",
-    "entertainment: musicals & theatres", "science: computers", "science: mathematics",
-    "science: gadgets", "politics", "art", "celebrities", "vehicles", "mythology",
-}
 
 
 def _qid(text: str) -> str:
@@ -137,6 +131,19 @@ CATEGORY_THEMES = {
     "entertainment: television": ["television", "watching tv", "tv studio", "remote control", "living room tv"],
     "entertainment: video games": ["playing video games", "gaming", "gamer", "video game controller", "esports"],
     "entertainment: cartoon & animations": ["cartoon", "animation drawing", "colorful animation", "drawing sketch"],
+    "entertainment: books": ["library books", "reading book", "bookshelf", "old books"],
+    "entertainment: musicals & theatres": ["theater stage", "stage lights", "theater curtain", "audience applause"],
+    "entertainment: board games": ["board game", "chess", "playing cards", "dice"],
+    "science: computers": ["computer code", "technology", "server room", "typing keyboard"],
+    "science: mathematics": ["mathematics", "chalkboard equations", "numbers", "calculator"],
+    "science: gadgets": ["gadgets", "technology", "smartphone", "electronics"],
+    "mythology": ["ancient temple", "greek statue", "ancient ruins", "old marble"],
+    "politics": ["government building", "flags", "capitol building", "voting"],
+    "art": ["art gallery", "painting", "artist painting", "sculpture"],
+    "celebrities": ["red carpet", "paparazzi flash", "city lights", "limousine"],
+    "vehicles": ["cars driving", "highway traffic", "sports car", "motorcycle"],
+    "entertainment: comics": ["comic books", "colorful comics", "drawing sketch", "superhero city"],
+    "entertainment: japanese anime & manga": ["japan city night", "tokyo street", "cherry blossom", "drawing sketch"],
 }
 PROPER_OK = {"geography", "history", "sports", "general knowledge"}
 
@@ -200,15 +207,18 @@ def _usable(q: str, correct: str, wrong: list) -> bool:
     return True
 
 
-# Open Trivia DB category ids. Anything stock footage can't show literally gets themed footage instead.
-VISUAL_CATEGORIES = {9: "General Knowledge", 17: "Science & Nature", 22: "Geography", 23: "History",
-                     21: "Sports", 27: "Animals", 12: "Entertainment: Music", 11: "Entertainment: Film",
-                     14: "Entertainment: Television", 15: "Entertainment: Video Games",
-                     32: "Entertainment: Cartoon & Animations"}
+# Every Open Trivia DB category the user can pick (id -> label shown on the page).
+CATEGORY_LABELS = {
+    9: "General Knowledge", 17: "Science & Nature", 22: "Geography", 23: "History", 21: "Sports",
+    27: "Animals", 12: "Music", 11: "Film", 14: "Television", 15: "Video Games", 32: "Cartoons & Animation",
+    10: "Books", 13: "Musicals & Theatre", 16: "Board Games", 18: "Computers", 19: "Mathematics",
+    20: "Mythology", 24: "Politics", 25: "Art", 26: "Celebrities", 28: "Vehicles", 29: "Comics",
+    30: "Gadgets", 31: "Anime & Manga",
+}
 
 
-def _fetch_category(cid: int):
-    url = f"https://opentdb.com/api.php?amount=20&category={cid}&type=multiple&difficulty=easy&encode=url3986"
+def _fetch_category(cid: int, amount: int = 20):
+    url = f"https://opentdb.com/api.php?amount={amount}&category={cid}&type=multiple&difficulty=easy&encode=url3986"
     for _ in range(3):
         try:
             r = requests.get(url, timeout=30)
@@ -216,23 +226,29 @@ def _fetch_category(cid: int):
                 data = r.json()
                 if data.get("response_code") == 0:
                     return data["results"]
+                if data.get("response_code") in (1, 2):  # not enough questions in this category
+                    return []
         except requests.RequestException:
             pass
         time.sleep(6)  # Open Trivia DB allows one request per 5 seconds
     return []
 
 
-def _from_opentdb() -> list:
+def _from_opentdb(categories=None, avoid=()) -> list:
+    """Questions from the chosen categories (empty/None = a mix of all of them)."""
     u = urllib.parse.unquote
+    ids = [c for c in (categories or []) if c in CATEGORY_LABELS] or list(CATEGORY_LABELS)
+    picked = random.sample(ids, min(3, len(ids)))
+    amount = {1: 50, 2: 30}.get(len(picked), 20)
     out = []
-    for n, cid in enumerate(random.sample(list(VISUAL_CATEGORIES), 3)):
+    for n, cid in enumerate(picked):
         if n:
             time.sleep(5.5)
-        for item in _fetch_category(cid):
+        for item in _fetch_category(cid, amount):
             q, correct = u(item["question"]), u(item["correct_answer"])
             wrong = [u(x) for x in item["incorrect_answers"]]
             cat = u(item["category"])
-            if cat.lower() in NICHE_CATEGORIES or not _usable(q, correct, wrong):
+            if not _usable(q, correct, wrong):
                 continue
             out.append({"question": q, "correct": correct, "wrong": wrong, "category": cat,
                         "video_queries": keywords_from(q, correct, cat)})
@@ -241,12 +257,15 @@ def _from_opentdb() -> list:
     return out
 
 
-def _from_claude(n: int, avoid: list) -> list:
+def _from_claude(n: int, avoid: list, categories=None) -> list:
     avoid_text = "\n".join(f"- {a}" for a in avoid) or "(none)"
+    chosen = [CATEGORY_LABELS[c] for c in (categories or []) if c in CATEGORY_LABELS]
+    topics = ("Use ONLY these topics: " + ", ".join(chosen) + ".") if chosen else \
+        "Mix topics: science, history, geography, pop culture, animals, food, sports, space, etc."
     prompt = f"""Create {n + 4} diverse, fun trivia questions for a short TikTok quiz video.
 
 Rules:
-- Mix topics: science, history, geography, pop culture, animals, food, sports, space, etc.
+- {topics}
 - EASY, widely known questions that most people could answer (school-level or everyday general knowledge). No obscure trivia, niche fandoms, or specific dates/statistics.
 - Exactly one clearly correct answer.
 - Question under 110 characters. Each answer under 28 characters.
@@ -304,7 +323,7 @@ def _mock_pool() -> list:
              "video_queries": [vq, "abstract background"]} for q, c, w, cat, vq in _MOCK_BANK]
 
 
-def get_questions(n: int) -> list:
+def get_questions(n: int, categories=None) -> list:
     history = _load_history()
     if is_mock():
         pool = _mock_pool()
@@ -313,11 +332,11 @@ def get_questions(n: int) -> list:
         pool = None
         if source == "claude":
             try:
-                pool = _from_claude(n, list(history.values())[-40:])
+                pool = _from_claude(n, list(history.values())[-40:], categories)
             except Exception as e:
                 print(f"[questions] Claude failed ({e}); falling back to Open Trivia DB")
         if not pool:
-            pool = _from_opentdb()
+            pool = _from_opentdb(categories)
     fresh = [q for q in pool if _qid(q["question"]) not in history]
     stale = [q for q in pool if _qid(q["question"]) in history]
     random.shuffle(fresh)

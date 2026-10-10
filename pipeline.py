@@ -67,12 +67,13 @@ def cleanup_disk() -> None:
                 pass
 
 
-def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None) -> dict:
+def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None,
+               categories=None) -> dict:
     job_dir = WORK_DIR / uuid.uuid4().hex[:8]
     job_dir.mkdir(parents=True)
     try:
         progress("Picking questions...", 0.03)
-        raw = get_questions(n_questions)
+        raw = get_questions(n_questions, categories)
         quiz = []
         for q, ci in zip(raw, pick_letters(n_questions)):
             others = list(q["wrong"][:3])
