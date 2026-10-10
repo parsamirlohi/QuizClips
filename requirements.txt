@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+requests
+pillow>=10.1
+numpy
+imageio-ffmpeg
+edge-tts

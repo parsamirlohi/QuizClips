@@ -1,0 +1,67 @@
+# Quiz Video Maker
+
+Click **Generate** and get a new vertical (1080x1920) trivia quiz video for TikTok:
+
+- Fresh questions every time (it remembers past ones and avoids repeats)
+- The correct answer lands on a different letter each time (A-D, never the same twice in a row)
+- A Pixabay stock video behind each question, searched from the question's topic
+- AI narration reads the question and each choice, then announces the answer
+- A "bing" sound on the reveal, with a countdown tick before it
+
+## Quick start
+
+1. Install Python 3.10 or newer from python.org (Windows: tick "Add Python to PATH").
+2. Get your free Pixabay key: sign up at pixabay.com, then open https://pixabay.com/api/docs/ while logged in. The key is shown next to `key (required)`.
+3. Start the app:
+   - **Mac:** double-click `run_mac.command` (if macOS blocks it, right-click, Open; or run `chmod +x run_mac.command` first).
+   - **Windows:** double-click `run_windows.bat`.
+4. The first time, it installs what it needs, asks you to paste your key, and saves it to a `.env` file for you.
+5. Your browser opens http://localhost:8000. Pick the number of questions and a voice, then click **Generate quiz video**.
+
+Next time, just double-click the same launcher. Videos are saved in the `output` folder.
+A 5-question video is about 1.5 minutes long and takes a minute or two to render.
+
+Prefer the terminal? `pip install -r requirements.txt`, then `python set_key.py`, then `python app.py`
+(use `python3` / `pip3` on a Mac).
+
+## Troubleshooting
+
+- **Banner says no key / no settings file:** it shows exactly where it looks. The file must be named `.env`
+  (not `.env.example`) and sit next to `app.py`. Run `python set_key.py` to create it correctly.
+  After changing it, stop the app (Ctrl+C) and start it again.
+- **"Pixabay error 400/401":** the key was pasted wrong. Run `python set_key.py` again.
+- **"Could not fetch questions":** the free question site allows one request every few seconds. Wait a bit and retry.
+- **Narration fails:** the voices come from Microsoft's free service and need an internet connection.
+
+## Options (all go in `.env`)
+
+- `ANTHROPIC_API_KEY=` Claude writes the questions and picks footage searches that fit the topic without
+  giving away the answer. Without it, questions come from the free Open Trivia DB.
+- `THINK_SECONDS=5` length of the countdown before each reveal.
+- `VIDEO_ENCODER=h264_videotoolbox` faster rendering on a Mac (`h264_nvenc` on an NVIDIA GPU).
+- `PEXELS_API_KEY=` use Pexels instead (sharper portrait video). If both keys are set, Pexels is used; force
+  one with `VIDEO_SOURCE=pixabay`.
+- Your own bing sound: put `bing.wav` (or .mp3) in the `assets` folder.
+- Test mode: `MOCK=1` runs offline with placeholder questions, backgrounds and voice.
+
+## Notes
+
+- Pixabay allows 100 requests per minute. Each video uses about one request per question, and results are cached.
+- Pixabay has no portrait filter, so its widescreen clips are center-cropped to vertical.
+- Pixabay asks that you credit them when showing search results; the page footer does this.
+- Downloaded clips are cached in `cache` so repeats don't re-download.
+- Keep your `.env` private. Don't share it or zip it.
+
+## Files
+
+| File | What it does |
+| --- | --- |
+| `run_mac.command`, `run_windows.bat` | One-click launchers (install, set key on first run, start) |
+| `set_key.py` | Asks for your key and saves the `.env` file |
+| `app.py` | Web server and the Generate button |
+| `pipeline.py` | Builds one video start to finish and sets the timing |
+| `questions.py` | Gets questions, shuffles answer letters, builds video search words |
+| `videos.py` | Searches and downloads background videos (Pixabay and Pexels) |
+| `tts.py` | AI narration |
+| `audio.py` | Mixing and the bing / tick / pop sounds |
+| `render.py` | Draws the quiz graphics and renders each scene with ffmpeg |

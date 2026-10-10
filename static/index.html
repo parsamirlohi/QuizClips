@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quiz Video Maker</title>
+<style>
+  :root { color-scheme: dark; --bg:#0d0e12; --card:#171923; --line:#272a37; --text:#eceef4; --muted:#8c91a5; --accent:#ff2d6f; --accent2:#7c5cff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 36px 16px 80px; }
+  h1 { font-size: 30px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .panel { background: var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+  label { display:flex; flex-direction:column; gap:6px; color:var(--muted); font-size:14px; }
+  select { background:#0d0e12; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; min-width:170px; }
+  #go { width:100%; border:0; border-radius:14px; padding:18px; font:inherit; font-size:20px; font-weight:700; color:#fff; cursor:pointer;
+        background:linear-gradient(90deg,var(--accent),var(--accent2)); }
+  #go:disabled { opacity:.5; cursor:not-allowed; }
+  .warn { background:#2a1d12; border:1px solid #5a3b1c; color:#ffcf99; border-radius:12px; padding:12px 14px; margin-bottom:16px; display:none; }
+  .err { color:#ff8a8a; margin-top:12px; white-space:pre-wrap; }
+  #status { display:none; margin-top:18px; }
+  .bar { height:10px; background:#0d0e12; border-radius:99px; overflow:hidden; }
+  .bar > i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .4s; }
+  #msg { color:var(--muted); margin-top:8px; font-size:14px; }
+  #result { display:none; margin-top:24px; }
+  #result video { width:100%; max-width:360px; aspect-ratio:9/16; background:#000; border-radius:14px; display:block; margin:0 auto 14px; }
+  .dl { display:block; width:max-content; margin:0 auto 18px; background:#fff; color:#111; text-decoration:none; font-weight:700; padding:10px 22px; border-radius:10px; }
+  ol { color:var(--muted); font-size:14px; padding-left:20px; }
+  ol b { color:var(--text); }
+  h2 { font-size:18px; margin:36px 0 12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
+  .grid video { width:100%; aspect-ratio:9/16; background:#000; border-radius:10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Quiz Video Maker</h1>
+  <p class="sub">One click makes a new vertical trivia video for TikTok.</p>
+
+  <div class="warn" id="warn"></div>
+
+  <div class="panel">
+    <div class="row">
+      <label>Questions
+        <select id="count"></select>
+      </label>
+      <label>Voice
+        <select id="voice"></select>
+      </label>
+    </div>
+    <button id="go">Generate quiz video</button>
+    <div class="err" id="err"></div>
+
+    <div id="status">
+      <div class="bar"><i id="fill"></i></div>
+      <div id="msg"></div>
+    </div>
+
+    <div id="result">
+      <video id="player" controls playsinline></video>
+      <a class="dl" id="dl" download>Download video</a>
+      <ol id="qlist"></ol>
+    </div>
+  </div>
+
+  <h2>Previous videos</h2>
+  <div class="grid" id="grid"></div>
+  <p class="sub" style="margin-top:32px;font-size:13px">Background footage from <a href="https://pixabay.com" style="color:var(--muted)">Pixabay</a> and <a href="https://www.pexels.com" style="color:var(--muted)">Pexels</a>.</p>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+for (let n = 3; n <= 10; n++) $("count").add(new Option(n + " questions", n, n === 5, n === 5));
+
+async function init() {
+  const cfg = await (await fetch("/api/config")).json();
+  cfg.voices.forEach((v) => $("voice").add(new Option(v.label, v.id)));
+  const warns = [];
+  if (cfg.mock) warns.push("Test mode is on (MOCK=1): placeholder questions, backgrounds and voice.");
+  else if (!cfg.video_key) {
+    warns.push(cfg.env_loaded_from
+      ? "Found your settings file (" + cfg.env_loaded_from + ") but it has no PIXABAY_API_KEY= or PEXELS_API_KEY= line with a key after it. Fix the line, save, and restart the app."
+      : "No settings file found. Create a file named .env (not .env.example) at " + cfg.env_path + " containing PIXABAY_API_KEY= followed by your key, then restart the app.");
+    $("go").disabled = true;
+  }
+  if (warns.length) { $("warn").textContent = warns.join(" "); $("warn").style.display = "block"; }
+  loadHistory();
+}
+
+async function loadHistory() {
+  const vids = await (await fetch("/api/videos")).json();
+  $("grid").innerHTML = "";
+  vids.forEach((v) => {
+    const el = document.createElement("video");
+    el.src = v.url; el.controls = true; el.preload = "metadata"; el.playsInline = true;
+    $("grid").appendChild(el);
+  });
+}
+
+$("go").addEventListener("click", async () => {
+  $("err").textContent = "";
+  $("result").style.display = "none";
+  $("go").disabled = true;
+  $("status").style.display = "block";
+  $("fill").style.width = "2%";
+  $("msg").textContent = "Starting...";
+  try {
+    const r = await fetch("/api/generate", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ questions: Number($("count").value), voice: $("voice").value }),
+    });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || "Request failed"); }
+    const job = await r.json();
+    await poll(job.id);
+  } catch (e) {
+    $("err").textContent = e.message;
+    $("status").style.display = "none";
+  } finally {
+    $("go").disabled = false;
+  }
+});
+
+async function poll(id) {
+  while (true) {
+    await new Promise((res) => setTimeout(res, 800));
+    const job = await (await fetch("/api/jobs/" + id)).json();
+    $("fill").style.width = Math.max(2, job.progress * 100) + "%";
+    $("msg").textContent = job.message;
+    if (job.status === "error") throw new Error(job.error);
+    if (job.status === "done") return finish(job);
+  }
+}
+
+function finish(job) {
+  $("status").style.display = "none";
+  $("player").src = job.video_url;
+  $("dl").href = job.video_url;
+  $("qlist").innerHTML = job.questions.map((q) => `<li>${esc(q.question)} <b>${esc(q.answer)}</b> <i>(footage search: ${esc(q.footage || "?")})</i></li>`).join("");
+  $("result").style.display = "block";
+  $("player").play().catch(() => {});
+  loadHistory();
+}
+
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+init();
+</script>
+</body>
+</html>

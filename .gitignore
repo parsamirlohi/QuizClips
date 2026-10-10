@@ -1,0 +1,15 @@
+# Secrets - never commit these
+.env
+.env.txt
+
+# Generated files
+output/
+cache/
+work/
+history.json
+__pycache__/
+*.pyc
+
+# Editor / OS
+.vscode/
+.DS_Store
