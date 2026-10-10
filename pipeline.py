@@ -5,7 +5,7 @@ import time
 import uuid
 
 from audio import SR, Mixer, bing, pop, tick
-from config import OUTPUT_DIR, WORK_DIR, env
+from config import CACHE_DIR, OUTPUT_DIR, WORK_DIR, env
 from videos import find_background
 from questions import LETTERS, get_questions, mark_used, pick_letters
 from render import concat_videos, mux, render_segment
@@ -47,6 +47,24 @@ def _plan_question(i, total, q, clips, sfx):
     events += [(t, sfx["bing"], 0.9), (t + 0.45, cr, 1.0)]
     t += 0.45 + len(cr) / SR + 1.3
     return frames, t, events
+
+
+def cleanup_disk() -> None:
+    """Keep disk use small: clear downloaded stock clips and (optionally) trim old finished videos."""
+    if env("KEEP_CACHE") != "1":
+        for f in CACHE_DIR.glob("*"):
+            try:
+                f.unlink()
+            except OSError:
+                pass
+    keep = int(env("MAX_KEEP_VIDEOS", "0") or 0)  # 0 = keep every finished video
+    if keep > 0:
+        vids = sorted(OUTPUT_DIR.glob("quiz_*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in vids[keep:]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
 
 
 def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None) -> dict:
@@ -116,3 +134,4 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
         }
     finally:
         shutil.rmtree(job_dir, ignore_errors=True)
+        cleanup_disk()

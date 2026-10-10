@@ -116,6 +116,13 @@ def _text(img, xy, text, f, fill=(255, 255, 255, 255), anchor="la", shadow=True)
     d.text(xy, text, font=f, fill=fill, anchor=anchor)
 
 
+def _ctext(img, cx, cy, text, f, fill=(255, 255, 255, 255)):
+    """Draw text so its actual glyph shape (not the font's line box) is centered on (cx, cy)."""
+    d = ImageDraw.Draw(img)
+    l, t, r, b = d.textbbox((0, 0), text, font=f, anchor="la")
+    d.text((cx - (l + r) / 2, cy - (t + b) / 2), text, font=f, fill=fill, anchor="la")
+
+
 def _wrap(text, f, max_w):
     lines, cur = [], ""
     for w in text.split():
@@ -176,8 +183,7 @@ def _choice_card(q_idx, text, i, reveal, is_correct):
     cx, cy = CARD_X0 + 78, y + CARD_H // 2
     dim = reveal and not is_correct
     _circle(layer, cx, cy, 52, (255, 255, 255, 120 if dim else 245))
-    _text(layer, (cx, cy + 2), LETTERS[i], font(66), fill=((90, 90, 100, 255) if dim else dark + (255,)),
-          anchor="mm", shadow=False)
+    _ctext(layer, cx, cy, LETTERS[i], font(66), fill=((90, 90, 100, 255) if dim else dark + (255,)))
     f, lines = _fit(text, CARD_X1 - CARD_X0 - 250, CARD_H - 20, 54, 32, gap=1.15)
     lh = int(f.size * 1.18)
     ty = cy - (lh * len(lines)) // 2
@@ -243,14 +249,14 @@ def draw_quiz(q_num, total, question, choices, correct_idx, category="", visible
     cx, cy = 540, 732
     if reveal:
         _card(img, (300, cy - 44, 780, cy + 44), 44, GREEN[0], GREEN[1], outline=(255, 255, 255, 255), ow=4)
-        _text(img, (540, cy + 2), "CORRECT ANSWER", font(42), anchor="mm", shadow=False)
+        _ctext(img, 540, cy, "CORRECT ANSWER", font(42))
     elif timer is not None:
         left = max(0.0, timer)
         urgent = left <= 2.0
         col = (255, 80, 80, 255) if urgent else GOLD + (255,)
         _circle(img, cx, cy, 62, (0, 0, 0, 170))
         _ring(img, cx, cy, 62, 9, left / think, col)
-        _text(img, (cx, cy + 2), str(max(1, math.ceil(left))), font(74), fill=col, anchor="mm", shadow=False)
+        _ctext(img, cx, cy, str(max(1, math.ceil(left))), font(74), fill=col)
 
     # answer cards (newest one slides in from the right)
     for i in range(visible):
@@ -297,7 +303,7 @@ def make_overlay(kind, args):
 def _vcodec_args():
     enc = env("VIDEO_ENCODER", "libx264")
     if enc == "libx264":
-        return ["-c:v", "libx264", "-preset", env("X264_PRESET", "veryfast"), "-crf", "20"]
+        return ["-c:v", "libx264", "-preset", env("X264_PRESET", "veryfast"), "-crf", env("VIDEO_CRF", "24")]
     if enc == "h264_nvenc":
         return ["-c:v", "h264_nvenc", "-preset", "p5", "-cq", "22", "-b:v", "0"]
     return ["-c:v", enc]

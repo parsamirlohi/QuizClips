@@ -102,38 +102,38 @@ world united states president country nation countries government war""".split()
 
 
 CONCRETE = frozenset("""
-dog cat horse cow pig sheep goat chicken duck goose turkey rabbit mouse rat squirrel fox wolf bear lion tiger
+dog cat horse cow pig sheep goat chicken duck goose rabbit rat squirrel fox wolf bear lion tiger
 leopard cheetah elephant giraffe zebra hippo rhino monkey gorilla chimpanzee kangaroo koala panda penguin eagle
-owl parrot hawk falcon bat shark whale dolphin octopus jellyfish turtle crocodile alligator snake lizard frog
-spider ant bee butterfly dragonfly beetle scorpion camel deer moose bison buffalo seal walrus otter beaver
+owl parrot hawk falcon shark whale dolphin octopus jellyfish turtle crocodile alligator snake lizard frog
+spider ant bee butterfly dragonfly beetle scorpion camel deer moose bison buffalo walrus otter beaver
 hedgehog flamingo peacock swan crab lobster fish salmon bird insect dinosaur
-planet moon sun star galaxy comet asteroid rocket astronaut telescope earth mars jupiter saturn venus mercury
-neptune uranus pluto eclipse
+planet moon galaxy comet asteroid rocket astronaut telescope earth mars jupiter saturn venus
+neptune uranus eclipse
 mountain ocean sea river lake waterfall desert volcano island forest jungle glacier ice snow rain storm
-lightning thunder cloud rainbow tornado earthquake beach coral cave canyon valley tree flower rose leaf grass
-fire water wave
+lightning thunder cloud rainbow tornado earthquake beach coral cave canyon valley tree flower leaf grass
+
 pyramid sphinx eiffel colosseum castle temple bridge tower skyscraper city village map globe compass lighthouse
 statue museum cathedral palace
-pizza burger bread cheese chocolate coffee tea wine beer apple banana orange lemon grape strawberry tomato
-potato corn rice pasta egg milk honey sugar salt pepper cake cookie candy
-soccer football basketball baseball tennis golf hockey rugby cricket volleyball swimming running marathon
+pizza burger bread cheese chocolate coffee tea wine beer apple banana lemon grape strawberry tomato
+potato corn rice pasta egg milk honey sugar cake cookie candy
+soccer football basketball baseball tennis golf hockey rugby volleyball swimming running marathon
 boxing skiing skating surfing cycling gymnastics olympics stadium
-guitar piano drum violin trumpet saxophone orchestra concert microphone singer band
-atom molecule chemistry laboratory microscope electricity magnet battery bulb dna cell brain heart bone
+guitar piano violin trumpet saxophone orchestra concert microphone singer
+atom molecule chemistry laboratory microscope electricity magnet battery dna brain heart bone
 computer keyboard phone camera clock watch car train airplane plane ship boat bicycle motorcycle bus truck
-helicopter plant plants knight sword armor king queen crown throne viking pirate gold diamond coin money skeleton
+helicopter knight sword armor king queen throne viking pirate gold diamond skeleton
 """.split())
 
 # Footage themes per category: always related to the question's subject area.
 CATEGORY_THEMES = {
     "general knowledge": ["library books", "globe", "old books", "classroom", "lightbulb idea"],
-    "science & nature": ["nature", "laboratory", "microscope", "stars space", "chemistry experiment"],
+    "science & nature": ["science laboratory", "chemistry experiment", "microscope", "scientist", "stars space", "nature"],
     "geography": ["world map", "globe", "travel landscape", "aerial city", "airplane window"],
     "history": ["ancient ruins", "old castle", "museum", "statue", "old map"],
     "sports": ["sports stadium", "running", "soccer ball", "basketball", "crowd cheering"],
     "animals": ["wildlife", "safari animals", "forest animals", "birds", "ocean animals"],
     "entertainment: music": ["concert lights", "guitar", "piano", "music studio", "dj headphones"],
-    "entertainment: film": ["film set", "movie camera", "cinema", "movie theater", "clapperboard", "film reel"],
+    "entertainment: film": ["film set", "cinema", "movie theater", "hollywood", "movie popcorn", "film director"],
     "entertainment: television": ["television", "watching tv", "tv studio", "remote control", "living room tv"],
     "entertainment: video games": ["playing video games", "gaming", "gamer", "video game controller", "esports"],
     "entertainment: cartoon & animations": ["cartoon", "animation drawing", "colorful animation", "drawing sketch"],
@@ -148,6 +148,18 @@ def category_themes(category: str) -> list:
     return themes
 
 
+def _concrete_base(word: str):
+    """Return the concrete noun for a word, handling plurals safely (animals -> animal, never corner -> corn)."""
+    forms = [word]
+    if word.endswith("ies") and len(word) > 4:
+        forms.append(word[:-3] + "y")
+    elif word.endswith("es") and len(word) > 4:
+        forms.append(word[:-2])
+    if word.endswith("s") and not word.endswith("ss") and len(word) > 3:
+        forms.append(word[:-1])
+    return next((f for f in forms if f in CONCRETE), None)
+
+
 def keywords_from(question: str, correct: str, category: str) -> list:
     """Footage searches, best first. Only real, concrete things are searched by name; anything else
     falls back to footage themed to the question's category, so it is never random."""
@@ -158,11 +170,11 @@ def keywords_from(question: str, correct: str, category: str) -> list:
         lw = w.lower().strip("'-")
         if lw.endswith("'s"):
             lw = lw[:-2]
-        base = next((c for c in (lw, lw[:-1], lw[:-2]) if c in CONCRETE), None)
+        base = None if cat.startswith("entertainment") else _concrete_base(lw)
         if base and base not in queries:
             queries.append(base)
         elif (w[0].isupper() and i > 0 and lw not in STOP and lw not in EXTRA_STOP and len(lw) >= 4):
-            caps.append(w)
+            caps.append(w[:-2] if w.lower().endswith("'s") else w)
     if cat in PROPER_OK:
         if len(caps) >= 2:
             queries.append(" ".join(caps[:2]))

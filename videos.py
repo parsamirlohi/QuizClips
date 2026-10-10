@@ -62,6 +62,17 @@ def has_video_key() -> bool:
     return is_mock() or _source() is not None
 
 
+# Tags that mark YouTube intros, overlays and templates rather than real footage.
+JUNK_TAGS = ("subscribe", "youtube", "subscriber", "button", "channel", "intro", "template", "logo", "lower third",
+             "green screen", "greenscreen", "social media", "countdown", "like button", "notification", "overlay",
+             "transition", "alpha", "text", "title")
+
+
+def _is_junk(hit: dict) -> bool:
+    tags = hit.get("tags", "").lower()
+    return any(j in tags for j in JUNK_TAGS)
+
+
 def _pixabay_hits(q: str, key: str) -> list:
     cached = _PIXABAY_CACHE.get(q)
     if cached and time.time() - cached[0] < 86400:
@@ -86,7 +97,8 @@ def _find_pixabay(queries: list, used: set):
     if not key:
         raise RuntimeError("PIXABAY_API_KEY is missing. Get a free key at pixabay.com/api/docs and put it in .env")
     for q in queries:
-        hits = [h for h in _pixabay_hits(q, key) if h["id"] not in used and h.get("duration", 0) >= 4]
+        hits = [h for h in _pixabay_hits(q, key)
+                if h["id"] not in used and h.get("duration", 0) >= 4 and not _is_junk(h)]
         print(f"[footage] searched '{q}': {len(hits)} usable results", flush=True)
         if not hits:
             continue
