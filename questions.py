@@ -96,40 +96,78 @@ gave called call play plays played playing included include includes including b
 belonged derived derive comes come came held hold take takes took taken get gets got
 largest smallest biggest tallest highest lowest longest shortest fastest slowest oldest youngest
 perform species system systems group member members period century number numbers kind part parts
-solar person people place places thing event events""".split()
+solar person people place places thing event events
+world united states president country nation countries government war""".split()
 )
 
 
-def keywords_from(question: str, correct: str, category: str) -> list:
-    """Search words for stock footage, best first, never using words that give away the answer.
+CONCRETE = frozenset("""
+dog cat horse cow pig sheep goat chicken duck goose turkey rabbit mouse rat squirrel fox wolf bear lion tiger
+leopard cheetah elephant giraffe zebra hippo rhino monkey gorilla chimpanzee kangaroo koala panda penguin eagle
+owl parrot hawk falcon bat shark whale dolphin octopus jellyfish turtle crocodile alligator snake lizard frog
+spider ant bee butterfly dragonfly beetle scorpion camel deer moose bison buffalo seal walrus otter beaver
+hedgehog flamingo peacock swan crab lobster fish salmon bird insect dinosaur
+planet moon sun star galaxy comet asteroid rocket astronaut telescope earth mars jupiter saturn venus mercury
+neptune uranus pluto eclipse
+mountain ocean sea river lake waterfall desert volcano island forest jungle glacier ice snow rain storm
+lightning thunder cloud rainbow tornado earthquake beach coral cave canyon valley tree flower rose leaf grass
+fire water wave
+pyramid sphinx eiffel colosseum castle temple bridge tower skyscraper city village map globe compass lighthouse
+statue museum cathedral palace
+pizza burger bread cheese chocolate coffee tea wine beer apple banana orange lemon grape strawberry tomato
+potato corn rice pasta egg milk honey sugar salt pepper cake cookie candy
+soccer football basketball baseball tennis golf hockey rugby cricket volleyball swimming running marathon
+boxing skiing skating surfing cycling gymnastics olympics stadium
+guitar piano drum violin trumpet saxophone orchestra concert microphone singer band
+atom molecule chemistry laboratory microscope electricity magnet battery bulb dna cell brain heart bone
+computer keyboard phone camera clock watch car train airplane plane ship boat bicycle motorcycle bus truck
+helicopter plant plants knight sword armor king queen crown throne viking pirate gold diamond coin money skeleton
+""".split())
 
-    Stock sites match single concrete words far better than long phrases, so this tries
-    proper nouns first, then single nouns (longest first), then the topic, then a generic fallback.
-    """
-    # Words come from the question itself, so they can't spoil the answer.
+# Footage themes per category: always related to the question's subject area.
+CATEGORY_THEMES = {
+    "general knowledge": ["library books", "globe", "old books", "classroom", "lightbulb idea"],
+    "science & nature": ["nature", "laboratory", "microscope", "stars space", "chemistry experiment"],
+    "geography": ["world map", "globe", "travel landscape", "aerial city", "airplane window"],
+    "history": ["ancient ruins", "old castle", "museum", "statue", "old map"],
+    "sports": ["sports stadium", "running", "soccer ball", "basketball", "crowd cheering"],
+    "animals": ["wildlife", "safari animals", "forest animals", "birds", "ocean animals"],
+    "entertainment: music": ["concert lights", "guitar", "piano", "music studio", "dj headphones"],
+    "entertainment: film": ["film set", "movie camera", "cinema", "movie theater", "clapperboard", "film reel"],
+    "entertainment: television": ["television", "watching tv", "tv studio", "remote control", "living room tv"],
+    "entertainment: video games": ["playing video games", "gaming", "gamer", "video game controller", "esports"],
+    "entertainment: cartoon & animations": ["cartoon", "animation drawing", "colorful animation", "drawing sketch"],
+}
+PROPER_OK = {"geography", "history", "sports", "general knowledge"}
+
+
+def category_themes(category: str) -> list:
+    c = (category or "").lower().strip()
+    themes = list(CATEGORY_THEMES.get(c, [category_query(category)] if category else ["nature"]))
+    random.shuffle(themes)
+    return themes
+
+
+def keywords_from(question: str, correct: str, category: str) -> list:
+    """Footage searches, best first. Only real, concrete things are searched by name; anything else
+    falls back to footage themed to the question's category, so it is never random."""
     words = re.findall(r"[A-Za-z][A-Za-z'\-]+", question)
-    caps, rest = [], []
+    cat = (category or "").lower().strip()
+    queries, caps = [], []
     for i, w in enumerate(words):
         lw = w.lower().strip("'-")
-        if lw in STOP or lw in EXTRA_STOP or len(lw) < 4:
-            continue
         if lw.endswith("'s"):
-            w = w[:-2]
-        (caps if (w[0].isupper() and i > 0) else rest).append(w)
-    rest.sort(key=len, reverse=True)
-    queries = []
-    if len(caps) >= 2:
-        queries.append(" ".join(caps[:2]))
-    for w in caps[:2]:
-        queries.append(w)
-    for w in rest[:3]:
-        queries.append(w.lower())
-    if len(rest) >= 2:
-        queries.append(f"{rest[0].lower()} {rest[1].lower()}")
-    cat = category_query(category)
-    if cat:
-        queries.append(cat)
-    queries.append("abstract colorful background")
+            lw = lw[:-2]
+        base = next((c for c in (lw, lw[:-1], lw[:-2]) if c in CONCRETE), None)
+        if base and base not in queries:
+            queries.append(base)
+        elif (w[0].isupper() and i > 0 and lw not in STOP and lw not in EXTRA_STOP and len(lw) >= 4):
+            caps.append(w)
+    if cat in PROPER_OK:
+        if len(caps) >= 2:
+            queries.append(" ".join(caps[:2]))
+        queries += caps[:2]
+    queries = queries[:4] + category_themes(category) + ["abstract colorful background"]
     out = []
     for q in queries:
         if q and q not in out:
@@ -150,33 +188,44 @@ def _usable(q: str, correct: str, wrong: list) -> bool:
     return True
 
 
-def _from_opentdb() -> list:
-    url = "https://opentdb.com/api.php?amount=50&type=multiple&difficulty=easy&encode=url3986"
-    data = None
+# Open Trivia DB category ids. Anything stock footage can't show literally gets themed footage instead.
+VISUAL_CATEGORIES = {9: "General Knowledge", 17: "Science & Nature", 22: "Geography", 23: "History",
+                     21: "Sports", 27: "Animals", 12: "Entertainment: Music", 11: "Entertainment: Film",
+                     14: "Entertainment: Television", 15: "Entertainment: Video Games",
+                     32: "Entertainment: Cartoon & Animations"}
+
+
+def _fetch_category(cid: int):
+    url = f"https://opentdb.com/api.php?amount=20&category={cid}&type=multiple&difficulty=easy&encode=url3986"
     for _ in range(3):
         try:
             r = requests.get(url, timeout=30)
             if r.status_code == 200:
                 data = r.json()
                 if data.get("response_code") == 0:
-                    break
+                    return data["results"]
         except requests.RequestException:
             pass
         time.sleep(6)  # Open Trivia DB allows one request per 5 seconds
-    if not data or data.get("response_code") != 0:
-        raise RuntimeError("Could not fetch questions from Open Trivia DB. Try again in a few seconds.")
+    return []
+
+
+def _from_opentdb() -> list:
     u = urllib.parse.unquote
     out = []
-    for item in data["results"]:
-        q, correct = u(item["question"]), u(item["correct_answer"])
-        wrong = [u(x) for x in item["incorrect_answers"]]
-        cat = u(item["category"])
-        if cat.lower() in NICHE_CATEGORIES or not _usable(q, correct, wrong):
-            continue
-        out.append(
-            {"question": q, "correct": correct, "wrong": wrong, "category": cat,
-             "video_queries": keywords_from(q, correct, cat)}
-        )
+    for n, cid in enumerate(random.sample(list(VISUAL_CATEGORIES), 3)):
+        if n:
+            time.sleep(5.5)
+        for item in _fetch_category(cid):
+            q, correct = u(item["question"]), u(item["correct_answer"])
+            wrong = [u(x) for x in item["incorrect_answers"]]
+            cat = u(item["category"])
+            if cat.lower() in NICHE_CATEGORIES or not _usable(q, correct, wrong):
+                continue
+            out.append({"question": q, "correct": correct, "wrong": wrong, "category": cat,
+                        "video_queries": keywords_from(q, correct, cat)})
+    if not out:
+        raise RuntimeError("Could not fetch questions from Open Trivia DB. Try again in a few seconds.")
     return out
 
 
