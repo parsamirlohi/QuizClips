@@ -4,7 +4,7 @@ import shutil
 import time
 import uuid
 
-from audio import SR, Mixer, bing, pop, tick
+from audio import SR, Mixer, bing, pop, siren, sparkle, tick, whoosh
 from config import CACHE_DIR, OUTPUT_DIR, WORK_DIR, env
 from videos import find_background
 from questions import LETTERS, get_questions, mark_used, pick_letters
@@ -14,39 +14,84 @@ from tts import synthesize_all
 NUMWORD = {3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
 INTRO_QUERIES = ["neon lights abstract", "colorful abstract background", "light particles",
                  "glowing lines", "bokeh lights", "abstract waves"]
+PROMPTS = ["Pick your answer!", "Comment your guess!", "Lock it in!", "No cheating!", "Think fast!",
+           "Shout it out in the comments!", "Which one is it?"]
 THINK = int(env("THINK_SECONDS", "5"))
+POP_ANIM = (0.55, 1.08, 0.96, 1.0)
 
 
-def _plan_title(clip, title, subtitle, pop_clip):
-    d = max(2.5, 0.3 + len(clip) / SR + 0.8)
-    frames = [(0.0, "title", dict(title=title, subtitle=subtitle))]
-    events = [(0.1, pop_clip, 0.3), (0.3, clip, 1.0)]
-    return frames, d, events
+def _pops(frames, t, base, key="anim"):
+    for k, a in enumerate(POP_ANIM):
+        frames.append((t + 0.05 * k, "scene", dict(base, **{key: a})))
 
 
-def _plan_question(i, total, q, clips, sfx):
-    """Narration: the question, then (after the countdown) the answer. Choices appear silently."""
-    cq, cr = clips
-    base = dict(q_num=i + 1, total=total, question=q["question"], choices=q["choices"],
-                correct_idx=q["correct_idx"], category=q.get("category", ""), think=THINK, seed=i)
-    frames = [(0.0, "quiz", dict(base, visible=0))]
-    events = [(0.05, sfx["pop"], 0.3), (0.35, cq, 1.0)]
-    t = 0.35 + len(cq) / SR + 0.35
-    for k in range(4):                                   # each choice slides in with a pop
-        for step, a in enumerate((0.25, 0.6, 1.0)):
-            frames.append((t + 0.06 * step, "quiz", dict(base, visible=k + 1, anim=a)))
-        events.append((t, sfx["pop"], 0.35))
-        t += 0.55
-    t += 0.15
-    for s_left in range(THINK, 0, -1):                   # smooth countdown ring, 4 frames per second
-        events.append((t, sfx["tick"], 0.5))
+def _plan_hook(clip, n, sfx):
+    """Chalkboard intro. The word being read is highlighted pink, moving along with the voice."""
+    w = NUMWORD.get(n, str(n))
+    words = ["ONLY", "A", "GENIUS", "CAN", "GET", f"{n}/{n}"]
+    spoken = ["only", "a", "genius", "can", "get", f"{w} out of {w}"]
+    weights = [len(x) + 1 for x in spoken]
+    text = " ".join(words)
+    frames = [(0.0, "hook", dict(text=text, hl=-1, hscale=0.7)), (0.06, "hook", dict(text=text, hl=-1, hscale=1.08)),
+              (0.12, "hook", dict(text=text, hl=-1, hscale=1.0))]
+    t0, dur = 0.4, len(clip) / SR
+    acc = 0.0
+    for k, wt in enumerate(weights):
+        frames.append((t0 + dur * acc / sum(weights), "hook", dict(text=text, hl=k, hscale=1.0)))
+        acc += wt
+    frames.append((t0 + dur, "hook", dict(text=text, hl=-1, hscale=1.0)))
+    events = [(0.0, sfx["whoosh"], 0.8), (0.05, sfx["pop"], 0.6), (t0, clip, 1.0)]
+    return frames, t0 + dur + 0.9, events, False, True
+
+
+def _plan_challenge(clip, sfx):
+    frames = [(0.2 * k, "challenge", dict(flash=k, boxscale=1.0 if k > 2 else 0.6 + 0.2 * k)) for k in range(13)]
+    events = [(0.0, sfx["siren"], 0.7), (0.0, sfx["whoosh"], 0.8), (0.35, clip, 1.0)]
+    return frames, 2.6, events, False
+
+
+def _plan_question(i, total, q, clips, sfx, challenge=False):
+    """Question read aloud, choices pop in (pop sound each), short prompt, countdown, then ONLY the answer."""
+    cq, cp, cr = clips
+    theme = "red" if challenge else "purple"
+    base = dict(theme=theme, q_num=i + 1, header=q["question"], choices=q["choices"], correct_idx=q["correct_idx"],
+                label=f"QUESTION {i + 1}/{total}", think=THINK)
+    frames = [(0.0, "scene", dict(base, visible=0, hscale=0.8)), (0.05, "scene", dict(base, visible=0, hscale=1.06)),
+              (0.1, "scene", dict(base, visible=0))]
+    events = [(0.0, sfx["whoosh"], 0.8), (0.05, sfx["pop"], 0.6), (0.4, cq, 1.0)]
+    t = 0.4 + len(cq) / SR + 0.3
+    for k in range(len(q["choices"])):
+        _pops(frames, t, dict(base, visible=k + 1))
+        events.append((t, sfx["pop"], 0.6))
+        t += 0.5
+    t += 0.1
+    events.append((t, cp, 1.0))
+    for s_left in range(THINK, 0, -1):
+        events.append((t, sfx["tick"], 0.4))
         for sub in range(4):
-            frames.append((t + 0.25 * sub, "quiz", dict(base, visible=4, timer=s_left - 0.25 * sub)))
+            frames.append((t + 0.25 * sub, "scene", dict(base, visible=len(q["choices"]), timer=s_left - 0.25 * sub)))
         t += 1.0
-    frames.append((t, "quiz", dict(base, visible=4, reveal=True)))
-    events += [(t, sfx["bing"], 0.9), (t + 0.45, cr, 1.0)]
-    t += 0.45 + len(cr) / SR + 1.3
-    return frames, t, events
+    full = dict(base, visible=len(q["choices"]), reveal=True)
+    for k, sc in enumerate((0.3, 0.8, 1.15, 1.0)):
+        frames.append((t + 0.06 * k, "scene", dict(full, plus=sc)))
+    events += [(t, sfx["bing"], 0.9), (t + 0.05, sfx["sparkle"], 0.7), (t + 0.5, cr, 1.0)]
+    t += 0.5 + len(cr) / SR + 1.2
+    return frames, t, events, True
+
+
+def _plan_outro(clip, sfx):
+    base = dict(theme="purple", header="How did you do?", num_label=False, label="COMMENT YOUR SCORE",
+                letters="SAB", choices=["All correct: Quiz Master", "Most correct: Sharp Mind", "Few correct: Keep Trying"])
+    frames = [(0.0, "scene", dict(base, lit=0, hscale=0.8)), (0.05, "scene", dict(base, lit=0, hscale=1.06)),
+              (0.1, "scene", dict(base, lit=0))]
+    events = [(0.0, sfx["whoosh"], 0.8), (0.05, sfx["pop"], 0.5), (0.4, clip, 1.0)]
+    dur = 0.4 + len(clip) / SR + 1.0
+    for k in range(3):
+        t = 0.9 + 0.6 * k
+        _pops(frames, t, dict(base, lit=3, visible=k + 1))
+        events.append((t, sfx["pop"], 0.6))
+    frames.sort(key=lambda f: f[0])
+    return frames, max(dur, 3.0), events, True
 
 
 def cleanup_disk() -> None:
@@ -80,38 +125,52 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
             random.shuffle(others)
             quiz.append({**q, "choices": others[:ci] + [q["correct"]] + others[ci:], "correct_idx": ci})
 
-        word = NUMWORD.get(n_questions, str(n_questions))
-        texts = [f"Can you get all {word} questions right? Let's find out!"]
+        n = n_questions
+        challenge = n >= 5
+        word = NUMWORD.get(n, str(n))
+        prompts = random.sample(PROMPTS, min(len(PROMPTS), n))
+        texts = [f"Only a genius can get {word} out of {word}!"]
         for i, q in enumerate(quiz):
-            texts.append(f"Question {i + 1}. {q['question']}")
-            texts.append(f"The answer is {LETTERS[q['correct_idx']]}. {q['correct']}.")
+            if challenge and i == n - 1:
+                texts.append("Challenge round! This one is tough.")
+            texts += [q["question"], prompts[i % len(prompts)], q["correct"]]
         texts.append("How many did you get right? Comment your score, and follow for more quizzes!")
 
         progress("Recording narration...", 0.08)
         clips = synthesize_all(texts, voice)
 
-        used, bgs = set(), []
+        used = set()
         progress("Finding background videos...", 0.14)
-        bgs.append(find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used)[0])
+        bgs = []
         for i, q in enumerate(quiz):
-            progress(f"Finding video for question {i + 1} of {n_questions}...", 0.14 + 0.24 * i / n_questions)
+            progress(f"Finding video for question {i + 1} of {n}...", 0.14 + 0.24 * i / n)
             path, matched = find_background(q["video_queries"], used)
             q["footage"] = matched
             bgs.append(path)
-        bgs.append(find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used)[0])
+        outro_bg = find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used)[0]
 
-        sfx = {"bing": bing(), "tick": tick(), "pop": pop()}
-        plans = [_plan_title(clips[0], f"CAN YOU GET {n_questions}/{n_questions}?", "Trivia Quiz Challenge", sfx["pop"])]
+        sfx = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle(), "siren": siren()}
+        plans, scene_bgs, ci = [], [], 1
+        plans.append(_plan_hook(clips[0], n, sfx))
+        scene_bgs.append(None)
         for i, q in enumerate(quiz):
-            plans.append(_plan_question(i, n_questions, q, clips[1 + i * 2: 3 + i * 2], sfx))
-        plans.append(_plan_title(clips[-1], "HOW DID YOU DO?", "Comment your score & follow for more!", sfx["pop"]))
+            is_ch = challenge and i == n - 1
+            if is_ch:
+                plans.append(_plan_challenge(clips[ci], sfx))
+                scene_bgs.append(None)
+                ci += 1
+            plans.append(_plan_question(i, n, q, clips[ci:ci + 3], sfx, is_ch))
+            scene_bgs.append(bgs[i])
+            ci += 3
+        plans.append(_plan_outro(clips[ci], sfx))
+        scene_bgs.append(outro_bg)
 
         total = sum(p[1] for p in plans)
         mixer, seg_paths, offset = Mixer(total), [], 0.0
-        for si, ((frames, dur, events), bg) in enumerate(zip(plans, bgs)):
+        for si, ((frames, dur, events, has_clip, *extra), bg) in enumerate(zip(plans, scene_bgs)):
             progress(f"Rendering scene {si + 1} of {len(plans)}...", 0.40 + 0.48 * si / len(plans))
             seg = job_dir / f"seg_{si:02d}.mp4"
-            render_segment(bg, frames, dur, seg, job_dir)
+            render_segment(bg if has_clip else None, frames, dur, seg, job_dir, still=bool(extra))
             seg_paths.append(seg)
             for t, clip, gain in events:
                 mixer.add(offset + t, clip, gain)

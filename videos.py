@@ -1,5 +1,6 @@
 """Finds and downloads background stock videos from Pixabay (default) or Pexels."""
 import random
+import re
 import time
 
 import requests
@@ -73,6 +74,18 @@ def _is_junk(hit: dict) -> bool:
     return any(j in tags for j in JUNK_TAGS)
 
 
+def tag_score(hit: dict, query: str) -> int:
+    """How many words of the search appear in the video's own tags (Pixabay's search is loose)."""
+    tags = hit.get("tags", "").lower()
+    score = 0
+    for w in re.findall(r"[a-z]+", query.lower()):
+        if len(w) < 3:
+            continue
+        if w in tags or (w.endswith("s") and w[:-1] in tags):
+            score += 1
+    return score
+
+
 def _pixabay_hits(q: str, key: str) -> list:
     cached = _PIXABAY_CACHE.get(q)
     if cached and time.time() - cached[0] < 86400:
@@ -99,10 +112,15 @@ def _find_pixabay(queries: list, used: set):
     for q in queries:
         hits = [h for h in _pixabay_hits(q, key)
                 if h["id"] not in used and h.get("duration", 0) >= 4 and not _is_junk(h)]
-        print(f"[footage] searched '{q}': {len(hits)} usable results", flush=True)
+        generic = q == "abstract colorful background"
+        if not generic:  # only accept videos whose own tags actually match the search
+            scored = [(tag_score(h, q), h) for h in hits]
+            best = max((sc for sc, _ in scored), default=0)
+            hits = [h for sc, h in scored if sc >= max(1, best)] if best > 0 else []
+        print(f"[footage] searched '{q}': {len(hits)} matching results", flush=True)
         if not hits:
             continue
-        h = random.choice(hits[:12])
+        h = random.choice(hits[:8])
         sizes = h.get("videos", {})
         f = next((sizes[k] for k in ("medium", "large", "small") if sizes.get(k, {}).get("url")), None)
         if not f:

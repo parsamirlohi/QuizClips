@@ -88,3 +88,39 @@ def pop() -> np.ndarray:
     t = np.arange(int(SR * dur)) / SR
     phase = 2 * np.pi * (400 * t + (500 / (2 * dur)) * t**2)  # sweep 400 -> 900 Hz
     return (np.sin(phase) * np.exp(-30 * t)).astype(np.float32) * 0.6
+
+
+def whoosh() -> np.ndarray:
+    dur = 0.38
+    n = int(SR * dur)
+    rng = np.random.default_rng(7)
+    noise = rng.standard_normal(n).astype(np.float32)
+    out = np.zeros(n, dtype=np.float32)
+    y = 0.0
+    for i in range(n):  # one-pole low-pass whose cutoff sweeps upward
+        a = 0.02 + 0.5 * (i / n) ** 2
+        y += a * (noise[i] - y)
+        out[i] = y
+    t = np.arange(n) / SR
+    env = np.sin(np.pi * np.clip(t / dur, 0, 1)) ** 2
+    out = out * env
+    return out / (float(np.max(np.abs(out))) or 1.0) * 0.45
+
+
+def sparkle() -> np.ndarray:
+    out = np.zeros(int(SR * 0.9), dtype=np.float32)
+    for k, f in enumerate((2093, 2637, 3136, 4186)):
+        a = _tones([(f, 1.0), (2 * f, 0.2)], 0.6, 7)
+        s = int(k * 0.06 * SR)
+        out[s:s + len(a)] += a[: len(out) - s] * 0.35
+    return out
+
+
+def siren(dur: float = 2.4) -> np.ndarray:
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    f = 850 + 260 * np.sin(2 * np.pi * 1.3 * t)
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    s = np.sin(ph) + 0.35 * np.sin(2 * ph)
+    env = np.minimum(1.0, np.minimum(t / 0.05, (dur - t) / 0.25))
+    return (s * env * 0.28).astype(np.float32)

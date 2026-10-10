@@ -1,4 +1,7 @@
-"""Draws the 1080x1920 quiz overlays with Pillow and renders each scene with ffmpeg."""
+"""Draws the 1080x1920 quiz overlays (reference "marble + purple header" style) and renders each scene with ffmpeg.
+
+Layers per scene:  animated marble background  ->  framed stock clip  ->  Pillow overlay (header, bars, circle ...).
+"""
 import math
 import random
 from functools import lru_cache
@@ -6,32 +9,39 @@ from functools import lru_cache
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from config import env, run_ffmpeg
+from config import ASSETS_DIR, env, run_ffmpeg
+from chalkboard import ensure_chalkboard
+from marble import ensure_marble
 
 W, H = 1080, 1920
-LETTERS = "ABCD"
-# (light, dark) gradient colors for each answer letter
-LETTER_GRADS = [
-    ((255, 99, 99), (205, 40, 95)),     # A coral red
-    ((72, 176, 255), (40, 95, 225)),    # B blue
-    ((184, 120, 255), (115, 65, 225)),  # C purple
-    ((255, 190, 50), (240, 112, 22)),   # D orange
-]
-GREEN = ((52, 211, 120), (16, 150, 80))
-GOLD = (255, 214, 10)
 SS = 3  # supersampling for smooth shapes
 
+PINK = (255, 110, 185)
+HOT = (255, 70, 160)
+YELLOW = (255, 226, 40)
+THEMES = {
+    "purple": dict(fill=(112, 84, 240), line=PINK, border=PINK),
+    "green": dict(fill=(74, 160, 74), line=(255, 255, 255), border=(90, 200, 110)),
+    "red": dict(fill=(226, 56, 56), line=(255, 150, 160), border=(255, 80, 90)),
+}
+BAR_STYLES = {
+    "purple": dict(fill=(255, 255, 255), line=PINK, text=HOT, circ=PINK, circ_line=(255, 255, 255), letter=(255, 255, 255)),
+    "red": dict(fill=(222, 50, 50), line=(255, 160, 160), text=(255, 255, 255), circ=(255, 255, 255), circ_line=(255, 160, 160), letter=(222, 50, 50)),
+    "green": dict(fill=(70, 165, 70), line=(255, 255, 255), text=(255, 255, 255), circ=(70, 165, 70), circ_line=(255, 255, 255), letter=(255, 255, 255)),
+}
+
+# clip window (the stock footage is placed here by ffmpeg, the overlay draws the white frame around it)
+CLIP = (215, 620, 865, 970)
+HEADER = (56, 64, 1024, 500)
+BAR_Y0, BAR_STEP, BAR_H = 1010, 172, 136
+NUM_C = (540, 1772)
+
 _FONTS = [
+    str(ASSETS_DIR / "fonts" / "LilitaOne-Regular.ttf"),
     "/System/Library/Fonts/Supplemental/Arial Black.ttf",
     "C:/Windows/Fonts/ariblk.ttf",
-    "C:/Windows/Fonts/segoeuib.ttf",
-    "C:/Windows/Fonts/arialbd.ttf",
-    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-    "/Library/Fonts/Arial Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     "DejaVuSans-Bold.ttf",
-    "arialbd.ttf",
 ]
 
 
@@ -52,252 +62,256 @@ def _mask(w, h, radius):
     return m.resize((w, h), Image.LANCZOS)
 
 
-def _grad_img(w, h, c0, c1, alpha=255, horizontal=True):
-    t = np.linspace(0, 1, w if horizontal else h)
-    t = t[None, :, None] if horizontal else t[:, None, None]
-    c0, c1 = np.array(c0, dtype=np.float32), np.array(c1, dtype=np.float32)
-    rgb = c0 * (1 - t) + c1 * t
-    rgb = np.broadcast_to(rgb, (h, w, 3))
-    a = np.full((h, w, 1), alpha, dtype=np.float32)
-    return Image.fromarray(np.concatenate([rgb, a], axis=2).astype("uint8"), "RGBA")
-
-
-def _shadow(img, box, radius, blur=20, alpha=120, dy=12, color=(0, 0, 0)):
-    x0, y0, x1, y1 = [int(v) for v in box]
-    w, h, pad = x1 - x0, y1 - y0, blur * 3
-    layer = Image.new("RGBA", (w + 2 * pad, h + 2 * pad), (0, 0, 0, 0))
-    ImageDraw.Draw(layer).rounded_rectangle((pad, pad, pad + w, pad + h), radius, fill=color + (alpha,))
-    layer = layer.filter(ImageFilter.GaussianBlur(blur))
-    img.alpha_composite(layer, (x0 - pad, y0 - pad + dy))
-
-
-def _card(img, box, radius, c0=None, c1=None, fill=None, alpha=255, outline=None, ow=0, shadow=True,
-          horizontal=True):
-    """Rounded card: gradient (c0 -> c1) or flat fill, optional outline and soft shadow."""
-    x0, y0, x1, y1 = [int(v) for v in box]
-    w, h = x1 - x0, y1 - y0
-    if shadow:
-        _shadow(img, box, radius, alpha=int(110 * alpha / 255))
-    base = _grad_img(w, h, c0, c1, alpha, horizontal) if c0 is not None else Image.new("RGBA", (w, h), fill)
+def _box(w, h, radius, fill, line=None, lw=0):
+    """Rounded rectangle layer with optional outline."""
     layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    layer.paste(base, (0, 0), _mask(w, h, radius))
-    if outline:
-        outer = _mask(w, h, radius)
-        inner = Image.new("L", (w, h), 0)
-        inner.paste(_mask(w - 2 * ow, h - 2 * ow, max(1, radius - ow)), (ow, ow))
-        ring = Image.new("RGBA", (w, h), outline)
-        ring.putalpha(Image.fromarray(np.clip(np.array(outer, dtype=np.int16) - np.array(inner, dtype=np.int16), 0, 255).astype("uint8")))
-        layer.alpha_composite(ring)
-    img.alpha_composite(layer, (x0, y0))
+    if line and lw:
+        layer.paste(Image.new("RGBA", (w, h), tuple(line) + (255,)), (0, 0), _mask(w, h, radius))
+        inner = _mask(w - 2 * lw, h - 2 * lw, max(1, radius - lw))
+        layer.paste(Image.new("RGBA", (w - 2 * lw, h - 2 * lw), tuple(fill) + (255,)), (lw, lw), inner)
+    else:
+        layer.paste(Image.new("RGBA", (w, h), tuple(fill) + (255,)), (0, 0), _mask(w, h, radius))
+    return layer
 
 
-def _circle(img, cx, cy, r, fill, outline=None, width=0):
-    w = 2 * r
-    layer = Image.new("RGBA", (w * SS, w * SS), (0, 0, 0, 0))
-    ImageDraw.Draw(layer).ellipse((0, 0, w * SS - 1, w * SS - 1), fill=fill, outline=outline, width=width * SS)
-    img.alpha_composite(layer.resize((w, w), Image.LANCZOS), (int(cx - r), int(cy - r)))
+def _place(img, layer, cx, cy, scale=1.0, alpha=1.0):
+    """Paste layer centered on (cx, cy), optionally scaled/faded; clips safely at the edges."""
+    if scale != 1.0:
+        layer = layer.resize((max(1, int(layer.width * scale)), max(1, int(layer.height * scale))), Image.LANCZOS)
+    if alpha < 1.0:
+        layer = layer.copy()
+        layer.putalpha(layer.getchannel("A").point(lambda v: int(v * alpha)))
+    x, y = int(cx - layer.width / 2), int(cy - layer.height / 2)
+    l, t = max(0, -x), max(0, -y)
+    r, b = min(layer.width, W - x), min(layer.height, H - y)
+    if r <= l or b <= t:
+        return
+    img.alpha_composite(layer.crop((l, t, r, b)), (x + l, y + t))
 
 
-def _ring(img, cx, cy, r, thickness, frac, color, track=(255, 255, 255, 60)):
-    size = 2 * (r + thickness)
-    layer = Image.new("RGBA", (size * SS, size * SS), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    box = (thickness * SS, thickness * SS, (size - thickness) * SS, (size - thickness) * SS)
-    d.ellipse(box, outline=track, width=thickness * SS)
-    if frac > 0:
-        d.arc(box, -90, -90 + 360 * min(frac, 1.0), fill=color, width=thickness * SS)
-    img.alpha_composite(layer.resize((size, size), Image.LANCZOS), (int(cx - size / 2), int(cy - size / 2)))
-
-
-def _text(img, xy, text, f, fill=(255, 255, 255, 255), anchor="la", shadow=True):
+def _ctext(img, cx, cy, text, f, fill=(255, 255, 255, 255), stroke=0, stroke_fill=(0, 0, 0, 255)):
+    """Center the glyph shape (not the line box) on (cx, cy)."""
     d = ImageDraw.Draw(img)
-    if shadow:
-        d.text((xy[0] + 3, xy[1] + 4), text, font=f, fill=(0, 0, 0, 140), anchor=anchor)
-    d.text(xy, text, font=f, fill=fill, anchor=anchor)
-
-
-def _ctext(img, cx, cy, text, f, fill=(255, 255, 255, 255)):
-    """Draw text so its actual glyph shape (not the font's line box) is centered on (cx, cy)."""
-    d = ImageDraw.Draw(img)
-    l, t, r, b = d.textbbox((0, 0), text, font=f, anchor="la")
-    d.text((cx - (l + r) / 2, cy - (t + b) / 2), text, font=f, fill=fill, anchor="la")
+    l, t, r, b = d.textbbox((0, 0), text, font=f, anchor="la", stroke_width=stroke)
+    d.text((cx - (l + r) / 2, cy - (t + b) / 2), text, font=f, fill=fill, anchor="la",
+           stroke_width=stroke, stroke_fill=stroke_fill)
 
 
 def _wrap(text, f, max_w):
-    lines, cur = [], ""
+    lines, cur = [], []
     for w in text.split():
-        t = f"{cur} {w}".strip()
+        t = " ".join(cur + [w])
         if f.getlength(t) <= max_w or not cur:
-            cur = t
+            cur.append(w)
         else:
             lines.append(cur)
-            cur = w
+            cur = [w]
     if cur:
         lines.append(cur)
-    return lines
+    return lines  # list of word lists
 
 
-def _fit(text, max_w, max_h, start, minimum, gap=1.2):
+def _fit(text, max_w, max_h, start, minimum, gap=1.1):
     size = start
     while True:
         f = font(size)
         lines = _wrap(text, f, max_w)
-        fits = len(lines) * size * gap <= max_h and all(f.getlength(l) <= max_w for l in lines)
-        if fits or size <= minimum:
+        ok = len(lines) * size * gap <= max_h and all(f.getlength(" ".join(l)) <= max_w for l in lines)
+        if ok or size <= minimum:
             return f, lines
         size -= 4
 
 
-def _confetti(img, seed, box):
-    rnd = random.Random(seed)
-    colors = [g[0] for g in LETTER_GRADS] + [GOLD, (255, 255, 255)]
-    x0, y0, x1, y1 = box
-    d = ImageDraw.Draw(img)
-    for _ in range(80):
-        x, y = rnd.randint(x0, x1), rnd.randint(y0, y1)
-        c = rnd.choice(colors) + (255,)
-        if rnd.random() < 0.5:
-            r = rnd.randint(6, 13)
-            d.ellipse((x - r, y - r, x + r, y + r), fill=c)
-        else:
-            a, L = rnd.random() * math.pi, rnd.randint(14, 30)
-            d.line((x, y, x + math.cos(a) * L, y + math.sin(a) * L), fill=c, width=8)
+def _words(layer, cx, cy, text, max_w, max_h, start, minimum, color, lit=None, lit_color=PINK, stroke=9, only=None):
+    """Chunky outlined centered text, optionally with the first `lit` words in a highlight color."""
+    f, lines = _fit(text, max_w, max_h, start, minimum, 1.12)
+    lh = int(f.size * 1.12)
+    d = ImageDraw.Draw(layer)
+    base = cy + int(0.35 * f.size) - (len(lines) - 1) * lh / 2
+    idx = 0
+    for k, words in enumerate(lines):
+        line = " ".join(words)
+        x = cx - f.getlength(line) / 2
+        y = base + k * lh
+        for w in words:
+            col = lit_color if ((lit is not None and idx < lit) or (only is not None and idx == only)) else color
+            d.text((x, y), w, font=f, fill=col + (255,), anchor="ls", stroke_width=stroke, stroke_fill=(0, 0, 0, 255))
+            x += f.getlength(w + " ")
+            idx += 1
 
 
-CARD_X0, CARD_X1, CARD_H, CARD_STEP, CARD_Y0 = 70, 950, 150, 172, 840
-
-
-def _choice_card(q_idx, text, i, reveal, is_correct):
-    """One answer card on its own transparent layer so it can slide in."""
-    y = CARD_Y0 + i * CARD_STEP
-    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    box = (CARD_X0, y, CARD_X1, y + CARD_H)
-    light, dark = LETTER_GRADS[i]
-    if is_correct:
-        _shadow(layer, box, 44, blur=30, alpha=200, dy=0, color=GREEN[0])
-        _card(layer, box, 44, GREEN[0], GREEN[1], outline=(255, 255, 255, 255), ow=6, shadow=False)
-    elif reveal:
-        _card(layer, box, 44, fill=(30, 28, 45, 225), shadow=False)
-    else:
-        _card(layer, box, 44, light, dark, alpha=245)
-    cx, cy = CARD_X0 + 78, y + CARD_H // 2
-    dim = reveal and not is_correct
-    _circle(layer, cx, cy, 52, (255, 255, 255, 120 if dim else 245))
-    _ctext(layer, cx, cy, LETTERS[i], font(66), fill=((90, 90, 100, 255) if dim else dark + (255,)))
-    f, lines = _fit(text, CARD_X1 - CARD_X0 - 250, CARD_H - 20, 54, 32, gap=1.15)
-    lh = int(f.size * 1.18)
-    ty = cy - (lh * len(lines)) // 2
-    color = (200, 200, 205, 255) if dim else (255, 255, 255, 255)
-    for ln in lines:
-        _text(layer, (CARD_X0 + 160, ty), ln, f, fill=color, anchor="lt", shadow=not dim)
-        ty += lh
-    if is_correct:
-        d = ImageDraw.Draw(layer)
-        px, py = CARD_X1 - 62, cy
-        d.line([(px - 22, py + 2), (px - 6, py + 20), (px + 24, py - 18)], fill=(255, 255, 255, 255), width=12, joint="curve")
+def _header(theme, text, lit=None):
+    t = THEMES[theme]
+    x0, y0, x1, y1 = HEADER
+    w, h = x1 - x0, y1 - y0
+    layer = _box(w, h, 6, t["fill"], t["line"], 9)
+    _words(layer, w // 2, h // 2, text, w - 110, h - 80, 150, 54, (255, 255, 255), lit, stroke=11)
     return layer
 
 
-def draw_quiz(q_num, total, question, choices, correct_idx, category="", visible=0, anim=1.0,
-              timer=None, reveal=False, think=5, seed=0):
+def _bar(text, letter, style):
+    s = BAR_STYLES[style]
+    w, h = 960, BAR_H
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    rect = _box(w - 70, 112, 8, s["fill"], s["line"], 7)
+    layer.alpha_composite(rect, (70, 12))
+    f = font(78)
+    size = 78
+    while f.getlength(text) > w - 70 - 190 and size > 30:
+        size -= 4
+        f = font(size)
+    _ctext(layer, 70 + (w - 70 + 90) / 2 - 40, 68, text, f, s["text"] + (255,))
+    c = Image.new("RGBA", (136, 136), (0, 0, 0, 0))
+    big = Image.new("RGBA", (136 * SS, 136 * SS), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(big)
+    bd.ellipse((4 * SS, 4 * SS, 132 * SS, 132 * SS), fill=s["circ_line"] + (255,))
+    bd.ellipse((14 * SS, 14 * SS, 122 * SS, 122 * SS), fill=s["circ"] + (255,))
+    c = big.resize((136, 136), Image.LANCZOS)
+    _ctext(c, 68, 68, letter, font(84), s["letter"] + (255,))
+    layer.alpha_composite(c, (0, 0))
+    return layer
+
+
+def _ring(img, cx, cy, r, thickness, frac, color):
+    size = 2 * (r + thickness)
+    layer = Image.new("RGBA", (size * SS, size * SS), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    box = (thickness * SS, thickness * SS, (size - thickness) * SS, (size - thickness) * SS)
+    d.ellipse(box, outline=(255, 255, 255, 90), width=thickness * SS)
+    if frac > 0:
+        d.arc(box, -90, -90 + 360 * min(frac, 1.0), fill=color, width=thickness * SS)
+    _place(img, layer.resize((size, size), Image.LANCZOS), cx, cy)
+
+
+def _number_circle(img, label, reveal, timer, think, urgent):
+    cx, cy = NUM_C
+    big = Image.new("RGBA", (150 * SS, 150 * SS), (0, 0, 0, 0))
+    d = ImageDraw.Draw(big)
+    d.ellipse((2 * SS, 2 * SS, 148 * SS, 148 * SS), fill=(255, 255, 255, 255))
+    d.ellipse((12 * SS, 12 * SS, 138 * SS, 138 * SS), fill=((255, 255, 255, 255) if reveal else (0, 0, 0, 255)))
+    c = big.resize((150, 150), Image.LANCZOS)
+    col = (70, 165, 70) if reveal else ((255, 70, 70) if urgent else HOT)
+    _ctext(c, 75, 75, label, font(92), col + (255,))
+    _place(img, c, cx, cy)
+    if timer is not None and not reveal:
+        _ring(img, cx, cy, 84, 10, max(0.0, timer) / think, (255, 70, 70, 255) if urgent else (255, 110, 185, 255))
+
+
+def _frame_border(img, color):
+    d = ImageDraw.Draw(img)
+    c = color + (255,)
+    d.rectangle((0, 0, W - 1, 17), fill=c)
+    d.rectangle((0, H - 18, W - 1, H - 1), fill=c)
+    d.rectangle((0, 0, 17, H - 1), fill=c)
+    d.rectangle((W - 18, 0, W - 1, H - 1), fill=c)
+
+
+def _clip_frame(img):
+    x0, y0, x1, y1 = CLIP
+    t = 14
+    w, h = x1 - x0 + 2 * t, y1 - y0 + 2 * t
+    outer = _mask(w, h, 30)
+    inner = Image.new("L", (w, h), 0)
+    inner.paste(_mask(w - 2 * t, h - 2 * t, 18), (t, t))
+    a = np.clip(np.array(outer, dtype=np.int16) - np.array(inner, dtype=np.int16), 0, 255).astype("uint8")
+    ring = Image.new("RGBA", (w, h), (255, 255, 255, 255))
+    ring.putalpha(Image.fromarray(a))
+    img.alpha_composite(ring, (x0 - t, y0 - t))
+
+
+def _outline_label(img, cx, cy, text, size, fill=(255, 255, 255)):
+    _ctext(img, cx, cy, text, font(size), fill + (255,), stroke=7)
+
+
+def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choices=(), letters="ABCD",
+               visible=0, anim=1.0, correct_idx=None, reveal=False, timer=None, think=5, q_num=1,
+               plus=0.0, clip=True, num_label=None, **_):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    shown = "green" if reveal else theme
+    _frame_border(img, THEMES[shown]["border"])
+    hx0, hy0, hx1, hy1 = HEADER
+    _place(img, _header(shown, header, lit), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale)
+    if clip:
+        _clip_frame(img)
+    if label:
+        _outline_label(img, 540, 566, label, 50)
 
-    # soft dark gradient top and bottom so text stays readable on any footage
-    top = _grad_img(W, 700, (0, 0, 0), (0, 0, 0), 255, horizontal=False)
-    a = np.linspace(150, 0, 700, dtype=np.float32)[:, None]
-    top.putalpha(Image.fromarray(np.broadcast_to(a, (700, W)).astype("uint8")))
-    img.alpha_composite(top, (0, 0))
-    bot = _grad_img(W, 700, (0, 0, 0), (0, 0, 0), 255, horizontal=False)
-    a = np.linspace(0, 170, 700, dtype=np.float32)[:, None]
-    bot.putalpha(Image.fromarray(np.broadcast_to(a, (700, W)).astype("uint8")))
-    img.alpha_composite(bot, (0, H - 700))
+    bar_style = "red" if theme == "red" else "purple"
+    for i in range(min(visible, len(choices))):
+        if reveal and i != correct_idx:
+            continue
+        style = "green" if reveal else bar_style
+        layer = _bar(choices[i], letters[i], style)
+        cy = BAR_Y0 + i * BAR_STEP + BAR_H / 2
+        if i == visible - 1 and anim < 1.0 or (i == visible - 1 and anim > 1.0):
+            _place(img, layer, 50 + layer.width / 2, cy, anim, min(1.0, max(0.2, (anim - 0.4) * 2.5)))
+        else:
+            _place(img, layer, 50 + layer.width / 2, cy)
 
-    if reveal:  # confetti sits behind the cards
-        _confetti(img, seed + q_num, (40, 330, 1040, 1560))
+    if plus > 0:
+        txt = Image.new("RGBA", (1000, 360), (0, 0, 0, 0))
+        d = ImageDraw.Draw(txt)
+        f = font(250)
+        d.text((500, 180), "+500", font=f, fill=YELLOW + (255,), anchor="mm", stroke_width=18, stroke_fill=(45, 20, 70, 255))
+        _place(img, txt, 540, 795, plus)
 
-    # header: question pill + category pill
-    label = f"QUESTION {q_num}/{total}"
-    f = font(40)
-    tw = int(f.getlength(label))
-    _card(img, (60, 140, 60 + tw + 70, 218), 39, GOLD, (255, 160, 20), shadow=True)
-    _text(img, (95, 180), label, f, fill=(30, 20, 0, 255), anchor="lm", shadow=False)
-    if category:
-        cat = category.split(":")[-1].strip().upper()[:22]
-        cf = font(34)
-        cw = int(cf.getlength(cat))
-        _card(img, (W - 60 - cw - 60, 146, W - 60, 212), 33, fill=(0, 0, 0, 150), outline=(255, 255, 255, 110), ow=3,
-              shadow=False)
-        _text(img, (W - 90 - cw // 2 + 0, 179), cat, cf, anchor="mm", shadow=False)
+    if num_label is not False:
+        _number_circle(img, str(num_label if num_label is not None else q_num), reveal, timer, think,
+                       timer is not None and timer <= 2.0)
 
-    # progress bar
-    done = (q_num - 1 + (1 if reveal else 0.5)) / total
-    _card(img, (60, 246, 1020, 262), 8, fill=(255, 255, 255, 70), shadow=False)
-    if done > 0:
-        _card(img, (60, 246, 60 + max(24, int(960 * done)), 262), 8, GOLD, (255, 120, 40), shadow=False)
-
-    # question card
-    qbox = (60, 296, 1020, 640)
-    _card(img, qbox, 48, fill=(14, 12, 30, 238), outline=GOLD + (255,), ow=5)
-    f, lines = _fit(question, 840, 290, 74, 38)
-    lh = int(f.size * 1.22)
-    y = 296 + (344 - lh * len(lines)) // 2
-    for ln in lines:
-        _text(img, (540, y), ln, f, anchor="mt")
-        y += lh
-
-    # timer ring or reveal banner (between question and answers)
-    cx, cy = 540, 732
-    if reveal:
-        _card(img, (300, cy - 44, 780, cy + 44), 44, GREEN[0], GREEN[1], outline=(255, 255, 255, 255), ow=4)
-        _ctext(img, 540, cy, "CORRECT ANSWER", font(42))
-    elif timer is not None:
-        left = max(0.0, timer)
-        urgent = left <= 2.0
-        col = (255, 80, 80, 255) if urgent else GOLD + (255,)
-        _circle(img, cx, cy, 62, (0, 0, 0, 170))
-        _ring(img, cx, cy, 62, 9, left / think, col)
-        _ctext(img, cx, cy, str(max(1, math.ceil(left))), font(74), fill=col)
-
-    # answer cards (newest one slides in from the right)
-    for i in range(visible):
-        layer = _choice_card(q_num, choices[i], i, reveal, reveal and i == correct_idx)
-        if i == visible - 1 and anim < 1.0:
-            e = 1 - (1 - anim) ** 3
-            shift = int((1 - e) * 420)
-            alpha = layer.getchannel("A").point(lambda v: int(v * e))
-            layer.putalpha(alpha)
-            moved = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-            moved.paste(layer, (shift, 0))
-            layer = moved
-        img.alpha_composite(layer)
-
+    name = env("CHANNEL_NAME")
+    if name:
+        _ctext(img, 540, 1858, name, font(50), (255, 255, 255, 255), stroke=6)
     return img
 
 
-def draw_title(title, subtitle=""):
+def _siren(color_on, on):
+    w, h = 190, 220
+    layer = Image.new("RGBA", (w * SS, h * SS), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    base = (150, 150, 160, 255)
+    d.rounded_rectangle((20 * SS, 170 * SS, 170 * SS, 215 * SS), 10 * SS, fill=base)
+    body = color_on if on else tuple(int(c * 0.35) for c in color_on)
+    d.rounded_rectangle((35 * SS, 40 * SS, 155 * SS, 180 * SS), 55 * SS, fill=body + (255,), outline=(30, 30, 30, 255), width=6 * SS)
+    d.rectangle((35 * SS, 120 * SS, 155 * SS, 172 * SS), fill=body + (255,))
+    d.ellipse((60 * SS, 62 * SS, 90 * SS, 100 * SS), fill=(255, 255, 255, 200 if on else 60))
+    img = layer.resize((w, h), Image.LANCZOS)
+    if on:
+        glow = Image.new("RGBA", (w + 160, h + 160), (0, 0, 0, 0))
+        ImageDraw.Draw(glow).ellipse((20, 20, w + 140, h + 140), fill=color_on + (150,))
+        glow = glow.filter(ImageFilter.GaussianBlur(34))
+        out = Image.new("RGBA", glow.size, (0, 0, 0, 0))
+        out.alpha_composite(glow)
+        out.alpha_composite(img, (80, 80))
+        return out
+    return img
+
+
+def draw_challenge(flash=0, boxscale=1.0, **_):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    veil = Image.new("RGBA", (W, H), (0, 0, 0, 90))
-    img.alpha_composite(veil)
-    box = (60, 600, 1020, 1280)
-    _card(img, box, 64, fill=(14, 12, 30, 225), outline=GOLD + (255,), ow=6)
-    f, lines = _fit(title, 840, 320, 120, 60, gap=1.15)
-    lh = int(f.size * 1.15)
-    sf, slines = _fit(subtitle, 840, 150, 54, 34) if subtitle else (font(40), [])
-    slh = int(sf.size * 1.2)
-    block = lh * len(lines) + (50 + slh * len(slines) if slines else 0)
-    y = 600 + (680 - block) // 2
-    for ln in lines:
-        _text(img, (540, y), ln, f, anchor="mt")
-        y += lh
-    y += 50
-    for ln in slines:
-        _text(img, (540, y), ln, sf, fill=GOLD + (255,), anchor="mt")
-        y += slh
+    _frame_border(img, THEMES["red"]["border"])
+    _place(img, _siren((70, 220, 90), flash % 2 == 0), 540, 420)
+    _place(img, _siren((255, 50, 50), flash % 2 == 1), 540, 1500)
+    box = _box(900, 330, 6, (255, 255, 255), (255, 70, 90), 10)
+    for dy, txt in ((105, "CHALLENGE"), (240, "ROUND")):
+        _ctext(box, 450, dy, txt, font(138), (255, 255, 255, 255), stroke=7, stroke_fill=(220, 30, 50, 255))
+    _place(img, box, 540, 960, boxscale)
+    return img
+
+
+def draw_hook(text="", hl=0, hscale=1.0, **_):
+    """Intro text over the static chalkboard: big outlined words, the word currently being read (index `hl`) in pink."""
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    layer = Image.new("RGBA", (W, 900), (0, 0, 0, 0))
+    _words(layer, W // 2, 450, text, 900, 760, 190, 90, (255, 255, 255), None, stroke=15, only=hl)
+    _place(img, layer, 540, 940, hscale)
     return img
 
 
 def make_overlay(kind, args):
-    return draw_title(**args) if kind == "title" else draw_quiz(**args)
+    if kind == "hook":
+        return draw_hook(**args)
+    return draw_challenge(**args) if kind == "challenge" else draw_scene(**args)
 
 
 def _vcodec_args():
@@ -313,8 +327,9 @@ def _q(path) -> str:
     return path.as_posix().replace("'", "'\\''")
 
 
-def render_segment(bg, frame_specs, duration, out_path, tmp):
-    """frame_specs: list of (start_time, kind, args). Each overlay holds until the next one starts."""
+def render_segment(clip, frame_specs, duration, out_path, tmp, still=False):
+    """frame_specs: list of (start_time, kind, args). Each overlay holds until the next one starts.
+    clip: path of a stock video shown inside the frame, or None."""
     items = []
     for idx, (start, kind, args) in enumerate(frame_specs):
         end = frame_specs[idx + 1][0] if idx + 1 < len(frame_specs) else duration
@@ -328,10 +343,25 @@ def render_segment(bg, frame_specs, duration, out_path, tmp):
     lst = tmp / f"{out_path.stem}.txt"
     lst.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    vf = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30,"
-          "eq=brightness=-0.06:saturation=1.3:contrast=1.08,vignette=angle=PI/5[bg];[1:v]format=rgba[ov];[bg][ov]overlay=0:0:format=auto,format=yuv420p[v]")
-    run_ffmpeg(["-stream_loop", "-1", "-i", bg, "-f", "concat", "-safe", "0", "-i", lst,
-                "-filter_complex", vf, "-map", "[v]", "-t", f"{duration:.3f}", "-an"]
+    if still:  # static image background (chalkboard intro)
+        inputs = ["-loop", "1", "-framerate", "30", "-i", ensure_chalkboard()]
+    else:
+        inputs = ["-ss", f"{random.uniform(0, 7):.2f}", "-stream_loop", "-1", "-i", ensure_marble()]
+    cw, ch = CLIP[2] - CLIP[0], CLIP[3] - CLIP[1]
+    if clip:
+        inputs += ["-stream_loop", "-1", "-i", clip]
+        ov = 2
+        vf = (f"[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];"
+              f"[1:v]scale={cw}:{ch}:force_original_aspect_ratio=increase,crop={cw}:{ch},setsar=1,fps=30[c];"
+              f"[bg][c]overlay={CLIP[0]}:{CLIP[1]}:shortest=0[b2];")
+        base = "b2"
+    else:
+        ov = 1
+        vf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];"
+        base = "bg"
+    vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto,format=yuv420p[v]"
+    run_ffmpeg(inputs + ["-f", "concat", "-safe", "0", "-i", lst, "-filter_complex", vf, "-map", "[v]",
+                         "-t", f"{duration:.3f}", "-an"]
                + _vcodec_args() + ["-pix_fmt", "yuv420p", "-r", "30", out_path])
 
 
