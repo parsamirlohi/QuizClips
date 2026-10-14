@@ -74,16 +74,24 @@ def _is_junk(hit: dict) -> bool:
     return any(j in tags for j in JUNK_TAGS)
 
 
+def _words(query: str) -> list:
+    return [w for w in re.findall(r"[a-z]+", query.lower()) if len(w) >= 3]
+
+
 def tag_score(hit: dict, query: str) -> int:
-    """How many words of the search appear in the video's own tags (Pixabay's search is loose)."""
-    tags = hit.get("tags", "").lower()
+    """How many words of the search appear as whole words in the clip's own tags (Pixabay's search is loose)."""
+    tokens = set(re.findall(r"[a-z]+", hit.get("tags", "").lower()))
     score = 0
-    for w in re.findall(r"[a-z]+", query.lower()):
-        if len(w) < 3:
-            continue
-        if w in tags or (w.endswith("s") and w[:-1] in tags):
+    for w in _words(query):
+        if w in tokens or w + "s" in tokens or (w.endswith("s") and w[:-1] in tokens):
             score += 1
     return score
+
+
+def need_score(query: str) -> int:
+    """At least half of the search words must match, so 'Universal Serial Bus' never passes on 'bus' alone."""
+    n = len(_words(query))
+    return max(1, (n + 1) // 2)
 
 
 def _pixabay_hits(q: str, key: str) -> list:
@@ -105,6 +113,48 @@ def _pixabay_hits(q: str, key: str) -> list:
     return hits
 
 
+PIXABAY_PHOTO_API = "https://pixabay.com/api/"
+_PHOTO_CACHE: dict = {}
+
+
+def _pixabay_photo_hits(q: str, key: str) -> list:
+    cached = _PHOTO_CACHE.get(q)
+    if cached and time.time() - cached[0] < 86400:
+        return cached[1]
+    r = requests.get(
+        PIXABAY_PHOTO_API,
+        params={"key": key, "q": q[:100], "image_type": "photo", "orientation": "horizontal", "per_page": 20,
+                "safesearch": "true", "min_width": 900},
+        timeout=30,
+    )
+    if r.status_code != 200:
+        return []
+    hits = r.json().get("hits", [])
+    _PHOTO_CACHE[q] = (time.time(), hits)
+    return hits
+
+
+def _find_pixabay_photo(q: str, key: str, used: set):
+    """Photos have far more coverage than videos for specific topics; the renderer adds a slow zoom."""
+    hits = [h for h in _pixabay_photo_hits(q, key) if ("p%s" % h["id"]) not in used and not _is_junk(h)]
+    scored = [(tag_score(h, q), h) for h in hits]
+    best = max((sc for sc, _ in scored), default=0)
+    hits = [h for sc, h in scored if best >= need_score(q) and sc >= best]
+    print(f"[footage] photo search '{q}': {len(hits)} matching results", flush=True)
+    if not hits:
+        return None
+    h = random.choice(hits[:8])
+    url = h.get("largeImageURL") or h.get("webformatURL")
+    if not url:
+        return None
+    dest = CACHE_DIR / f"pixabay_photo_{h['id']}.jpg"
+    if not dest.exists():
+        _download(url, dest)
+    used.add("p%s" % h["id"])
+    print(f"[footage]   -> picked photo tagged: {h.get('tags', '')}", flush=True)
+    return dest, f"{q}  ->  photo tags: {h.get('tags', '')[:60]}"
+
+
 def _find_pixabay(queries: list, used: set):
     key = env("PIXABAY_API_KEY")
     if not key:
@@ -116,8 +166,16 @@ def _find_pixabay(queries: list, used: set):
         if not generic:  # only accept videos whose own tags actually match the search
             scored = [(tag_score(h, q), h) for h in hits]
             best = max((sc for sc, _ in scored), default=0)
-            hits = [h for sc, h in scored if sc >= max(1, best)] if best > 0 else []
+            hits = [h for sc, h in scored if sc >= max(need_score(q), best)] if best >= need_score(q) else []
         print(f"[footage] searched '{q}': {len(hits)} matching results", flush=True)
+        if not hits and not generic:
+            try:
+                photo = _find_pixabay_photo(q, key, used)
+            except Exception as e:  # keep going with the next query
+                print(f"[footage] photo search failed: {e}", flush=True)
+                photo = None
+            if photo:
+                return photo
         if not hits:
             continue
         h = random.choice(hits[:8])

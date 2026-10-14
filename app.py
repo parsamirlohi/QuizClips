@@ -1,4 +1,5 @@
 """Local web app: open http://localhost:8000 and click Generate."""
+import re
 import threading
 import time
 import uuid
@@ -25,6 +26,31 @@ class GenerateRequest(BaseModel):
     questions: int = Field(default=5, ge=3, le=10)
     voice: str = Field(default="en-US-AriaNeural", max_length=60)
     categories: list[int] = Field(default_factory=list, max_length=24)  # empty = mix of all
+    watermark_on: bool = True
+    watermark_platform: str = Field(default="tiktok", max_length=20)
+    watermark_handle: str = Field(default="", max_length=60)
+
+
+PLATFORMS = {
+    "tiktok": "tiktok.com/@{}",
+    "youtube": "youtube.com/@{}",
+    "instagram": "instagram.com/{}",
+    "x": "x.com/{}",
+    "facebook": "facebook.com/{}",
+    "custom": "{}",
+}
+
+
+def watermark_text(req: GenerateRequest) -> str:
+    """The text drawn at the bottom of the video ('' = no watermark)."""
+    if not req.watermark_on:
+        return ""
+    handle = req.watermark_handle.strip()
+    if req.watermark_platform != "custom":
+        handle = re.sub(r"[^\w.\-]", "", handle.lstrip("@"))
+    if not handle:
+        return ""
+    return PLATFORMS.get(req.watermark_platform, "{}").format(handle)[:60]
 
 
 def run_job(job_id: str, req: GenerateRequest):
@@ -36,7 +62,7 @@ def run_job(job_id: str, req: GenerateRequest):
 
     try:
         cats = [c for c in req.categories if c in CATEGORY_LABELS]
-        result = build_quiz(req.questions, req.voice, progress, cats)
+        result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req))
         job.update(status="done", progress=1.0, message="Done!", video_url=f"/output/{result['file']}",
                    questions=result["questions"], duration=result["duration"])
     except Exception as e:
@@ -92,7 +118,7 @@ app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
 
 @app.get("/")
 def index():
-    return FileResponse(BASE / "static" / "index.html")
+    return FileResponse(BASE / "static" / "index.html", headers={"Cache-Control": "no-store"})
 
 
 if __name__ == "__main__":

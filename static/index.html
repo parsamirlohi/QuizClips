@@ -25,6 +25,11 @@
   .chip { background:#0d0e12; color:var(--text); border:1px solid var(--line); border-radius:99px; padding:7px 14px; font:inherit; font-size:14px; cursor:pointer; }
   .chip.on { background:linear-gradient(90deg,var(--accent),var(--accent2)); border-color:transparent; font-weight:600; }
   .chip.mix { font-weight:600; }
+  .wm { margin-bottom:18px; }
+  .wm .check { flex-direction:row; align-items:center; gap:8px; color:var(--text); font-size:15px; margin-bottom:10px; }
+  .wm input[type=text] { background:#0d0e12; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; min-width:220px; }
+  .wm .row { margin-bottom:6px; }
+  .hint { color:var(--muted); font-size:13px; }
   .err { color:#ff8a8a; margin-top:12px; white-space:pre-wrap; }
   #status { display:none; margin-top:18px; }
   .bar { height:10px; background:#0d0e12; border-radius:99px; overflow:hidden; }
@@ -59,6 +64,25 @@
     <div class="cats">
       <span>Categories</span>
       <div class="chips" id="chips"></div>
+    </div>
+    <div class="wm">
+      <label class="check"><input type="checkbox" id="wmOn" checked> Show my link at the bottom of the video</label>
+      <div class="row" id="wmRow">
+        <label>Platform
+          <select id="wmPlat">
+            <option value="tiktok">TikTok</option>
+            <option value="youtube">YouTube</option>
+            <option value="instagram">Instagram</option>
+            <option value="x">X (Twitter)</option>
+            <option value="facebook">Facebook</option>
+            <option value="custom">Custom text</option>
+          </select>
+        </label>
+        <label>Handle
+          <input type="text" id="wmHandle" placeholder="yourname" maxlength="40" autocomplete="off">
+        </label>
+      </div>
+      <div class="hint" id="wmPrev"></div>
     </div>
     <button id="go">Generate quiz video</button>
     <div class="err" id="err"></div>
@@ -110,6 +134,29 @@ async function loadHistory() {
   });
 }
 
+const PREFIX = { tiktok: "tiktok.com/@", youtube: "youtube.com/@", instagram: "instagram.com/", x: "x.com/", facebook: "facebook.com/", custom: "" };
+function wmText() {
+  if (!$("wmOn").checked) return "";
+  let h = $("wmHandle").value.trim();
+  const p = $("wmPlat").value;
+  if (p !== "custom") h = h.replace(/^@+/, "").replace(/[^\w.\-]/g, "");
+  return h ? PREFIX[p] + h : "";
+}
+function wmUpdate() {
+  const t = wmText();
+  $("wmRow").style.opacity = $("wmOn").checked ? 1 : 0.4;
+  $("wmPrev").textContent = !$("wmOn").checked ? "No link will be shown." : t ? "Shown as: " + t : "Type your handle to show a link.";
+  try { localStorage.setItem("qvm_wm", JSON.stringify({ on: $("wmOn").checked, p: $("wmPlat").value, h: $("wmHandle").value })); } catch (e) {}
+}
+function wmInit() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem("qvm_wm") || "null"); } catch (e) {}
+  if (s) { $("wmOn").checked = !!s.on; $("wmPlat").value = s.p || "tiktok"; $("wmHandle").value = s.h || ""; }
+  ["wmOn", "wmPlat", "wmHandle"].forEach((id) => $(id).addEventListener("input", wmUpdate));
+  wmUpdate();
+}
+wmInit();
+
 const selected = new Set(); // empty set = mix of all categories
 function buildChips(cats) {
   const box = $("chips");
@@ -141,7 +188,8 @@ $("go").addEventListener("click", async () => {
   try {
     const r = await fetch("/api/generate", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ questions: Number($("count").value), voice: $("voice").value, categories: [...selected] }),
+      body: JSON.stringify({ questions: Number($("count").value), voice: $("voice").value, categories: [...selected],
+        watermark_on: $("wmOn").checked, watermark_platform: $("wmPlat").value, watermark_handle: $("wmHandle").value }),
     });
     if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || "Request failed"); }
     const job = await r.json();

@@ -5,9 +5,12 @@ import time
 import uuid
 
 from audio import SR, Mixer, bing, pop, siren, sparkle, tick, whoosh
-from config import CACHE_DIR, OUTPUT_DIR, WORK_DIR, env
+from chalkboard import ensure_chalkboard
+from config import ASSETS_DIR, CACHE_DIR, OUTPUT_DIR, WORK_DIR, env
 from videos import find_background
 from questions import LETTERS, get_questions, mark_used, pick_letters
+import render
+from footage_plan import refine_queries
 from render import concat_videos, mux, render_segment
 from tts import synthesize_all
 
@@ -16,8 +19,22 @@ INTRO_QUERIES = ["neon lights abstract", "colorful abstract background", "light 
                  "glowing lines", "bokeh lights", "abstract waves"]
 PROMPTS = ["Pick your answer!", "Comment your guess!", "Lock it in!", "No cheating!", "Think fast!",
            "Shout it out in the comments!", "Which one is it?"]
-THINK = int(env("THINK_SECONDS", "5"))
+THINK = int(env("THINK_SECONDS", "7"))
 POP_ANIM = (0.55, 1.08, 0.96, 1.0)
+
+
+def _intro_background(used):
+    """Real chalkboard picture/video for the intro. Order: your own assets/intro_bg.* file, then a chalkboard
+    video from Pixabay, then the built-in generated chalkboard picture."""
+    for ext in ("mp4", "mov", "webm", "jpg", "jpeg", "png"):
+        mine = ASSETS_DIR / f"intro_bg.{ext}"
+        if mine.exists():
+            return mine
+    try:
+        return find_background(["chalkboard writing", "chalkboard", "blackboard classroom"], used)[0]
+    except Exception as e:  # no internet / no result: fall back to the offline picture
+        print(f"[intro] using built-in chalkboard: {e}", flush=True)
+        return ensure_chalkboard()
 
 
 def _pops(frames, t, base, key="anim"):
@@ -41,7 +58,7 @@ def _plan_hook(clip, n, sfx):
         acc += wt
     frames.append((t0 + dur, "hook", dict(text=text, hl=-1, hscale=1.0)))
     events = [(0.0, sfx["whoosh"], 0.8), (0.05, sfx["pop"], 0.6), (t0, clip, 1.0)]
-    return frames, t0 + dur + 0.9, events, False, True
+    return frames, t0 + dur + 0.9, events, False
 
 
 def _plan_challenge(clip, sfx):
@@ -68,12 +85,11 @@ def _plan_question(i, total, q, clips, sfx, challenge=False):
     events.append((t, cp, 1.0))
     for s_left in range(THINK, 0, -1):
         events.append((t, sfx["tick"], 0.4))
-        for sub in range(4):
-            frames.append((t + 0.25 * sub, "scene", dict(base, visible=len(q["choices"]), timer=s_left - 0.25 * sub)))
+        for sub in range(6):
+            frames.append((t + sub / 6, "scene", dict(base, visible=len(q["choices"]), timer=s_left - sub / 6)))
         t += 1.0
     full = dict(base, visible=len(q["choices"]), reveal=True)
-    for k, sc in enumerate((0.3, 0.8, 1.15, 1.0)):
-        frames.append((t + 0.06 * k, "scene", dict(full, plus=sc)))
+    frames.append((t, "scene", full))
     events += [(t, sfx["bing"], 0.9), (t + 0.05, sfx["sparkle"], 0.7), (t + 0.5, cr, 1.0)]
     t += 0.5 + len(cr) / SR + 1.2
     return frames, t, events, True
@@ -113,7 +129,8 @@ def cleanup_disk() -> None:
 
 
 def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None,
-               categories=None) -> dict:
+               categories=None, watermark: str = "") -> dict:
+    render.WATERMARK = watermark or ""
     job_dir = WORK_DIR / uuid.uuid4().hex[:8]
     job_dir.mkdir(parents=True)
     try:
@@ -141,6 +158,10 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
 
         used = set()
         progress("Finding background videos...", 0.14)
+        try:
+            refine_queries(quiz)
+        except Exception as e:  # never let search-term planning break the video
+            print(f"[footage] search planning skipped: {e}", flush=True)
         bgs = []
         for i, q in enumerate(quiz):
             progress(f"Finding video for question {i + 1} of {n}...", 0.14 + 0.24 * i / n)
@@ -152,7 +173,7 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
         sfx = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle(), "siren": siren()}
         plans, scene_bgs, ci = [], [], 1
         plans.append(_plan_hook(clips[0], n, sfx))
-        scene_bgs.append(None)
+        scene_bgs.append(_intro_background(used))
         for i, q in enumerate(quiz):
             is_ch = challenge and i == n - 1
             if is_ch:
@@ -167,10 +188,11 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
 
         total = sum(p[1] for p in plans)
         mixer, seg_paths, offset = Mixer(total), [], 0.0
-        for si, ((frames, dur, events, has_clip, *extra), bg) in enumerate(zip(plans, scene_bgs)):
+        for si, ((frames, dur, events, has_clip), bg) in enumerate(zip(plans, scene_bgs)):
+            kind0 = frames[0][1]
             progress(f"Rendering scene {si + 1} of {len(plans)}...", 0.40 + 0.48 * si / len(plans))
             seg = job_dir / f"seg_{si:02d}.mp4"
-            render_segment(bg if has_clip else None, frames, dur, seg, job_dir, still=bool(extra))
+            render_segment(bg if has_clip else None, frames, dur, seg, job_dir, full=bg if kind0 == 'hook' else None)
             seg_paths.append(seg)
             for t, clip, gain in events:
                 mixer.add(offset + t, clip, gain)

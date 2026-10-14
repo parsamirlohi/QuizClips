@@ -10,14 +10,15 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from config import ASSETS_DIR, env, run_ffmpeg
-from chalkboard import ensure_chalkboard
+from chalkboard import ensure_chalkboard  # noqa: F401  (offline fallback intro picture)
 from marble import ensure_marble
 
 W, H = 1080, 1920
 SS = 3  # supersampling for smooth shapes
+WATERMARK = None  # text for the bottom of the screen; set per video by the pipeline ('' = none)
 
-PINK = (255, 110, 185)
-HOT = (255, 70, 160)
+PINK = (255, 78, 178)
+HOT = (246, 36, 140)
 YELLOW = (255, 226, 40)
 THEMES = {
     "purple": dict(fill=(112, 84, 240), line=PINK, border=PINK),
@@ -34,7 +35,7 @@ BAR_STYLES = {
 CLIP = (215, 620, 865, 970)
 HEADER = (56, 64, 1024, 500)
 BAR_Y0, BAR_STEP, BAR_H = 1010, 172, 136
-NUM_C = (540, 1772)
+NUM_C = (540, 1745)
 
 _FONTS = [
     str(ASSETS_DIR / "fonts" / "LilitaOne-Regular.ttf"),
@@ -45,10 +46,13 @@ _FONTS = [
 ]
 
 
+HOOK_FONTS = [str(ASSETS_DIR / "fonts" / "Bangers-Regular.ttf")]
+
+
 @lru_cache(maxsize=None)
-def font(size: int):
+def font(size: int, face: str = "main"):
     custom = env("FONT_PATH")
-    for p in ([custom] if custom else []) + _FONTS:
+    for p in (HOOK_FONTS if face == "hook" else []) + ([custom] if custom else []) + _FONTS:
         try:
             return ImageFont.truetype(p, size)
         except OSError:
@@ -111,10 +115,10 @@ def _wrap(text, f, max_w):
     return lines  # list of word lists
 
 
-def _fit(text, max_w, max_h, start, minimum, gap=1.1):
+def _fit(text, max_w, max_h, start, minimum, gap=1.1, face="main"):
     size = start
     while True:
-        f = font(size)
+        f = font(size, face)
         lines = _wrap(text, f, max_w)
         ok = len(lines) * size * gap <= max_h and all(f.getlength(" ".join(l)) <= max_w for l in lines)
         if ok or size <= minimum:
@@ -122,9 +126,9 @@ def _fit(text, max_w, max_h, start, minimum, gap=1.1):
         size -= 4
 
 
-def _words(layer, cx, cy, text, max_w, max_h, start, minimum, color, lit=None, lit_color=PINK, stroke=9, only=None):
+def _words(layer, cx, cy, text, max_w, max_h, start, minimum, color, lit=None, lit_color=PINK, stroke=9, only=None, face="main"):
     """Chunky outlined centered text, optionally with the first `lit` words in a highlight color."""
-    f, lines = _fit(text, max_w, max_h, start, minimum, 1.12)
+    f, lines = _fit(text, max_w, max_h, start, minimum, 1.12, face)
     lh = int(f.size * 1.12)
     d = ImageDraw.Draw(layer)
     base = cy + int(0.35 * f.size) - (len(lines) - 1) * lh / 2
@@ -193,17 +197,36 @@ def _number_circle(img, label, reveal, timer, think, urgent):
     col = (70, 165, 70) if reveal else ((255, 70, 70) if urgent else HOT)
     _ctext(c, 75, 75, label, font(92), col + (255,))
     _place(img, c, cx, cy)
-    if timer is not None and not reveal:
-        _ring(img, cx, cy, 84, 10, max(0.0, timer) / think, (255, 70, 70, 255) if urgent else (255, 110, 185, 255))
 
 
-def _frame_border(img, color):
+def _frame_border(img, color, frac=1.0, t=24):
+    """Border around the screen that doubles as the timer: it shrinks clockwise from the top centre."""
+    if frac <= 0:
+        return
+    if frac < 1.0:  # white track of the same size behind the pink, so you can see the timer deplete
+        _frame_border(img, (255, 255, 255), 1.0, t)
     d = ImageDraw.Draw(img)
     c = color + (255,)
-    d.rectangle((0, 0, W - 1, 17), fill=c)
-    d.rectangle((0, H - 18, W - 1, H - 1), fill=c)
-    d.rectangle((0, 0, 17, H - 1), fill=c)
-    d.rectangle((W - 18, 0, W - 1, H - 1), fill=c)
+    # clockwise path: top-centre -> top-right -> bottom-right -> bottom-left -> top-left -> top-centre
+    segs = [((W // 2, 0), (W, 0)), ((W, 0), (W, H)), ((W, H), (0, H)), ((0, H), (0, 0)), ((0, 0), (W // 2, 0))]
+    total = sum(abs(b[0] - a[0]) + abs(b[1] - a[1]) for a, b in segs)
+    left = total * min(frac, 1.0)
+    for (x0, y0), (x1, y1) in segs:
+        length = abs(x1 - x0) + abs(y1 - y0)
+        use = min(length, left)
+        if use <= 0:
+            break
+        ex = x0 + (x1 - x0) * use / length
+        ey = y0 + (y1 - y0) * use / length
+        xa, xb = sorted((x0, ex))
+        ya, yb = sorted((y0, ey))
+        if y0 == y1:  # horizontal run, drawn on the top or bottom edge
+            top = 0 if y0 == 0 else H - t
+            d.rectangle((xa, top, xb, top + t - 1), fill=c)
+        else:
+            left_x = 0 if x0 == 0 else W - t
+            d.rectangle((left_x, ya, left_x + t - 1, yb), fill=c)
+        left -= use
 
 
 def _clip_frame(img):
@@ -225,10 +248,15 @@ def _outline_label(img, cx, cy, text, size, fill=(255, 255, 255)):
 
 def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choices=(), letters="ABCD",
                visible=0, anim=1.0, correct_idx=None, reveal=False, timer=None, think=5, q_num=1,
-               plus=0.0, clip=True, num_label=None, **_):
+               plus=0.0, clip=True, num_label=None, border=True, **_):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     shown = "green" if reveal else theme
-    _frame_border(img, THEMES[shown]["border"])
+    if timer is not None:
+        bfrac = timer / think
+    else:
+        bfrac = 0.0 if reveal else 1.0
+    if border:
+        _frame_border(img, THEMES[theme]["border"], bfrac)
     hx0, hy0, hx1, hy1 = HEADER
     _place(img, _header(shown, header, lit), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale)
     if clip:
@@ -259,9 +287,9 @@ def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choice
         _number_circle(img, str(num_label if num_label is not None else q_num), reveal, timer, think,
                        timer is not None and timer <= 2.0)
 
-    name = env("CHANNEL_NAME")
-    if name:
-        _ctext(img, 540, 1858, name, font(50), (255, 255, 255, 255), stroke=6)
+    name = WATERMARK if WATERMARK is not None else env("CHANNEL_NAME")
+    if name and name.lower() != "none":
+        _ctext(img, 540, 1850, name, font(36), (255, 255, 255, 255), stroke=5)
     return img
 
 
@@ -290,9 +318,8 @@ def _siren(color_on, on):
 def draw_challenge(flash=0, boxscale=1.0, **_):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     _frame_border(img, THEMES["red"]["border"])
-    _place(img, _siren((70, 220, 90), flash % 2 == 0), 540, 420)
-    _place(img, _siren((255, 50, 50), flash % 2 == 1), 540, 1500)
-    box = _box(900, 330, 6, (255, 255, 255), (255, 70, 90), 10)
+    line = (255, 70, 90) if flash % 2 == 0 else (255, 255, 255)
+    box = _box(900, 330, 6, (255, 255, 255), line, 10)
     for dy, txt in ((105, "CHALLENGE"), (240, "ROUND")):
         _ctext(box, 450, dy, txt, font(138), (255, 255, 255, 255), stroke=7, stroke_fill=(220, 30, 50, 255))
     _place(img, box, 540, 960, boxscale)
@@ -303,7 +330,7 @@ def draw_hook(text="", hl=0, hscale=1.0, **_):
     """Intro text over the static chalkboard: big outlined words, the word currently being read (index `hl`) in pink."""
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     layer = Image.new("RGBA", (W, 900), (0, 0, 0, 0))
-    _words(layer, W // 2, 450, text, 900, 760, 190, 90, (255, 255, 255), None, stroke=15, only=hl)
+    _words(layer, W // 2, 450, text, 940, 780, 250, 100, (255, 255, 255), None, stroke=16, only=hl, face="hook")
     _place(img, layer, 540, 940, hscale)
     return img
 
@@ -327,7 +354,7 @@ def _q(path) -> str:
     return path.as_posix().replace("'", "'\\''")
 
 
-def render_segment(clip, frame_specs, duration, out_path, tmp, still=False):
+def render_segment(clip, frame_specs, duration, out_path, tmp, full=None):
     """frame_specs: list of (start_time, kind, args). Each overlay holds until the next one starts.
     clip: path of a stock video shown inside the frame, or None."""
     items = []
@@ -343,21 +370,36 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, still=False):
     lst = tmp / f"{out_path.stem}.txt"
     lst.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-    if still:  # static image background (chalkboard intro)
-        inputs = ["-loop", "1", "-framerate", "30", "-i", ensure_chalkboard()]
+    if full:  # full-screen picture or video behind everything (chalkboard intro)
+        if str(full).lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+            inputs = ["-loop", "1", "-framerate", "30", "-i", str(full)]
+        else:
+            inputs = ["-stream_loop", "-1", "-i", str(full)]
     else:
         inputs = ["-ss", f"{random.uniform(0, 7):.2f}", "-stream_loop", "-1", "-i", ensure_marble()]
     cw, ch = CLIP[2] - CLIP[0], CLIP[3] - CLIP[1]
     if clip:
-        inputs += ["-stream_loop", "-1", "-i", clip]
+        photo = str(clip).lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
+        if photo:  # a single photo with a slow zoom-in
+            inputs += ["-i", str(clip)]
+            frames = int(duration * 30) + 30
+            cvf = (f"[1:v]scale={cw * 2}:{ch * 2}:force_original_aspect_ratio=increase,crop={cw * 2}:{ch * 2},"
+                   f"zoompan=z='min(1+0.0009*on,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={cw}x{ch}:fps=30,"
+                   f"setsar=1[c];")
+        else:
+            inputs += ["-stream_loop", "-1", "-i", clip]
+            cvf = f"[1:v]scale={cw}:{ch}:force_original_aspect_ratio=increase,crop={cw}:{ch},setsar=1,fps=30[c];"
         ov = 2
-        vf = (f"[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];"
-              f"[1:v]scale={cw}:{ch}:force_original_aspect_ratio=increase,crop={cw}:{ch},setsar=1,fps=30[c];"
+        vf = (f"[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];" + cvf +
               f"[bg][c]overlay={CLIP[0]}:{CLIP[1]}:shortest=0[b2];")
         base = "b2"
     else:
         ov = 1
-        vf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];"
+        if full:
+            vf = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase:flags=bicubic,crop=1080:1920,setsar=1,"
+                  "fps=30,eq=brightness=-0.10:saturation=0.9[bg];")
+        else:
+            vf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];"
         base = "bg"
     vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto,format=yuv420p[v]"
     run_ffmpeg(inputs + ["-f", "concat", "-safe", "0", "-i", lst, "-filter_complex", vf, "-map", "[v]",

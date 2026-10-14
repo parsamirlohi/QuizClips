@@ -167,6 +167,32 @@ def _concrete_base(word: str):
     return next((f for f in forms if f in CONCRETE), None)
 
 
+GENERIC = {"famous", "country", "called", "known", "first", "largest", "biggest", "smallest", "between",
+           "following", "would", "could", "often", "year", "years", "name", "named", "term", "most", "common",
+           "commonly", "type", "kind", "original", "originally", "number", "capital", "city", "which", "wrote",
+           "written", "invented", "discovered", "created", "found", "form", "part", "main", "major", "used",
+           "people", "person", "world", "ever", "after", "before", "during", "since", "other", "another",
+           "something", "really", "known", "popular", "current", "currently", "average", "typically", "usually"}
+
+
+# Categories whose answers are real things you can film (a country, an animal, an element ...).
+# For film/TV/music/people questions the answer is a name nobody has footage of, so we show the matching
+# *setting* instead (film set, concert, gaming ...) via the category themes.
+THING_CATS = {"geography", "animals", "science & nature", "sports", "general knowledge", "vehicles", "art"}
+
+
+def subject_queries(question: str, correct: str, category: str = "") -> list:
+    """The answer itself when it is something that can be filmed (a country, an animal, an element ...)."""
+    return []  # footage is chosen from the question and category only, never from the answer
+    if (category or "").lower().strip() not in THING_CATS:
+        return []
+    ans = re.sub(r"\s+", " ", (correct or "").strip())
+    if (not ans or re.fullmatch(r"[\d.,\-%/ ]+", ans) or ans.lower() in ("true", "false")
+            or len(ans.split()) > 3 or len(ans) > 28):
+        return []
+    return [ans]
+
+
 def keywords_from(question: str, correct: str, category: str) -> list:
     """Footage searches, best first. Only real, concrete things are searched by name; anything else
     falls back to footage themed to the question's category, so it is never random."""
@@ -186,7 +212,7 @@ def keywords_from(question: str, correct: str, category: str) -> list:
         if len(caps) >= 2:
             queries.append(" ".join(caps[:2]))
         queries += caps[:2]
-    queries = queries[:4] + category_themes(category) + ["abstract colorful background"]
+    queries = subject_queries(question, correct, category) + queries[:4] + category_themes(category) + ["abstract colorful background"]
     out = []
     for q in queries:
         if q and q not in out:

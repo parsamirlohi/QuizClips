@@ -3,7 +3,7 @@ import math
 
 import numpy as np
 
-from config import ASSETS_DIR, run_ffmpeg
+from config import ASSETS_DIR
 
 MARBLE = ASSETS_DIR / "marble.mp4"
 W, H, FPS, SECONDS = 406, 720, 30, 8
@@ -11,7 +11,7 @@ W, H, FPS, SECONDS = 406, 720, 30, 8
 # lilac -> pink -> white -> violet, blended smoothly
 STOPS = np.array([
     [176, 124, 255],
-    [255, 128, 208],
+    [255, 92, 192],
     [252, 236, 255],
     [150, 100, 245],
     [214, 160, 255],
@@ -44,17 +44,25 @@ def ensure_marble():
     """Create assets/marble.mp4 if missing. Takes a few seconds the first time."""
     if MARBLE.exists() and MARBLE.stat().st_size > 10_000:
         return MARBLE
-    import imageio
+    import subprocess
+
+    from config import ffmpeg_exe
 
     tmp = MARBLE.with_suffix(".tmp.mp4")
     n = FPS * SECONDS
-    writer = imageio.get_writer(str(tmp), fps=FPS, codec="libx264", macro_block_size=1,
-                                ffmpeg_params=["-crf", "16"])
+    cmd = [ffmpeg_exe(), "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
+           "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", str(tmp)]
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         for i in range(n):
-            writer.append_data(_frame(i / n))
+            p.stdin.write(_frame(i / n).tobytes())
+        p.stdin.close()
+        err = p.stderr.read().decode(errors="ignore")
+        if p.wait() != 0:
+            raise RuntimeError("Could not build the marble background: " + err[-400:])
     finally:
-        writer.close()
+        if p.poll() is None:
+            p.kill()
     tmp.replace(MARBLE)
     return MARBLE
 
