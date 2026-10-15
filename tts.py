@@ -1,8 +1,11 @@
 """AI narration using Microsoft's free neural voices via edge-tts (no API key)."""
 import asyncio
+import io
 import shutil
 import tempfile
 import uuid
+import wave
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +19,28 @@ VOICES = [
     ("en-US-JennyNeural", "Jenny (female)"),
     ("en-US-ChristopherNeural", "Christopher (male)"),
 ]
+
+PREVIEW_TEXT = "Ready for a quick quiz? Which planet is known as the Red Planet? Pick your answer!"
+
+
+def voice_preview(voice: str) -> bytes:
+    """A short sample at the same speaking rate as the quiz narration."""
+    if voice not in {v for v, _ in VOICES}:
+        raise ValueError("Unsupported voice")
+    return _cached_preview(voice, is_mock())
+
+
+@lru_cache(maxsize=8)
+def _cached_preview(voice: str, mock: bool) -> bytes:
+    clip = _mock_voice(PREVIEW_TEXT) if mock else synthesize_all([PREVIEW_TEXT], voice)[0]
+    pcm = (np.clip(clip, -1, 1) * 32767).astype("<i2")
+    output = io.BytesIO()
+    with wave.open(output, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(SR)
+        wav.writeframes(pcm.tobytes())
+    return output.getvalue()
 
 
 def _mock_voice(text: str) -> np.ndarray:

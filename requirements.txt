@@ -3,5 +3,6 @@ uvicorn
 requests
 pillow>=10.1
 numpy
+imageio
 imageio-ffmpeg
 edge-tts

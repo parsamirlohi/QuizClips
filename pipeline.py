@@ -23,7 +23,7 @@ THINK = int(env("THINK_SECONDS", "7"))
 POP_ANIM = (0.55, 1.08, 0.96, 1.0)
 
 
-def _intro_background(used):
+def _intro_background(used, cache_dir=None):
     """Real chalkboard picture/video for the intro. Order: your own assets/intro_bg.* file, then a chalkboard
     video from Pixabay, then the built-in generated chalkboard picture."""
     for ext in ("mp4", "mov", "webm", "jpg", "jpeg", "png"):
@@ -31,7 +31,7 @@ def _intro_background(used):
         if mine.exists():
             return mine
     try:
-        return find_background(["chalkboard writing", "chalkboard", "blackboard classroom"], used)[0]
+        return find_background(["chalkboard writing", "chalkboard", "blackboard classroom"], used, cache_dir=cache_dir)[0]
     except Exception as e:  # no internet / no result: fall back to the offline picture
         print(f"[intro] using built-in chalkboard: {e}", flush=True)
         return ensure_chalkboard()
@@ -111,13 +111,7 @@ def _plan_outro(clip, sfx):
 
 
 def cleanup_disk() -> None:
-    """Keep disk use small: clear downloaded stock clips and (optionally) trim old finished videos."""
-    if env("KEEP_CACHE") != "1":
-        for f in CACHE_DIR.glob("*"):
-            try:
-                f.unlink()
-            except OSError:
-                pass
+    """Optionally trim finished videos; each job cleans up its own footage separately."""
     keep = int(env("MAX_KEEP_VIDEOS", "0") or 0)  # 0 = keep every finished video
     if keep > 0:
         vids = sorted(OUTPUT_DIR.glob("quiz_*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -133,6 +127,7 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
     render.WATERMARK = watermark or ""
     job_dir = WORK_DIR / uuid.uuid4().hex[:8]
     job_dir.mkdir(parents=True)
+    media_dir = job_dir / "media"
     try:
         progress("Picking questions...", 0.03)
         raw = get_questions(n_questions, categories)
@@ -165,15 +160,15 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
         bgs = []
         for i, q in enumerate(quiz):
             progress(f"Finding video for question {i + 1} of {n}...", 0.14 + 0.24 * i / n)
-            path, matched = find_background(q["video_queries"], used)
+            path, matched = find_background(q["video_queries"], used, question=q["question"], cache_dir=media_dir)
             q["footage"] = matched
             bgs.append(path)
-        outro_bg = find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used)[0]
+        outro_bg = find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used, cache_dir=media_dir)[0]
 
         sfx = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle(), "siren": siren()}
         plans, scene_bgs, ci = [], [], 1
         plans.append(_plan_hook(clips[0], n, sfx))
-        scene_bgs.append(_intro_background(used))
+        scene_bgs.append(_intro_background(used, media_dir))
         for i, q in enumerate(quiz):
             is_ch = challenge and i == n - 1
             if is_ch:

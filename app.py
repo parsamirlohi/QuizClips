@@ -6,7 +6,7 @@ import uuid
 import webbrowser
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -14,7 +14,7 @@ from config import BASE, ENV_STATUS, OUTPUT_DIR, env, is_mock
 from videos import has_video_key
 from pipeline import build_quiz
 from questions import CATEGORY_LABELS
-from tts import VOICES
+from tts import VOICES, voice_preview
 
 app = FastAPI(title="Quiz Video Maker")
 jobs: dict = {}
@@ -83,6 +83,17 @@ def config():
         "voices": [{"id": v, "label": label} for v, label in VOICES],
         "categories": [{"id": i, "label": label} for i, label in CATEGORY_LABELS.items()],
     }
+
+
+@app.get("/api/voices/{voice}/preview")
+def preview_voice(voice: str):
+    if voice not in {v for v, _ in VOICES}:
+        raise HTTPException(400, "Choose one of the available voices.")
+    try:
+        audio = voice_preview(voice)
+    except Exception:
+        raise HTTPException(503, "Could not create the voice preview. Check your internet connection and try again.")
+    return Response(audio, media_type="audio/wav", headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/generate")
