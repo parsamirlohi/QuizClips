@@ -3,68 +3,185 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#673af5">
 <title>Quiz Video Maker</title>
 <style>
-  :root { color-scheme: dark; --bg:#0d0e12; --card:#171923; --line:#272a37; --text:#eceef4; --muted:#8c91a5; --accent:#ff2d6f; --accent2:#7c5cff; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; }
-  main { max-width: 760px; margin: 0 auto; padding: 36px 16px 80px; }
-  h1 { font-size: 30px; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 24px; }
-  .panel { background: var(--card); border:1px solid var(--line); border-radius:16px; padding:20px; }
-  .row { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
-  label { display:flex; flex-direction:column; gap:6px; color:var(--muted); font-size:14px; }
-  select { background:#0d0e12; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; min-width:170px; }
-  #go { width:100%; border:0; border-radius:14px; padding:18px; font:inherit; font-size:20px; font-weight:700; color:#fff; cursor:pointer;
-        background:linear-gradient(90deg,var(--accent),var(--accent2)); }
-  #go:disabled { opacity:.5; cursor:not-allowed; }
-  .warn { background:#2a1d12; border:1px solid #5a3b1c; color:#ffcf99; border-radius:12px; padding:12px 14px; margin-bottom:16px; display:none; }
-  .cats { margin-bottom:18px; }
-  .cats > span { display:block; color:var(--muted); font-size:14px; margin-bottom:8px; }
-  .chips { display:flex; flex-wrap:wrap; gap:8px; }
-  .chip { background:#0d0e12; color:var(--text); border:1px solid var(--line); border-radius:99px; padding:7px 14px; font:inherit; font-size:14px; cursor:pointer; }
-  .chip.on { background:linear-gradient(90deg,var(--accent),var(--accent2)); border-color:transparent; font-weight:600; }
-  .chip.mix { font-weight:600; }
+:root { color-scheme:light; --bg:#f6f7fb; --surface:#fff; --ink:#10182b; --muted:#67738a; --line:#e3e7f0; --violet:#673af5; --violet-dark:#5125d2; --lavender:#eee8ff; font-family:"Segoe UI",Arial,sans-serif; }
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; scroll-padding-top:24px; }
+body { margin:0; background:var(--bg); color:var(--ink); font-size:15px; line-height:1.5; }
+button,select { font:inherit; }
+button,a,select { -webkit-tap-highlight-color:transparent; outline-offset:4px; }
+:focus-visible { outline:3px solid #936dff; }
+button { cursor:pointer; }
+button:disabled,select:disabled { cursor:not-allowed; }
+[hidden] { display:none !important; }
+svg { width:20px; height:20px; flex:0 0 auto; }
+.topbar { background:var(--surface); border-bottom:1px solid var(--line); }
+.topbar-inner { max-width:1440px; margin:auto; padding:18px 44px; display:flex; align-items:center; gap:58px; }
+.brand { display:inline-flex; align-items:center; gap:14px; color:var(--ink); font-size:21px; font-weight:750; text-decoration:none; letter-spacing:-.6px; }
+.brand-mark { background:var(--violet); color:#fff; width:38px; height:36px; border-radius:8px; display:grid; place-items:center; }
+.brand-mark svg { width:21px; height:21px; }
+nav { display:flex; align-self:stretch; align-items:center; gap:36px; }
+nav a { position:relative; color:var(--muted); text-decoration:none; font-size:15px; font-weight:550; }
+nav a:hover,nav a.active { color:var(--violet); }
+nav a.active::after { content:""; position:absolute; height:2px; left:0; right:0; bottom:-19px; background:var(--violet); }
+main { max-width:1440px; margin:auto; padding:17px 40px 18px; }
+.page-title { margin:0 0 2px; font-size:clamp(30px,3vw,40px); line-height:1.25; letter-spacing:-1.3px; font-weight:750; }
+.subtitle { margin:4px 0 23px; color:var(--muted); font-size:20px; letter-spacing:-.25px; }
+.workspace { display:grid; grid-template-columns:minmax(0,1.74fr) minmax(320px,1fr); gap:16px; align-items:stretch; }
+.panel { background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:0 2px 5px #17234b03; padding:23px; min-width:0; }
+h2 { margin:0; font-size:23px; line-height:1.3; letter-spacing:-.6px; font-weight:700; }
+.creator { display:flex; flex-direction:column; }
+.creator h2 { margin-bottom:23px; }
+.controls { display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-bottom:22px; }
+.field { display:flex; flex-direction:column; gap:6px; font-size:15px; font-weight:500; }
+.select-wrap { position:relative; }
+.voice-preview { display:inline-flex; align-items:center; align-self:flex-start; gap:6px; min-height:36px; padding:6px 10px; margin-top:3px; color:var(--violet); background:#faf8ff; border:1px solid #ded3ff; border-radius:7px; font-size:13px; font-weight:600; }
+.voice-preview:hover:not(:disabled) { background:var(--lavender); }
+.voice-preview:disabled { opacity:.5; }
+.voice-preview svg { width:15px; height:15px; }
+.voice-message { color:var(--muted); font-size:12px; font-weight:400; margin:0; }
+.voice-message.error-text { color:#af263c; }
+.select-wrap svg { position:absolute; top:18px; right:14px; width:16px; height:16px; pointer-events:none; color:var(--muted); }
+select { appearance:none; width:100%; min-height:50px; padding:12px 40px 12px 14px; background:var(--surface); border:1px solid #dce2ee; border-radius:8px; color:var(--ink); font-size:15px; }
+select:hover { border-color:#aa99d7; }
+.categories { margin:0; border:0; padding:0; min-width:0; }
+.categories legend { font-weight:650; font-size:16px; padding:0; }
+.hint { color:var(--muted); font-size:14px; margin:3px 0 13px; }
+.chips { display:flex; flex-wrap:wrap; gap:10px 9px; }
+.chip { display:inline-flex; align-items:center; justify-content:center; gap:5px; border:1px solid var(--line); border-radius:99px; background:#f5f7fb; color:#26334e; padding:9px 17px; font-size:14px; line-height:1.4; min-height:40px; transition:background .16s,border-color .16s; }
+.chip svg { width:14px; height:14px; }
+.chip:hover:not(:disabled) { border-color:#b9a5f6; background:var(--lavender); }
+.chip.on { background:var(--violet); color:#fff; border-color:var(--violet); }
+.chip:disabled { opacity:.6; }
+.generate-area { padding-top:44px; margin-top:auto; }
+.primary { width:100%; min-height:61px; border:1px solid transparent; border-radius:9px; background:var(--violet); color:#fff; font-size:18px; font-weight:650; display:flex; justify-content:center; align-items:center; gap:13px; transition:background .15s,transform .15s; }
+.primary svg { width:25px; height:25px; }
+.primary:hover:not(:disabled) { background:var(--violet-dark); }
+.primary:active:not(:disabled) { transform:translateY(1px); }
+.primary:disabled { opacity:.55; }
+.format { color:var(--muted); text-align:center; font-size:13px; margin:9px 0 13px; }
+.preview-panel { display:flex; flex-direction:column; }
+.preview-panel h2 { margin-bottom:6px; }
+.preview-stage { width:min(100%,276px); margin:0 auto; aspect-ratio:9 / 16; border-radius:13px; overflow:hidden; background:#e3d9fc; }
+.placeholder { display:flex; flex-direction:column; height:100%; padding:46px 20px 35px; position:relative; isolation:isolate; }
+.placeholder::before,.placeholder::after { content:""; position:absolute; width:148px; height:148px; border-radius:50%; background:#d9ccfa; z-index:-1; }
+.placeholder::before { top:-77px; left:-95px; }
+.placeholder::after { top:162px; right:-105px; }
+.placeholder-title { font-size:31px; line-height:1.14; text-align:center; font-weight:800; letter-spacing:-1px; color:#352177; margin:4px 0 17px; }
+.play-symbol { background:#4f3298; color:white; width:69px; height:69px; border-radius:50%; display:grid; place-items:center; margin:0 auto 18px; flex-shrink:0; }
+.play-symbol svg { width:30px; height:30px; }
+.example-option { min-height:41px; border-radius:11px; background:#ffffffdb; display:flex; align-items:center; gap:15px; padding:5px 9px; margin-bottom:8px; color:#3a4160; font-size:13px; }
+.example-option b { background:#e7ddff; border-radius:50%; display:grid; place-items:center; width:29px; height:29px; font-size:15px; color:#5930d7; }
+.preview-caption { text-align:center; color:var(--muted); font-size:13px; margin:17px -8px 3px; }
+#player { width:100%; height:100%; object-fit:contain; display:block; background:#171025; }
+.download { display:flex; align-items:center; justify-content:center; gap:9px; margin-top:16px; padding:11px 14px; background:var(--violet); color:#fff; text-decoration:none; border-radius:8px; font-size:14px; font-weight:600; }
+.download:hover { background:var(--violet-dark); }
+.notice { border-radius:9px; margin-bottom:17px; padding:13px 16px; font-size:14px; overflow-wrap:anywhere; }
+.warn { background:#fff8e9; border:1px solid #ecd8aa; color:#71511e; }
+.error { color:#af263c; background:#fff0f2; border:1px solid #f0c9d1; margin:16px 0 0; white-space:pre-wrap; }
+.status { border:1px solid #ded3ff; background:#faf8ff; border-radius:9px; padding:15px; margin-top:16px; }
+.status-heading { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:14px; font-weight:600; }
+.stages { list-style:none; padding:0; margin:14px 0; display:grid; gap:8px; }
+.stages li { display:flex; gap:9px; align-items:center; color:var(--muted); font-size:13px; }
+.stage-mark { width:21px; height:21px; border:1px solid #d7d0e5; border-radius:50%; display:grid; place-items:center; font-size:11px; flex-shrink:0; }
+.stages li.active { color:var(--violet); font-weight:600; }
+.stages li.active .stage-mark { background:var(--violet); border-color:var(--violet); color:white; }
+.stages li.complete .stage-mark { background:#e1f3e7; border-color:#b8dbc5; color:#247544; }
+#percent { color:var(--violet); font-variant-numeric:tabular-nums; }
+.bar { height:6px; background:#e9e3f6; border-radius:99px; overflow:hidden; margin:11px 0 8px; }
+.bar i { display:block; height:100%; width:0; background:var(--violet); border-radius:inherit; transition:width .3s; }
+#msg { font-size:13px; color:var(--muted); margin:0; }
+.spinner { animation:spin 1.2s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.library { margin-top:17px; }
+.library-heading { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:21px; }
+.library-heading span { color:var(--muted); font-size:13px; }
+.empty-state { min-height:125px; border:1px dashed #d7deec; border-radius:9px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:15px; text-align:center; padding:18px; color:var(--muted); }
+.empty-state svg { width:33px; height:33px; }
+.empty-state p { margin:0; font-size:15px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:20px; }
+.video-card { min-width:0; }
+.video-card video { width:100%; aspect-ratio:9 / 16; object-fit:contain; display:block; border-radius:9px; background:#171025; }
+.video-meta { padding-top:10px; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.video-meta p { margin:0; font-size:13px; font-weight:600; }
+.video-meta a { display:grid; place-items:center; color:var(--violet); border:1px solid var(--line); border-radius:7px; padding:7px; }
+.video-meta a:hover { background:var(--lavender); }
+details.answers { margin-top:17px; }
+details.answers summary { cursor:pointer; font-weight:600; font-size:16px; }
+#qlist { margin:18px 0 0; padding-left:21px; }
+#qlist li { padding:10px 5px; border-bottom:1px solid var(--line); }
+#qlist li:last-child { border:0; }
+#qlist strong,#qlist small { display:block; margin-top:4px; }
+#qlist strong { color:#278258; font-size:14px; }
+#qlist small { color:var(--muted); font-size:12px; }
+footer { text-align:right; padding-top:13px; color:var(--muted); font-size:11px; }
+footer a { color:inherit; text-decoration:none; }
+footer a:hover { text-decoration:underline; }
+@media (min-width:1300px) { .creator { min-height:608px; } }
+@media (max-width:1020px) {
+.topbar-inner { padding:18px 25px; gap:38px; } main { padding:24px; }
+.workspace { grid-template-columns:minmax(0,1.4fr) minmax(290px,1fr); }
+.panel { padding:20px; } .controls { gap:12px; } .chip { padding:9px 13px; }
+.generate-area { padding-top:28px; } .subtitle { font-size:17px; }
+}
+@media (max-width:760px) {
+.topbar-inner { padding:17px 20px 0; flex-wrap:wrap; gap:14px; }
+.brand { font-size:20px; } nav { width:100%; gap:26px; padding-bottom:14px; }
+nav a { font-size:14px; } nav a.active::after { bottom:-15px; }
+main { padding:24px 16px 18px; } .page-title { font-size:31px; }
+.subtitle { font-size:16px; margin-bottom:22px; } .workspace { grid-template-columns:1fr; }
+.panel { padding:20px; } h2 { font-size:21px; } .creator h2 { margin-bottom:20px; }
+.chip { padding:10px 14px; min-height:44px; } .chips { gap:8px; }
+.voice-preview { min-height:44px; }
+.primary { font-size:16px; min-height:56px; } .generate-area { padding-top:26px; }
+.format { margin-bottom:0; } .preview-panel h2 { margin-bottom:20px; }
+.preview-stage { width:min(100%,258px); } .placeholder { padding:30px 17px 22px; }
+.placeholder-title { font-size:29px; } .library-heading { margin-bottom:17px; }
+.library-heading span { font-size:12px; } .grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:15px; }
+.video-meta { flex-wrap:wrap; } footer { text-align:center; padding-top:20px; }
+}
+@media (max-width:370px) { .controls { grid-template-columns:1fr; } .panel { padding:16px; } }
+@media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { animation:none !important; transition:none !important; } }
   .wm { margin-bottom:18px; }
   .wm .check { flex-direction:row; align-items:center; gap:8px; color:var(--text); font-size:15px; margin-bottom:10px; }
   .wm input[type=text] { background:#0d0e12; color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; min-width:220px; }
   .wm .row { margin-bottom:6px; }
   .hint { color:var(--muted); font-size:13px; }
-  .err { color:#ff8a8a; margin-top:12px; white-space:pre-wrap; }
-  #status { display:none; margin-top:18px; }
-  .bar { height:10px; background:#0d0e12; border-radius:99px; overflow:hidden; }
-  .bar > i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .4s; }
-  #msg { color:var(--muted); margin-top:8px; font-size:14px; }
-  #result { display:none; margin-top:24px; }
-  #result video { width:100%; max-width:360px; aspect-ratio:9/16; background:#000; border-radius:14px; display:block; margin:0 auto 14px; }
-  .dl { display:block; width:max-content; margin:0 auto 18px; background:#fff; color:#111; text-decoration:none; font-weight:700; padding:10px 22px; border-radius:10px; }
-  ol { color:var(--muted); font-size:14px; padding-left:20px; }
-  ol b { color:var(--text); }
-  h2 { font-size:18px; margin:36px 0 12px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; }
-  .grid video { width:100%; aspect-ratio:9/16; background:#000; border-radius:10px; }
 </style>
 </head>
 <body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+<symbol id="icon-play" viewBox="0 0 24 24"><path fill="currentColor" d="M7 4.5a.9.9 0 0 1 1.4-.75l12 7.5a.9.9 0 0 1 0 1.5l-12 7.5a.9.9 0 0 1-1.4-.75z"/></symbol>
+<symbol id="icon-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
+<symbol id="icon-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="icon-sparkle" viewBox="0 0 24 24"><path d="m12 2 2.8 7.2L22 12l-7.2 2.8L12 22l-2.8-7.2L2 12l7.2-2.8Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+<symbol id="icon-film" viewBox="0 0 24 24"><rect x="3" y="2" width="18" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 2v20M17 2v20M7 12h10M3 7h4M3 17h4M17 7h4M17 17h4" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+<symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="icon-spinner" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-opacity=".3" stroke-width="2"/><path d="M12 3a9 9 0 0 1 9 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+</svg>
+<header class="topbar"><div class="topbar-inner">
+<a class="brand" href="#create"><span class="brand-mark"><svg aria-hidden="true"><use href="#icon-play"/></svg></span>Quiz Video Maker</a>
+<nav aria-label="Main navigation"><a class="active" href="#create" aria-current="location">Create</a><a href="#library">Previous videos</a></nav>
+</div></header>
 <main>
-  <h1>Quiz Video Maker</h1>
-  <p class="sub">One click makes a new vertical trivia video for TikTok.</p>
-
-  <div class="warn" id="warn"></div>
-
-  <div class="panel">
-    <div class="row">
-      <label>Questions
-        <select id="count"></select>
-      </label>
-      <label>Voice
-        <select id="voice"></select>
-      </label>
-    </div>
-    <div class="cats">
-      <span>Categories</span>
-      <div class="chips" id="chips"></div>
-    </div>
+<section id="create" aria-labelledby="page-title">
+<h1 class="page-title" id="page-title">Create a quiz video</h1>
+<p class="subtitle">One click makes a new vertical trivia video for TikTok.</p>
+<div class="notice warn" id="warn" role="status" hidden></div>
+<div class="workspace">
+<form class="panel creator" id="creator" aria-labelledby="form-title">
+<h2 id="form-title">Make it yours</h2>
+<div class="controls">
+<div class="field"><label for="count">Questions</label><span class="select-wrap"><select id="count" name="questions"></select><svg aria-hidden="true"><use href="#icon-chevron"/></svg></span></div>
+<div class="field"><label for="voice">Voice</label><span class="select-wrap"><select id="voice" name="voice" disabled><option value="">Loading voices…</option></select><svg aria-hidden="true"><use href="#icon-chevron"/></svg></span><button type="button" class="voice-preview" id="preview-voice" disabled aria-label="Preview selected voice"><svg id="voice-icon" aria-hidden="true"><use href="#icon-play"/></svg><span id="voice-label">Preview voice</span></button><p class="voice-message" id="voice-message" role="status" aria-live="polite"></p></div>
+</div>
+<fieldset class="categories" aria-describedby="category-hint"><legend>Categories</legend>
+<p class="hint" id="category-hint">Pick a few, or mix them all.</p>
+<div class="chips" id="chips"><span class="hint">Loading categories…</span></div></fieldset>
+<div class="generate-area">
     <div class="wm">
       <label class="check"><input type="checkbox" id="wmOn" checked> Show my link at the bottom of the video</label>
       <div class="row" id="wmRow">
@@ -84,56 +201,39 @@
       </div>
       <div class="hint" id="wmPrev"></div>
     </div>
-    <button id="go">Generate quiz video</button>
-    <div class="err" id="err"></div>
-
-    <div id="status">
-      <div class="bar"><i id="fill"></i></div>
-      <div id="msg"></div>
-    </div>
-
-    <div id="result">
-      <video id="player" controls playsinline></video>
-      <a class="dl" id="dl" download>Download video</a>
-      <ol id="qlist"></ol>
-    </div>
-  </div>
-
-  <h2>Previous videos</h2>
-  <div class="grid" id="grid"></div>
-  <p class="sub" style="margin-top:32px;font-size:13px">Background footage from <a href="https://pixabay.com" style="color:var(--muted)">Pixabay</a> and <a href="https://www.pexels.com" style="color:var(--muted)">Pexels</a>.</p>
+<button class="primary" id="go" type="submit" disabled><svg id="go-icon" aria-hidden="true"><use href="#icon-sparkle"/></svg><span id="go-label">Generate quiz video</span></button>
+<p class="format">1080 × 1920 · MP4</p>
+<div class="notice error" id="err" role="alert" hidden></div>
+<div class="status" id="status" hidden>
+<div class="status-heading"><span id="stage-heading" aria-live="polite">Preparing your quiz</span><span id="percent">0%</span></div>
+<div class="bar" id="progress" role="progressbar" aria-label="Video generation" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="fill"></i></div>
+<ol class="stages" id="stages" aria-label="Generation stages"><li><span class="stage-mark">1</span><span>Fetch questions</span></li><li><span class="stage-mark">2</span><span>Record narration</span></li><li><span class="stage-mark">3</span><span>Find and check footage</span></li><li><span class="stage-mark">4</span><span>Render scenes</span></li><li><span class="stage-mark">5</span><span>Mix audio and save video</span></li></ol><p id="msg" role="status">Starting…</p></div>
+</div></form>
+<section class="panel preview-panel" aria-labelledby="preview-title">
+<h2 id="preview-title">Your video</h2>
+<div class="preview-stage">
+<div class="placeholder" id="placeholder" aria-hidden="true">
+<p class="placeholder-title">Your next<br>quiz starts<br>here</p>
+<div class="play-symbol"><svg><use href="#icon-play"/></svg></div>
+<div class="example-option"><b>A</b>Option A</div><div class="example-option"><b>B</b>Option B</div><div class="example-option"><b>C</b>Option C</div><div class="example-option"><b>D</b>Option D</div>
+</div>
+<video id="player" controls playsinline preload="metadata" aria-label="Generated quiz video" hidden></video>
+</div>
+<p class="preview-caption" id="preview-caption">A preview will appear here when your video is ready.</p>
+<a class="download" id="dl" download hidden><svg aria-hidden="true"><use href="#icon-download"/></svg>Download video</a>
+</section>
+</div>
+<details class="panel answers" id="result" hidden><summary>Questions &amp; answers</summary><ol id="qlist"></ol></details>
+</section>
+<section class="panel library" id="library" aria-labelledby="library-title">
+<div class="library-heading"><h2 id="library-title">Previous videos</h2><span id="video-count"></span></div>
+<div class="empty-state" id="empty"><svg aria-hidden="true"><use href="#icon-film"/></svg><p id="empty-text">Loading previous videos…</p></div>
+<div class="grid" id="grid"></div>
+</section>
+<footer>Background footage from <a href="https://pixabay.com" target="_blank" rel="noreferrer">Pixabay</a> and <a href="https://www.pexels.com" target="_blank" rel="noreferrer">Pexels</a>.</footer>
 </main>
-
 <script>
 const $ = (id) => document.getElementById(id);
-for (let n = 3; n <= 10; n++) $("count").add(new Option(n + " questions", n, n === 5, n === 5));
-
-async function init() {
-  const cfg = await (await fetch("/api/config")).json();
-  cfg.voices.forEach((v) => $("voice").add(new Option(v.label, v.id)));
-  buildChips(cfg.categories);
-  const warns = [];
-  if (cfg.mock) warns.push("Test mode is on (MOCK=1): placeholder questions, backgrounds and voice.");
-  else if (!cfg.video_key) {
-    warns.push(cfg.env_loaded_from
-      ? "Found your settings file (" + cfg.env_loaded_from + ") but it has no PIXABAY_API_KEY= or PEXELS_API_KEY= line with a key after it. Fix the line, save, and restart the app."
-      : "No settings file found. Create a file named .env (not .env.example) at " + cfg.env_path + " containing PIXABAY_API_KEY= followed by your key, then restart the app.");
-    $("go").disabled = true;
-  }
-  if (warns.length) { $("warn").textContent = warns.join(" "); $("warn").style.display = "block"; }
-  loadHistory();
-}
-
-async function loadHistory() {
-  const vids = await (await fetch("/api/videos")).json();
-  $("grid").innerHTML = "";
-  vids.forEach((v) => {
-    const el = document.createElement("video");
-    el.src = v.url; el.controls = true; el.preload = "metadata"; el.playsInline = true;
-    $("grid").appendChild(el);
-  });
-}
-
 const PREFIX = { tiktok: "tiktok.com/@", youtube: "youtube.com/@", instagram: "instagram.com/", x: "x.com/", facebook: "facebook.com/", custom: "" };
 function wmText() {
   if (!$("wmOn").checked) return "";
@@ -157,73 +257,265 @@ function wmInit() {
 }
 wmInit();
 
-const selected = new Set(); // empty set = mix of all categories
-function buildChips(cats) {
+const selected = new Set();
+let ready = false;
+let busy = false;
+let previewToken = 0;
+let previewActive = false;
+const voiceAudio = new Audio();
+voiceAudio.preload = "none";
+for (let n = 3; n <= 10; n++) $("count").add(new Option(n + " questions", n, n === 5, n === 5));
+
+function icon(name) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+  use.setAttribute("href", "#icon-" + name);
+  svg.appendChild(use);
+  return svg;
+}
+async function api(url, options) {
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const detail = data && data.detail;
+    const message = typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((item) => item.msg).join(". ") : "Request failed. Please try again.";
+    throw new Error(message);
+  }
+  if (!data) throw new Error("The app returned an unexpected response. Please try again.");
+  return data;
+}
+async function init() {
+  try {
+    const cfg = await api("/api/config");
+    $("voice").replaceChildren();
+    cfg.voices.forEach((voice) => $("voice").add(new Option(voice.label, voice.id)));
+    $("voice").disabled = false;
+    $("preview-voice").disabled = !$("voice").value;
+    buildChips(cfg.categories);
+    ready = Boolean(cfg.mock || cfg.video_key);
+    if (cfg.mock) showWarning("Test mode is on (MOCK=1): placeholder questions, backgrounds and voice.");
+    else if (!cfg.video_key) showWarning(cfg.env_loaded_from
+      ? "Your settings file has no video API key. Add PIXABAY_API_KEY or PEXELS_API_KEY, save, and restart the app. Settings file: " + cfg.env_loaded_from
+      : "Add PIXABAY_API_KEY or PEXELS_API_KEY to a .env settings file, then restart the app. Expected location: " + cfg.env_path);
+    $("go").disabled = !ready;
+  } catch (error) {
+    showWarning("Could not load the app settings. Make sure the app is running, then refresh this page. " + error.message);
+    $("voice").replaceChildren(new Option("Unavailable", ""));
+    $("chips").textContent = "Categories unavailable";
+  }
+  await loadHistory();
+}
+function showWarning(message) {
+  $("warn").textContent = message;
+  $("warn").hidden = false;
+}
+function buildChips(categories) {
   const box = $("chips");
-  box.innerHTML = "";
-  const mk = (label, cls, onclick) => {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = "chip " + cls; b.textContent = label; b.onclick = onclick;
-    box.appendChild(b); return b;
-  };
-  const mix = mk("Mix of all", "mix", () => { selected.clear(); paint(); });
-  const chips = cats.map((c) => mk(c.label, "", () => {
-    selected.has(c.id) ? selected.delete(c.id) : selected.add(c.id);
+  box.replaceChildren();
+  function makeChip(label, onClick) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chip";
+    const check = icon("check");
+    check.setAttribute("hidden", "");
+    button.append(check, document.createTextNode(label));
+    button.addEventListener("click", onClick);
+    box.appendChild(button);
+    return button;
+  }
+  const mix = makeChip("Mix of all", () => { selected.clear(); paint(); });
+  const chips = categories.map((category) => makeChip(category.label, () => {
+    selected.has(category.id) ? selected.delete(category.id) : selected.add(category.id);
     paint();
   }));
+  function setPressed(button, pressed) {
+    button.classList.toggle("on", pressed);
+    button.setAttribute("aria-pressed", String(pressed));
+    button.querySelector("svg").toggleAttribute("hidden", !pressed);
+  }
   function paint() {
-    mix.classList.toggle("on", selected.size === 0);
-    chips.forEach((b, i) => b.classList.toggle("on", selected.has(cats[i].id)));
+    setPressed(mix, selected.size === 0);
+    chips.forEach((button, i) => setPressed(button, selected.has(categories[i].id)));
   }
   paint();
 }
-
-$("go").addEventListener("click", async () => {
-  $("err").textContent = "";
-  $("result").style.display = "none";
-  $("go").disabled = true;
-  $("status").style.display = "block";
-  $("fill").style.width = "2%";
-  $("msg").textContent = "Starting...";
+function setBusy(value) {
+  if (value) stopVoicePreview();
+  busy = value;
+  $("creator").setAttribute("aria-busy", String(value));
+  $("creator").querySelectorAll("select, .chip").forEach((control) => { control.disabled = value; });
+  $("go").disabled = value || !ready;
+  $("preview-voice").disabled = value || !$("voice").value;
+  $("go-label").textContent = value ? "Creating your video…" : "Generate quiz video";
+  $("go-icon").classList.toggle("spinner", value);
+  $("go-icon").querySelector("use").setAttribute("href", value ? "#icon-spinner" : "#icon-sparkle");
+}
+function stopVoicePreview() {
+  previewToken++;
+  previewActive = false;
+  voiceAudio.pause();
+  voiceAudio.removeAttribute("src");
+  voiceAudio.load();
+  $("voice-label").textContent = "Preview voice";
+  $("preview-voice").setAttribute("aria-label", "Preview selected voice");
+  $("voice-icon").classList.remove("spinner");
+  $("voice-icon").querySelector("use").setAttribute("href", "#icon-play");
+  $("voice-message").textContent = "";
+  $("voice-message").classList.remove("error-text");
+}
+$("voice").addEventListener("change", stopVoicePreview);
+voiceAudio.addEventListener("ended", stopVoicePreview);
+$("preview-voice").addEventListener("click", async () => {
+  if (previewActive) { stopVoicePreview(); return; }
+  stopVoicePreview();
+  const token = previewToken;
+  const label = $("voice").selectedOptions[0].text;
+  previewActive = true;
+  $("player").pause();
+  $("voice-label").textContent = "Cancel preview";
+  $("preview-voice").setAttribute("aria-label", "Cancel voice preview");
+  $("voice-icon").classList.add("spinner");
+  $("voice-icon").querySelector("use").setAttribute("href", "#icon-spinner");
+  $("voice-message").textContent = "Loading " + label + "…";
+  voiceAudio.src = "/api/voices/" + encodeURIComponent($("voice").value) + "/preview";
   try {
-    const r = await fetch("/api/generate", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ questions: Number($("count").value), voice: $("voice").value, categories: [...selected],
-        watermark_on: $("wmOn").checked, watermark_platform: $("wmPlat").value, watermark_handle: $("wmHandle").value }),
-    });
-    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || "Request failed"); }
-    const job = await r.json();
-    await poll(job.id);
-  } catch (e) {
-    $("err").textContent = e.message;
-    $("status").style.display = "none";
-  } finally {
-    $("go").disabled = false;
+    await voiceAudio.play();
+    if (token !== previewToken) return;
+    $("voice-label").textContent = "Stop preview";
+    $("preview-voice").setAttribute("aria-label", "Stop voice preview");
+    $("voice-icon").classList.remove("spinner");
+    $("voice-icon").querySelector("use").setAttribute("href", "#icon-stop");
+    $("voice-message").textContent = "Playing " + label;
+  } catch (error) {
+    if (token !== previewToken) return;
+    stopVoicePreview();
+    $("voice-message").textContent = "Could not play the preview. Check your connection and try again.";
+    $("voice-message").classList.add("error-text");
   }
 });
-
+function setProgress(fraction, message) {
+  const percent = Math.round(Math.max(0, Math.min(1, Number(fraction) || 0)) * 100);
+  $("fill").style.width = percent + "%";
+  $("percent").textContent = percent + "%";
+  $("progress").setAttribute("aria-valuenow", String(percent));
+  const stage = percent < 8 ? 0 : percent < 14 ? 1 : percent < 40 ? 2 : percent < 92 ? 3 : 4;
+  const headings = ["Fetching questions", "Recording narration", "Finding and checking footage", "Rendering scenes", "Finishing your video"];
+  $("stage-heading").textContent = percent === 100 ? "Your video is ready" : "Step " + (stage + 1) + " of 5 · " + headings[stage];
+  [...$("stages").children].forEach((item, index) => {
+    const complete = percent === 100 || index < stage;
+    item.classList.toggle("complete", complete);
+    item.classList.toggle("active", !complete && index === stage);
+    complete || index !== stage ? item.removeAttribute("aria-current") : item.setAttribute("aria-current", "step");
+    item.querySelector(".stage-mark").textContent = complete ? "\u2713" : String(index + 1);
+  });
+  $("msg").textContent = stage === 2 ? (message || "Searching for relevant clips…") + " Clips are checked before rendering; this stage can take longer." : message;
+}
+$("creator").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!ready || busy) return;
+  $("err").hidden = true;
+  $("status").hidden = false;
+  $("preview-caption").textContent = "Your new video is on its way.";
+  setProgress(0, "Starting…");
+  const request = { questions: Number($("count").value), voice: $("voice").value, categories: [...selected], watermark_on: $("wmOn").checked, watermark_platform: $("wmPlat").value, watermark_handle: $("wmHandle").value };
+  setBusy(true);
+  try {
+    const job = await api("/api/generate", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(request) });
+    await poll(job.id);
+  } catch (error) {
+    $("stage-heading").textContent = "Generation stopped";
+    $("msg").textContent = "See the error below. You can adjust your settings and try again.";
+    $("err").textContent = error.message;
+    $("err").hidden = false;
+    $("preview-caption").textContent = $("player").hidden ? "A preview will appear here when your video is ready." : "Your previous video is still available.";
+  } finally {
+    setBusy(false);
+  }
+});
 async function poll(id) {
   while (true) {
-    await new Promise((res) => setTimeout(res, 800));
-    const job = await (await fetch("/api/jobs/" + id)).json();
-    $("fill").style.width = Math.max(2, job.progress * 100) + "%";
-    $("msg").textContent = job.message;
-    if (job.status === "error") throw new Error(job.error);
-    if (job.status === "done") return finish(job);
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const job = await api("/api/jobs/" + encodeURIComponent(id));
+    setProgress(job.progress, job.message);
+    if (job.status === "error") throw new Error(job.error || "Video generation failed. Please try again.");
+    if (job.status === "done") { finish(job); return; }
   }
 }
-
 function finish(job) {
-  $("status").style.display = "none";
+  $("placeholder").hidden = true;
+  $("player").hidden = false;
   $("player").src = job.video_url;
   $("dl").href = job.video_url;
-  $("qlist").innerHTML = job.questions.map((q) => `<li>${esc(q.question)} <b>${esc(q.answer)}</b> <i>(footage search: ${esc(q.footage || "?")})</i></li>`).join("");
-  $("result").style.display = "block";
+  $("dl").hidden = false;
+  $("preview-caption").textContent = "Ready to download" + (typeof job.duration === "number" ? " · " + formatDuration(job.duration) : "");
+  $("qlist").replaceChildren();
+  (job.questions || []).forEach((question) => {
+    const item = document.createElement("li");
+    item.appendChild(document.createTextNode(question.question));
+    const answer = document.createElement("strong");
+    answer.textContent = question.answer;
+    item.appendChild(answer);
+    if (question.footage) {
+      const footage = document.createElement("small");
+      footage.textContent = "Footage search: " + question.footage;
+      item.appendChild(footage);
+    }
+    $("qlist").appendChild(item);
+  });
+  $("result").hidden = false;
   $("player").play().catch(() => {});
   loadHistory();
 }
-
-function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+function formatDuration(seconds) {
+  const rounded = Math.round(seconds);
+  return Math.floor(rounded / 60) + ":" + String(rounded % 60).padStart(2, "0");
+}
+function videoLabel(file) {
+  const match = /^quiz_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})\.mp4$/.exec(file);
+  if (!match) return file;
+  const date = new Date(Number(match[1]), Number(match[2])-1, Number(match[3]), Number(match[4]), Number(match[5]), Number(match[6]));
+  return date.toLocaleString(undefined, {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+}
+async function loadHistory() {
+  try {
+    const videos = await api("/api/videos");
+    $("grid").replaceChildren();
+    $("empty").hidden = videos.length > 0;
+    $("empty-text").textContent = "Your finished quizzes will appear here.";
+    $("video-count").textContent = videos.length ? videos.length + (videos.length === 1 ? " video" : " videos") : "";
+    videos.forEach((video) => {
+      const card = document.createElement("article");
+      card.className = "video-card";
+      const player = document.createElement("video");
+      player.src = video.url;
+      player.controls = true; player.preload = "metadata"; player.playsInline = true;
+      player.setAttribute("aria-label", "Quiz video from " + videoLabel(video.file));
+      const meta = document.createElement("div");
+      meta.className = "video-meta";
+      const title = document.createElement("p");
+      title.textContent = videoLabel(video.file);
+      const download = document.createElement("a");
+      download.href = video.url; download.download = video.file;
+      download.setAttribute("aria-label", "Download " + video.file);
+      download.appendChild(icon("download"));
+      meta.append(title, download); card.append(player, meta); $("grid").appendChild(card);
+    });
+  } catch (_) {
+    $("empty").hidden = false;
+    $("empty-text").textContent = "Could not load previous videos. Refresh the page to try again.";
+  }
+}
+function updateNavigation() {
+  document.querySelectorAll("nav a").forEach((link) => {
+    const active = link.hash === (location.hash || "#create");
+    link.classList.toggle("active", active);
+    if (active) link.setAttribute("aria-current", "location");
+    else link.removeAttribute("aria-current");
+  });
+}
+addEventListener("hashchange", updateNavigation);
+updateNavigation();
 init();
 </script>
 </body>

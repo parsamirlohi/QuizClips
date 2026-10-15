@@ -1,5 +1,6 @@
 """Where quiz questions come from, plus helpers for shuffling answer letters.
 
+QUESTION_SOURCE=ollama uses local Gemma for questions and footage searches.
 Default source is Open Trivia DB (free, no key). If ANTHROPIC_API_KEY is set, Claude
 writes the questions instead, along with a video search phrase that matches each
 question without giving away the answer.
@@ -14,6 +15,7 @@ import urllib.parse
 import requests
 
 from config import BASE, env, is_mock
+from local_model import chat_json
 
 HISTORY_FILE = BASE / "history.json"
 LETTERS = "ABCD"
@@ -244,20 +246,39 @@ CATEGORY_LABELS = {
 
 
 def _fetch_category(cid: int, amount: int = 20):
-    url = f"https://opentdb.com/api.php?amount={amount}&category={cid}&type=multiple&difficulty=easy&encode=url3986"
-    for _ in range(3):
+    """Reduce oversized requests without changing the selected category or difficulty."""
+    failures = 0
+    last_error = "Open Trivia DB is temporarily unavailable."
+    while True:
+        url = f"https://opentdb.com/api.php?amount={amount}&category={cid}&type=multiple&difficulty=easy&encode=url3986"
         try:
             r = requests.get(url, timeout=30)
-            if r.status_code == 200:
+            if r.status_code == 429:
+                last_error = "Open Trivia DB is rate-limiting requests. Please wait a few seconds and retry."
+            else:
+                r.raise_for_status()
                 data = r.json()
-                if data.get("response_code") == 0:
+                code = data.get("response_code")
+                if code == 0:
                     return data["results"]
-                if data.get("response_code") in (1, 2):  # not enough questions in this category
-                    return []
-        except requests.RequestException:
-            pass
-        time.sleep(6)  # Open Trivia DB allows one request per 5 seconds
-    return []
+                if code == 1:
+                    if amount == 1:
+                        return []
+                    amount = max(1, amount // 2)
+                    print(f"[questions] Category {cid}: retrying with {amount} easy questions.", flush=True)
+                    time.sleep(5.5)
+                    continue
+                if code == 2:
+                    raise RuntimeError("Open Trivia DB rejected the question request parameters.")
+                if code != 5:
+                    raise RuntimeError(f"Open Trivia DB returned unexpected response code {code}.")
+                last_error = "Open Trivia DB is rate-limiting requests. Please wait a few seconds and retry."
+        except (requests.RequestException, ValueError):
+            last_error = "Could not reach Open Trivia DB. Check your internet connection and try again."
+        failures += 1
+        if failures >= 3:
+            raise RuntimeError(last_error)
+        time.sleep(5.5)  # The provider permits one request per IP every five seconds.
 
 
 def _from_opentdb(categories=None, avoid=()) -> list:
@@ -279,21 +300,25 @@ def _from_opentdb(categories=None, avoid=()) -> list:
             out.append({"question": q, "correct": correct, "wrong": wrong, "category": cat,
                         "video_queries": keywords_from(q, correct, cat)})
     if not out:
-        raise RuntimeError("Could not fetch questions from Open Trivia DB. Try again in a few seconds.")
+        raise RuntimeError("No usable easy multiple-choice questions were found in the selected categories. Try another category.")
     return out
 
 
-def _from_claude(n: int, avoid: list, categories=None) -> list:
+def _question_prompt(n: int, avoid: list, categories=None, as_object=False) -> str:
     avoid_text = "\n".join(f"- {a}" for a in avoid) or "(none)"
     chosen = [CATEGORY_LABELS[c] for c in (categories or []) if c in CATEGORY_LABELS]
     topics = ("Use ONLY these topics: " + ", ".join(chosen) + ".") if chosen else \
         "Mix topics: science, history, geography, pop culture, animals, food, sports, space, etc."
-    prompt = f"""Create {n + 4} diverse, fun trivia questions for a short TikTok quiz video.
+    output = ('Return ONLY a JSON object with a "questions" array of objects with keys:' if as_object
+              else "Return ONLY a JSON array of objects with keys:")
+    return f"""Create {n + 4} diverse, fun trivia questions for a short TikTok quiz video.
 
 Rules:
 - {topics}
 - EASY, widely known questions that most people could answer (school-level or everyday general knowledge). No obscure trivia, niche fandoms, or specific dates/statistics.
 - Exactly one clearly correct answer.
+- Avoid circular questions that contain their answer, such as asking which mountain range is in the Andes.
+- Exclude other valid answers: specify which side of Egypt when asking which sea borders it.
 - Question under 110 characters. Each answer under 28 characters.
 - No "all of the above" / "none of the above" and nothing that needs an image.
 - "video_query": 2-3 words describing real stock footage that visually fits the question's topic
@@ -301,8 +326,12 @@ Rules:
 - Do not repeat these earlier questions:
 {avoid_text}
 
-Return ONLY a JSON array of objects with keys:
+{output}
 "question", "correct_answer", "wrong_answers" (exactly 3 strings), "category", "video_query"."""
+
+
+def _from_claude(n: int, avoid: list, categories=None) -> list:
+    prompt = _question_prompt(n, avoid, categories)
     r = requests.post(
         "https://api.anthropic.com/v1/messages",
         headers={"x-api-key": env("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01",
@@ -325,6 +354,55 @@ Return ONLY a JSON array of objects with keys:
         queries = [it.get("video_query", "")] + keywords_from(q, correct, cat)
         out.append({"question": q, "correct": correct, "wrong": wrong, "category": cat,
                     "video_queries": [x for x in queries if x]})
+    return out
+
+
+def _from_ollama(n: int, avoid: list, categories=None) -> list:
+    fields = {
+        name: {"type": "string", "minLength": 1, "maxLength": limit}
+        for name, limit in (("question", 110), ("correct_answer", 28),
+                            ("category", 80), ("video_query", 100))
+    }
+    fields["wrong_answers"] = {"type": "array", "minItems": 3, "maxItems": 3,
+                               "items": {"type": "string", "minLength": 1, "maxLength": 28}}
+    chosen = [CATEGORY_LABELS[c] for c in (categories or []) if c in CATEGORY_LABELS]
+    if chosen:
+        fields["category"]["enum"] = chosen
+    schema = {"type": "object", "required": ["questions"], "additionalProperties": False,
+              "properties": {"questions": {"type": "array", "minItems": n, "maxItems": n + 4,
+                  "items": {"type": "object", "properties": fields,
+                            "required": list(fields), "additionalProperties": False}}}}
+    prompt = _question_prompt(n, avoid, categories, as_object=True)
+    prompt += '\nSchema:\n' + json.dumps(schema)
+    data = chat_json([{"role": "user", "content": prompt}], schema)
+    items = data.get("questions")
+    if not isinstance(items, list):
+        raise RuntimeError("Ollama did not return a questions array.")
+    out, seen = [], set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        names = ("question", "correct_answer", "category", "video_query")
+        if any(not isinstance(item.get(k), str) or not item[k].strip() for k in names):
+            continue
+        wrong = item.get("wrong_answers")
+        if not isinstance(wrong, list) or len(wrong) != 3:
+            continue
+        if any(not isinstance(w, str) or not w.strip() for w in wrong):
+            continue
+        q, correct = item["question"].strip(), item["correct_answer"].strip()
+        wrong = [w.strip() for w in wrong]
+        if not _usable(q, correct, wrong) or _qid(q) in seen:
+            continue
+        cat = item["category"].strip()
+        if chosen and cat not in chosen:
+            continue
+        queries = [item["video_query"].strip()] + keywords_from(q, correct, cat)
+        out.append({"question": q, "correct": correct, "wrong": wrong, "category": cat,
+                    "video_queries": list(dict.fromkeys(queries))})
+        seen.add(_qid(q))
+    if len(out) < n:
+        raise RuntimeError(f"Ollama returned only {len(out)} usable questions; needed {n}.")
     return out
 
 
@@ -354,9 +432,14 @@ def get_questions(n: int, categories=None) -> list:
     if is_mock():
         pool = _mock_pool()
     else:
-        source = (env("QUESTION_SOURCE") or ("claude" if env("ANTHROPIC_API_KEY") else "opentdb")).lower()
+        source = (env("QUESTION_SOURCE") or ("claude" if env("ANTHROPIC_API_KEY") else "opentdb")).strip().lower()
         pool = None
-        if source == "claude":
+        if source in ("ollama", "local"):
+            try:
+                pool = _from_ollama(n, list(history.values())[-40:], categories)
+            except Exception as e:
+                print(f"[questions] Ollama failed ({e}); falling back to Open Trivia DB")
+        elif source == "claude":
             try:
                 pool = _from_claude(n, list(history.values())[-40:], categories)
             except Exception as e:
