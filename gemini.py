@@ -1,10 +1,12 @@
 """Small Gemini REST helper shared by footage planning (footage_plan.py) and the picture check (vision.py)."""
+import time
+
 import requests
 
 from config import env
 
 # Tried in order; GEMINI_MODEL in .env goes first. The "-latest" alias keeps working when Google renames models.
-MODELS = ["gemini-3.1-flash-lite", "gemini-flash-lite-latest"]
+MODELS = ["gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-2.5-flash-lite"]
 
 
 class RateLimited(RuntimeError):
@@ -21,13 +23,26 @@ def generate(parts: list, timeout: int = 60) -> str:
     models = ([env("GEMINI_MODEL")] if env("GEMINI_MODEL") else []) + MODELS
     last = "no model tried"
     for model in models:
-        r = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-            headers={"x-goog-api-key": key, "content-type": "application/json"},
-            json={"contents": [{"parts": parts}],
-                  "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}},
-            timeout=timeout,
-        )
+        r = None
+        for attempt in range(3):  # Google answers 503 "overloaded" now and then; waiting a moment usually fixes it
+            try:
+                r = requests.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    headers={"x-goog-api-key": key, "content-type": "application/json"},
+                    json={"contents": [{"parts": parts}],
+                          "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}},
+                    timeout=timeout,
+                )
+            except (requests.Timeout, requests.ConnectionError) as e:
+                last = f"{model}: {type(e).__name__}"
+                r = None
+            if r is not None and r.status_code not in (500, 502, 503, 504):
+                break
+            if r is not None:
+                last = f"{model}: HTTP {r.status_code}"
+            time.sleep(1.5 * (attempt + 1))
+        if r is None or r.status_code in (500, 502, 503, 504):
+            continue  # still failing: try the next model
         if r.status_code == 404:  # model name not available to this key; try the next one
             last = f"model {model} not found"
             continue

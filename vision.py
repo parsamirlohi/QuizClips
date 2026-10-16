@@ -51,7 +51,7 @@ def choose(cands: list, question: str, term: str):
     for attempt in range(2):
         _throttle()
         try:
-            text = gemini.generate(parts, timeout=60)
+            text = gemini.generate(parts, timeout=30)
             break
         except gemini.RateLimited:
             if attempt == 0:
