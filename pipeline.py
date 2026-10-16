@@ -4,11 +4,12 @@ import shutil
 import time
 import uuid
 
-from audio import SR, Mixer, bing, pop, siren, sparkle, tick, whoosh
+from audio import SR, Mixer, bing, challenge_sting, pop, siren, sparkle, tick, whoosh
 from chalkboard import ensure_chalkboard
 from config import ASSETS_DIR, CACHE_DIR, OUTPUT_DIR, WORK_DIR, env
 from videos import find_background
 from questions import LETTERS, get_questions, mark_used, pick_letters
+import looks
 import render
 from footage_plan import refine_queries
 from render import concat_videos, mux, render_segment
@@ -62,9 +63,15 @@ def _plan_hook(clip, n, sfx):
 
 
 def _plan_challenge(clip, sfx):
-    frames = [(0.2 * k, "challenge", dict(flash=k, boxscale=1.0 if k > 2 else 0.6 + 0.2 * k)) for k in range(13)]
-    events = [(0.0, sfx["siren"], 0.7), (0.0, sfx["whoosh"], 0.8), (0.35, clip, 1.0)]
-    return frames, 2.6, events, False
+    """Slam-in title card: riser, two hits (CHALLENGE, ROUND), then the narrator. Smooth 24-30 fps animation."""
+    dur = max(3.4, 1.25 + len(clip) / SR + 0.45)
+    times, t = [], 0.0
+    while t < dur:
+        times.append(round(t, 4))
+        t += 1 / 24 if t < 1.7 else 1 / 15
+    frames = [(t, "challenge", dict(t=t, dur=dur)) for t in times]
+    events = [(0.0, sfx["sting"], 0.95), (1.25, clip, 1.0)]
+    return frames, dur, events, False
 
 
 def _plan_question(i, total, q, clips, sfx, challenge=False):
@@ -129,11 +136,15 @@ def cleanup_disk() -> None:
 
 
 def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None,
-               categories=None, watermark: str = "") -> dict:
+               categories=None, watermark: str = "", style: str = looks.DEFAULT) -> dict:
     render.WATERMARK = watermark or ""
+    look = looks.resolve(style)
+    render.apply_skin(look["skin"])
     job_dir = WORK_DIR / uuid.uuid4().hex[:8]
     job_dir.mkdir(parents=True)
     try:
+        progress("Preparing the look...", 0.02)
+        look_info = {"bg": looks.ensure_background(look["key"]), "blur": look["blur"]}
         progress("Picking questions...", 0.03)
         raw = get_questions(n_questions, categories)
         quiz = []
@@ -165,12 +176,12 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
         bgs = []
         for i, q in enumerate(quiz):
             progress(f"Finding video for question {i + 1} of {n}...", 0.14 + 0.24 * i / n)
-            path, matched = find_background(q["video_queries"], used)
+            path, matched = find_background(q["video_queries"], used, q["question"])
             q["footage"] = matched
             bgs.append(path)
         outro_bg = find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used)[0]
 
-        sfx = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle(), "siren": siren()}
+        sfx = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle(), "siren": siren(), "sting": challenge_sting()}
         plans, scene_bgs, ci = [], [], 1
         plans.append(_plan_hook(clips[0], n, sfx))
         scene_bgs.append(_intro_background(used))
@@ -192,7 +203,8 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
             kind0 = frames[0][1]
             progress(f"Rendering scene {si + 1} of {len(plans)}...", 0.40 + 0.48 * si / len(plans))
             seg = job_dir / f"seg_{si:02d}.mp4"
-            render_segment(bg if has_clip else None, frames, dur, seg, job_dir, full=bg if kind0 == 'hook' else None)
+            render_segment(bg if has_clip else None, frames, dur, seg, job_dir, full=bg if kind0 == 'hook' else None,
+                           look=look_info)
             seg_paths.append(seg)
             for t, clip, gain in events:
                 mixer.add(offset + t, clip, gain)
@@ -208,6 +220,7 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
 
         mark_used(quiz)
         return {
+            "look": look["title"],
             "file": name,
             "duration": round(total, 1),
             "questions": [{"question": q["question"], "answer": f"{LETTERS[q['correct_idx']]}. {q['correct']}",
@@ -215,5 +228,6 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
                           for q in quiz],
         }
     finally:
+        render.reset_skin()
         shutil.rmtree(job_dir, ignore_errors=True)
         cleanup_disk()

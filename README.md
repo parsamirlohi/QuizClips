@@ -33,10 +33,25 @@ Prefer the terminal? `pip install -r requirements.txt`, then `python set_key.py`
 - **"Could not fetch questions":** the free question site allows one request every few seconds. Wait a bit and retry.
 - **Narration fails:** the voices come from Microsoft's free service and need an internet connection.
 
+## Looks
+
+The page has a **Look** section with 24 styles (background + matching header/answer-bar colours); pick one, or
+"Surprise me" for a random one each video. Your choice is remembered in the browser.
+- Backgrounds are made once, the first time a look is used (a few seconds), into `assets/backgrounds/`. Run
+  `python3 make_backgrounds.py` to make them all now. Delete that folder to regenerate.
+- The two "Blurred Clip" looks use each question's own footage, blurred, as the background.
+- `looks.py` lists every look; `styles.py` / `backgrounds.py` draw them. After adding or changing one, run
+  `python3 make_look_thumbs.py` to refresh the pictures in the selector.
+
 ## Options (all go in `.env`)
 
 - `ANTHROPIC_API_KEY=` Claude writes the questions and picks footage searches that fit the topic without
   giving away the answer. Without it, questions come from the free Open Trivia DB.
+- `GEMINI_API_KEY=` Gemini writes the footage searches so each clip matches its question (free key at
+  aistudio.google.com/apikey; run `python set_key.py` and choose 3). `FOOTAGE_LLM=gemini|claude|none` picks the
+  provider; `GEMINI_MODEL=` overrides the model.
+- `blocked_clips.json` (optional): a list of Pixabay clip ids to never use, e.g. `[12345, 67890]`. The id is the
+  number in the clip's filename in `cache` (`pixabay_12345.mp4`).
 - `THINK_SECONDS=5` length of the countdown before each reveal.
 - `VIDEO_ENCODER=h264_videotoolbox` faster rendering on a Mac (`h264_nvenc` on an NVIDIA GPU).
 - `PEXELS_API_KEY=` use Pexels instead (sharper portrait video). If both keys are set, Pexels is used; force

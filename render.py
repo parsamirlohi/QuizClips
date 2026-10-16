@@ -25,6 +25,30 @@ THEMES = {
     "green": dict(fill=(74, 160, 74), line=(255, 255, 255), border=(90, 200, 110)),
     "red": dict(fill=(226, 56, 56), line=(255, 150, 160), border=(255, 80, 90)),
 }
+LIT = [PINK]  # colour of the highlighted words in the header; changed by the chosen look
+_DEFAULT_SKIN = None
+
+
+def apply_skin(skin):
+    """Use a look's colours (header, answer bars, border, accents) for the video being made. None = original pink."""
+    global HOT, _DEFAULT_SKIN
+    if _DEFAULT_SKIN is None:
+        _DEFAULT_SKIN = (dict(THEMES["purple"]), dict(BAR_STYLES["purple"]), (246, 36, 140), PINK)
+    if not skin:
+        return reset_skin()
+    THEMES["purple"] = dict(skin["theme"])
+    BAR_STYLES["purple"] = dict(skin["bar"])
+    HOT = tuple(skin["accent"])
+    LIT[0] = tuple(skin["accent"])
+
+
+def reset_skin():
+    global HOT
+    if _DEFAULT_SKIN is not None:
+        THEMES["purple"], BAR_STYLES["purple"] = dict(_DEFAULT_SKIN[0]), dict(_DEFAULT_SKIN[1])
+        HOT, LIT[0] = _DEFAULT_SKIN[2], _DEFAULT_SKIN[3]
+
+
 BAR_STYLES = {
     "purple": dict(fill=(255, 255, 255), line=PINK, text=HOT, circ=PINK, circ_line=(255, 255, 255), letter=(255, 255, 255)),
     "red": dict(fill=(222, 50, 50), line=(255, 160, 160), text=(255, 255, 255), circ=(255, 255, 255), circ_line=(255, 160, 160), letter=(222, 50, 50)),
@@ -126,8 +150,9 @@ def _fit(text, max_w, max_h, start, minimum, gap=1.1, face="main"):
         size -= 4
 
 
-def _words(layer, cx, cy, text, max_w, max_h, start, minimum, color, lit=None, lit_color=PINK, stroke=9, only=None, face="main"):
+def _words(layer, cx, cy, text, max_w, max_h, start, minimum, color, lit=None, lit_color=None, stroke=9, only=None, face="main"):
     """Chunky outlined centered text, optionally with the first `lit` words in a highlight color."""
+    lit_color = lit_color or LIT[0]
     f, lines = _fit(text, max_w, max_h, start, minimum, 1.12, face)
     lh = int(f.size * 1.12)
     d = ImageDraw.Draw(layer)
@@ -315,14 +340,157 @@ def _siren(color_on, on):
     return img
 
 
-def draw_challenge(flash=0, boxscale=1.0, **_):
+def _ease_out(x):
+    x = min(max(x, 0.0), 1.0)
+    return 1 - (1 - x) ** 3
+
+
+def _ease_back(x):
+    x = min(max(x, 0.0), 1.0)
+    return 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2
+
+
+@lru_cache(maxsize=1)
+def _hazard_strip():
+    """Yellow/black warning stripes; repeats every 80 px so it can scroll."""
+    h = 74
+    img = Image.new("RGBA", (W + 160, h), (18, 14, 22, 255))
+    d = ImageDraw.Draw(img)
+    for x in range(-80, W + 240, 80):
+        d.polygon([(x, 0), (x + 40, 0), (x + 5, h), (x - 35, h)], fill=(255, 214, 0, 255))
+    return img
+
+
+@lru_cache(maxsize=1)
+def _vignette_alpha():
+    sw, sh = 135, 240
+    yy, xx = np.mgrid[0:sh, 0:sw]
+    dist = np.sqrt(((xx - sw / 2) / (sw / 2)) ** 2 + ((yy - sh / 2) / (sh / 2)) ** 2)
+    return np.clip((dist - 0.35) / 0.9, 0, 1) ** 1.4
+
+
+def _vignette(k):
+    a = (_vignette_alpha() * k * 235).astype(np.uint8)
+    small = Image.new("RGBA", a.shape[::-1], (205, 12, 34, 0))
+    small.putalpha(Image.fromarray(a))
+    return small.resize((W, H), Image.BICUBIC)
+
+
+@lru_cache(maxsize=4)
+def _title_layer(text, size_cap):
+    size = size_cap
+    f = font(size, "hook")
+    while f.getlength(text) > 940 and size > 80:
+        size -= 6
+        f = font(size, "hook")
+    m = 90
+    probe = ImageDraw.Draw(Image.new("RGBA", (4, 4)))
+    l, t, r, bb = probe.textbbox((0, 0), text, font=f, anchor="la", stroke_width=16)
+    tw, th = int(r - l), int(bb - t)
+    layer = Image.new("RGBA", (tw + 2 * m, th + 2 * m), (0, 0, 0, 0))
+    ImageDraw.Draw(layer).text((m - l, m - t), text, font=f, fill=(255, 255, 255, 255), anchor="la",
+                               stroke_width=16, stroke_fill=(120, 0, 24, 255))
+    glow = Image.new("RGBA", layer.size, (255, 40, 70, 0))
+    glow.putalpha(layer.getchannel("A").filter(ImageFilter.GaussianBlur(26)).point(lambda v: min(255, v * 2)))
+    shadow = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    shadow.paste((0, 0, 0, 170), (0, 14), layer.getchannel("A"))
+    out = Image.new("RGBA", layer.size, (0, 0, 0, 0))
+    out.alpha_composite(glow)
+    out.alpha_composite(shadow)
+    out.alpha_composite(layer)
+    return out
+
+
+def _slam(t, t0, dur=0.2, start=3.2):
+    """(scale, alpha) of a word that slams in from huge at time t0."""
+    if t < t0:
+        return None
+    p = (t - t0) / dur
+    return start + (1.0 - start) * _ease_out(p), min(1.0, (t - t0) / 0.06)
+
+
+def draw_challenge(t=0.0, dur=3.4, **_):
+    """Cinematic title card: dim + red vignette, scrolling hazard bars, rays, 'CHALLENGE' and 'ROUND' slam in with
+    shockwaves, flashes and screen shake, then a 'Final question' tag."""
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    _frame_border(img, THEMES["red"]["border"])
-    line = (255, 70, 90) if flash % 2 == 0 else (255, 255, 255)
-    box = _box(900, 330, 6, (255, 255, 255), line, 10)
-    for dy, txt in ((105, "CHALLENGE"), (240, "ROUND")):
-        _ctext(box, 450, dy, txt, font(138), (255, 255, 255, 255), stroke=7, stroke_fill=(220, 30, 50, 255))
-    _place(img, box, 540, 960, boxscale)
+    T1, T2, T3 = 0.45, 0.80, 1.22
+    pulse = 0.82 + 0.18 * math.sin(2 * math.pi * 2.0 * t)
+    ramp = _ease_out(t / 0.4)
+    img.alpha_composite(Image.new("RGBA", (W, H), (8, 0, 6, int(120 * ramp))))
+    img.alpha_composite(_vignette(ramp * pulse))
+
+    # rotating rays
+    if ramp > 0:
+        rays = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        rd = ImageDraw.Draw(rays)
+        base, step = t * 0.35, math.pi / 9
+        for k in range(18):
+            a0 = base + k * step * 2
+            rd.polygon([(W / 2, 930), (W / 2 + 2200 * math.cos(a0), 930 + 2200 * math.sin(a0)),
+                        (W / 2 + 2200 * math.cos(a0 + step), 930 + 2200 * math.sin(a0 + step))],
+                       fill=(255, 90, 110, int(34 * ramp)))
+        img.alpha_composite(rays)
+
+    # shake after each impact
+    shake = 0.0
+    for ti, amp in ((T1, 30), (T2, 18)):
+        if t >= ti:
+            shake += amp * math.exp(-(t - ti) * 9) * math.sin((t - ti) * 70)
+    sx, sy = shake, shake * 0.6
+
+    # hazard bars slide in from opposite sides and keep scrolling
+    strip = _hazard_strip()
+    off = int(t * 260) % 80
+    bar = strip.crop((off, 0, off + W, strip.height))
+    e = _ease_out(t / 0.35)
+    img.alpha_composite(bar, (int(-W * (1 - e) + sx), int(250 + sy)))
+    img.alpha_composite(bar.transpose(Image.FLIP_LEFT_RIGHT), (int(W * (1 - e) + sx), int(1596 + sy)))
+
+    # build-up line across the middle before the first hit
+    if t < T1:
+        wline = int(W * _ease_out(t / T1))
+        ImageDraw.Draw(img).rectangle((W // 2 - wline // 2, 954, W // 2 + wline // 2, 966), fill=(255, 255, 255, 235))
+
+    # shockwave rings
+    d = ImageDraw.Draw(img)
+    for ti in (T1, T2):
+        if t >= ti:
+            p = (t - ti) / 0.55
+            if p < 1:
+                r = 90 + 980 * _ease_out(p)
+                wd = max(2, int(22 * (1 - p)))
+                d.ellipse((W / 2 + sx - r, 930 + sy - r, W / 2 + sx + r, 930 + sy + r),
+                          outline=(255, 255, 255, int(235 * (1 - p))), width=wd)
+
+    # the words
+    for text, cap, t0, cy in (("CHALLENGE", 300, T1, 840), ("ROUND", 340, T2, 1110)):
+        s_a = _slam(t, t0)
+        if not s_a:
+            continue
+        sc, al = s_a
+        if t > t0 + 0.3:
+            sc *= 1 + 0.012 * math.sin(2 * math.pi * 1.8 * t)
+        _place(img, _title_layer(text, cap), 540 + sx, cy + sy, sc, al)
+
+    # 'final question' tag
+    if t >= T3:
+        p = _ease_back((t - T3) / 0.35)
+        tag = _box(560, 92, 46, (255, 214, 0), (18, 14, 22), 6)
+        _ctext(tag, 280, 46, "FINAL QUESTION", font(78, "hook"), (30, 8, 18, 255))
+        _place(img, tag, 540, 1365 - 40 * (1 - min(p, 1.0)) + sy, 0.7 + 0.3 * min(p, 1.2), min(1.0, p))
+
+    # white flashes on the hits
+    fl = 0.0
+    for ti, g in ((T1, 205), (T2, 130)):
+        if t >= ti:
+            fl = max(fl, g * math.exp(-(t - ti) * 11))
+    if fl > 4:
+        img.alpha_composite(Image.new("RGBA", (W, H), (255, 245, 245, int(fl))))
+
+    # fade the whole card out at the end
+    if t > dur - 0.22:
+        k = max(0.0, (dur - t) / 0.22)
+        img.putalpha(img.getchannel("A").point(lambda v: int(v * k)))
     return img
 
 
@@ -354,7 +522,7 @@ def _q(path) -> str:
     return path.as_posix().replace("'", "'\\''")
 
 
-def render_segment(clip, frame_specs, duration, out_path, tmp, full=None):
+def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=None):
     """frame_specs: list of (start_time, kind, args). Each overlay holds until the next one starts.
     clip: path of a stock video shown inside the frame, or None."""
     items = []
@@ -370,28 +538,47 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None):
     lst = tmp / f"{out_path.stem}.txt"
     lst.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
+    blur = (look or {}).get("blur") if (clip and not full) else None
+    bg_loop = (look or {}).get("bg") or ensure_marble()
+    cw, ch = CLIP[2] - CLIP[0], CLIP[3] - CLIP[1]
+    photo = bool(clip) and str(clip).lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
     if full:  # full-screen picture or video behind everything (chalkboard intro)
         if str(full).lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
             inputs = ["-loop", "1", "-framerate", "30", "-i", str(full)]
         else:
             inputs = ["-stream_loop", "-1", "-i", str(full)]
+    elif blur:  # the background is the question's own clip, blown up, blurred and darkened
+        inputs = (["-loop", "1", "-framerate", "30", "-i", str(clip)] if photo
+                  else ["-stream_loop", "-1", "-i", str(clip)])
     else:
-        inputs = ["-ss", f"{random.uniform(0, 7):.2f}", "-stream_loop", "-1", "-i", ensure_marble()]
-    cw, ch = CLIP[2] - CLIP[0], CLIP[3] - CLIP[1]
+        inputs = ["-ss", f"{random.uniform(0, 5):.2f}", "-stream_loop", "-1", "-i", str(bg_loop)]
     if clip:
-        photo = str(clip).lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
+        pre = ""
+        if blur:
+            if photo:
+                inputs += ["-i", str(clip)]  # second copy, not looped, for the slow zoom
+                bsrc, src, ov = "0:v", "1:v", 2
+            else:
+                pre = "[0:v]split=2[s1][s2];"
+                bsrc, src, ov = "s1", "s2", 1
+            bgf = (f"[{bsrc}]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,setsar=1,fps=30,"
+                   f"gblur=sigma=8,scale=1080:1920:flags=bicubic,eq=brightness={-blur.get('dark', 0.3):.2f}:"
+                   f"saturation={blur.get('sat', 0.9):.2f}")
+            if blur.get("tint"):
+                bgf += f",drawbox=x=0:y=0:w=iw:h=ih:color=0x{blur['tint']}@{blur.get('alpha', 0.35)}:t=fill"
+            bgf += "[bg];"
+        else:
+            inputs += ["-i", str(clip)] if photo else ["-stream_loop", "-1", "-i", str(clip)]
+            src, ov = "1:v", 2
+            bgf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];"
         if photo:  # a single photo with a slow zoom-in
-            inputs += ["-i", str(clip)]
             frames = int(duration * 30) + 30
-            cvf = (f"[1:v]scale={cw * 2}:{ch * 2}:force_original_aspect_ratio=increase,crop={cw * 2}:{ch * 2},"
+            cvf = (f"[{src}]scale={cw * 2}:{ch * 2}:force_original_aspect_ratio=increase,crop={cw * 2}:{ch * 2},"
                    f"zoompan=z='min(1+0.0009*on,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={cw}x{ch}:fps=30,"
                    f"setsar=1[c];")
         else:
-            inputs += ["-stream_loop", "-1", "-i", clip]
-            cvf = f"[1:v]scale={cw}:{ch}:force_original_aspect_ratio=increase,crop={cw}:{ch},setsar=1,fps=30[c];"
-        ov = 2
-        vf = (f"[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];" + cvf +
-              f"[bg][c]overlay={CLIP[0]}:{CLIP[1]}:shortest=0[b2];")
+            cvf = f"[{src}]scale={cw}:{ch}:force_original_aspect_ratio=increase,crop={cw}:{ch},setsar=1,fps=30[c];"
+        vf = pre + bgf + cvf + f"[bg][c]overlay={CLIP[0]}:{CLIP[1]}:shortest=0[b2];"
         base = "b2"
     else:
         ov = 1

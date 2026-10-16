@@ -124,3 +124,54 @@ def siren(dur: float = 2.4) -> np.ndarray:
     s = np.sin(ph) + 0.35 * np.sin(2 * ph)
     env = np.minimum(1.0, np.minimum(t / 0.05, (dur - t) / 0.25))
     return (s * env * 0.28).astype(np.float32)
+
+
+def challenge_sting() -> np.ndarray:
+    """Cinematic 'challenge round' hit: a riser, a deep boom with a brassy chord stab, a second smaller hit, then a heartbeat."""
+    custom = _override("challenge")
+    if custom is not None:
+        return custom
+    n = int(SR * 3.6)
+    out = np.zeros(n, dtype=np.float32)
+    rng = np.random.default_rng(11)
+
+    def add(at, a, g=1.0):
+        st = int(at * SR)
+        e = min(n, st + len(a))
+        if st < n:
+            out[st:e] += a[: e - st] * g
+
+    # riser into the first hit (0 - 0.45 s)
+    d = 0.45
+    m = int(SR * d)
+    t = np.arange(m) / SR
+    x = t / d
+    ph = 2 * np.pi * np.cumsum(160 + 1100 * x ** 2) / SR
+    tone = (np.sin(ph) + 0.5 * np.sin(2 * ph)) * x ** 1.6
+    hiss = np.diff(rng.standard_normal(m + 1)).astype(np.float32) * (x ** 2.2)
+    add(0.0, (tone * 0.22 + hiss * 0.16).astype(np.float32))
+
+    def hit(f0, deep, chord):
+        dd = 1.7
+        k = int(SR * dd)
+        tt = np.arange(k) / SR
+        boom = np.sin(2 * np.pi * np.cumsum(30 + (f0 - 30) * np.exp(-9 * tt)) / SR) * np.exp(-2.4 * tt)
+        crack = rng.standard_normal(k).astype(np.float32) * np.exp(-38 * tt)
+        stab = np.zeros(k, dtype=np.float32)
+        for f in chord:
+            for det in (0.994, 1.0, 1.006):
+                stab += sum(np.sin(2 * np.pi * h * f * det * tt) / h for h in range(1, 7)).astype(np.float32)
+        stab *= np.exp(-3.2 * tt) * np.minimum(1.0, tt / 0.012) * 0.045
+        return (boom * deep + crack * 0.35 + stab).astype(np.float32)
+
+    add(0.45, hit(95, 0.85, (110.0, 164.8, 220.0, 277.2)))
+    add(0.80, hit(120, 0.6, (123.5, 185.0, 246.9)), 0.7)
+
+    # heartbeat under the narration
+    for at in (1.45, 1.95, 2.45, 2.95):
+        tt = np.arange(int(SR * 0.3)) / SR
+        add(at, (np.sin(2 * np.pi * 58 * tt) * np.exp(-11 * tt)).astype(np.float32), 0.35)
+        add(at + 0.17, (np.sin(2 * np.pi * 52 * tt) * np.exp(-13 * tt)).astype(np.float32), 0.22)
+
+    peak = float(np.max(np.abs(out))) or 1.0
+    return out / peak * 0.62

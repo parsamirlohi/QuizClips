@@ -70,3 +70,14 @@ def run_ffmpeg(args: list) -> None:
     p = subprocess.run(cmd, capture_output=True, text=True)
     if p.returncode != 0:
         raise RuntimeError("ffmpeg failed: " + (p.stderr or "")[-1500:])
+
+
+def flog(msg: str) -> None:
+    """Print a footage decision and also append it to footage.log (so it can be reviewed after the fact)."""
+    print(msg, flush=True)
+    try:
+        import time as _t
+        with open(BASE / "footage.log", "a", encoding="utf-8") as f:
+            f.write(f"{_t.strftime('%H:%M:%S')} {msg}\n")
+    except OSError:
+        pass

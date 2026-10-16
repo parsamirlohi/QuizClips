@@ -7,9 +7,10 @@ env_file = Path(__file__).resolve().parent / ".env"
 print("Which site is your key from?")
 print("  1) Pixabay")
 print("  2) Pexels")
-choice = input("Type 1 or 2: ").strip()
-name = "PEXELS_API_KEY" if choice == "2" else "PIXABAY_API_KEY"
-site = "Pexels" if choice == "2" else "Pixabay"
+print("  3) Gemini (free key from aistudio.google.com; picks footage that matches each question)")
+choice = input("Type 1, 2 or 3: ").strip()
+name, site = {"2": ("PEXELS_API_KEY", "Pexels"), "3": ("GEMINI_API_KEY", "Gemini")}.get(
+    choice, ("PIXABAY_API_KEY", "Pixabay"))
 
 key = input(f"Paste your {site} API key and press Enter: ").strip().strip('"').strip("'")
 if not key:

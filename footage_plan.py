@@ -1,6 +1,6 @@
 """Works out what each question's footage should actually SHOW.
 
-With an ANTHROPIC_API_KEY in .env, Claude reads each question (and its category, never the answer) and writes
+With a GEMINI_API_KEY (free tier available) or an ANTHROPIC_API_KEY in .env, an AI model reads each question (and its category, never the answer) and writes
 visual search terms ("airport", "airplane runway" for a Manchester airport question). Without one, each content
 word of the question is checked against Pixabay's own photo counts, so words that are really filmable
 ("airport") rank above words that are not ("abbreviation").
@@ -10,7 +10,9 @@ import re
 
 import requests
 
-from config import env, is_mock
+import gemini
+
+from config import flog, env, is_mock
 from questions import EXTRA_STOP, GENERIC, STOP
 
 _TOTALS: dict = {}
@@ -25,30 +27,59 @@ def _dedupe(items):
     return out
 
 
-def _claude_queries(quiz):
+def _prompt(quiz):
     items = [{"i": i, "category": q.get("category", ""), "question": q["question"]} for i, q in enumerate(quiz)]
-    prompt = (
+    return (
         "For each trivia question, give 3 stock-footage search terms for a short background clip that shows what "
         "the question is ABOUT, so a viewer sees something clearly related. Rules: 1-3 plain words each, concrete "
         "things you can film (an object, place, animal, activity or scene), ordered from most specific to most "
-        "general but still related. Prefer the real-world subject over names. Examples: 'What is the abbreviation "
+        "general but still related. Prefer the real-world subject over names. Never reveal or hint at the answer. "
+        "Avoid words with several meanings that stock sites mis-tag (for example die, bat, bar, plant, mouse, "
+        "pitcher, seal) and avoid model numbers or jargon; use the common everyday name, e.g. 'dice' not 'd20 die'. "
+        "Examples: 'What is the abbreviation "
         "for Manchester Airport?' -> [\"airport\", \"airplane runway\", \"airport terminal\"]; 'Who voiced Batman?' -> "
         "[\"film set\", \"movie camera\", \"cinema\"]; 'What does USB stand for?' -> [\"usb cable\", \"computer\", "
         "\"laptop keyboard\"]. Reply with ONLY a JSON array of arrays of strings, one inner array per question, in "
         "order.\n\n" + json.dumps(items)
     )
+
+
+def _parse(text, n):
+    data = json.loads(text[text.index("["): text.rindex("]") + 1])
+    rows = [[str(x) for x in row][:3] for row in data if isinstance(row, list)]
+    if len(rows) != n:
+        raise ValueError(f"expected {n} rows of search terms, got {len(rows)}")
+    return rows
+
+
+def _claude_queries(quiz):
     r = requests.post(
         "https://api.anthropic.com/v1/messages",
         headers={"x-api-key": env("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01",
                  "content-type": "application/json"},
         json={"model": env("CLAUDE_MODEL", "claude-sonnet-5-5"), "max_tokens": 1500,
-              "messages": [{"role": "user", "content": prompt}]},
+              "messages": [{"role": "user", "content": _prompt(quiz)}]},
         timeout=60,
     )
     r.raise_for_status()
     text = "".join(b.get("text", "") for b in r.json().get("content", []))
-    data = json.loads(text[text.index("["): text.rindex("]") + 1])
-    return [[str(x) for x in row][:3] for row in data]
+    return _parse(text, len(quiz))
+
+
+def _gemini_queries(quiz):
+    return _parse(gemini.generate([{"text": _prompt(quiz)}]), len(quiz))
+
+
+def _llm_provider():
+    """FOOTAGE_LLM = gemini | claude | none. Unset: Gemini if its key exists, else Claude, else no AI."""
+    choice = env("FOOTAGE_LLM").lower()
+    if choice in ("none", "off", "no"):
+        return None
+    if choice == "gemini" or (not choice and env("GEMINI_API_KEY")):
+        return ("Gemini", _gemini_queries) if env("GEMINI_API_KEY") else None
+    if choice == "claude" or (not choice and env("ANTHROPIC_API_KEY")):
+        return ("Claude", _claude_queries) if env("ANTHROPIC_API_KEY") else None
+    return None
 
 
 def _total(word, key):
@@ -83,12 +114,14 @@ def refine_queries(quiz):
     if is_mock():
         return
     extra = None
-    if env("ANTHROPIC_API_KEY"):
+    provider = _llm_provider()
+    if provider:
+        name, fn = provider
         try:
-            extra = _claude_queries(quiz)
-            print("[footage] Claude wrote the search terms", flush=True)
+            extra = fn(quiz)
+            flog(f"[footage] {name} wrote the search terms")
         except Exception as e:
-            print(f"[footage] Claude search terms failed ({str(e)[:80]}); using Pixabay ranking", flush=True)
+            flog(f"[footage] {name} search terms failed ({str(e)[:100]}); using Pixabay ranking")
     key = env("PIXABAY_API_KEY")
     for i, q in enumerate(quiz):
         if extra and i < len(extra) and extra[i]:
@@ -98,4 +131,4 @@ def refine_queries(quiz):
         else:
             front = []
         q["video_queries"] = _dedupe(list(front) + list(q.get("video_queries", [])))
-        print(f"[footage] Q{i + 1} searches: {q['video_queries'][:4]}", flush=True)
+        flog(f"[footage] Q{i + 1} searches: {q['video_queries'][:4]}")

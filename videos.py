@@ -1,11 +1,13 @@
 """Finds and downloads background stock videos from Pixabay (default) or Pexels."""
+import json
 import random
 import re
 import time
 
 import requests
 
-from config import CACHE_DIR, env, is_mock, run_ffmpeg
+import vision
+from config import flog, BASE, CACHE_DIR, env, is_mock, run_ffmpeg
 
 API = "https://api.pexels.com/videos/search"
 
@@ -75,12 +77,12 @@ def _is_junk(hit: dict) -> bool:
 
 
 def _words(query: str) -> list:
-    return [w for w in re.findall(r"[a-z]+", query.lower()) if len(w) >= 3]
+    return [w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) >= 3]
 
 
 def tag_score(hit: dict, query: str) -> int:
     """How many words of the search appear as whole words in the clip's own tags (Pixabay's search is loose)."""
-    tokens = set(re.findall(r"[a-z]+", hit.get("tags", "").lower()))
+    tokens = set(re.findall(r"[a-z0-9]+", hit.get("tags", "").lower()))
     score = 0
     for w in _words(query):
         if w in tokens or w + "s" in tokens or (w.endswith("s") and w[:-1] in tokens):
@@ -89,9 +91,29 @@ def tag_score(hit: dict, query: str) -> int:
 
 
 def need_score(query: str) -> int:
-    """At least half of the search words must match, so 'Universal Serial Bus' never passes on 'bus' alone."""
+    """How many search words a clip's tags must match. Short searches need every word ('airplane runway' needs both);
+    longer ones need about half, so 'Universal Serial Bus' never passes on 'bus' alone."""
     n = len(_words(query))
-    return max(1, (n + 1) // 2)
+    return max(1, n if n <= 2 else (n + 1) // 2)
+
+
+BLOCKLIST_FILE = BASE / "blocked_clips.json"
+
+
+def _blocked() -> set:
+    """Clip ids you never want again: add Pixabay ids (numbers) to blocked_clips.json, e.g. [12345, 67890]."""
+    try:
+        return {str(x) for x in json.loads(BLOCKLIST_FILE.read_text(encoding="utf-8"))}
+    except Exception:
+        return set()
+
+
+def _pick_best(hits: list, query: str):
+    """Best-matching clip first (most search words in its tags, then the more popular), with a little variety
+    among the top three so repeated topics don't always give the same clip."""
+    ranked = sorted(hits, key=lambda h: (tag_score(h, query), h.get("likes", 0) + h.get("downloads", 0) / 50),
+                    reverse=True)
+    return random.choice(ranked[:3])
 
 
 def _pixabay_hits(q: str, key: str) -> list:
@@ -111,6 +133,48 @@ def _pixabay_hits(q: str, key: str) -> list:
     hits = r.json().get("hits", [])
     _PIXABAY_CACHE[q] = (time.time(), hits)
     return hits
+
+
+def _thumb(h: dict, kind: str) -> bytes:
+    """A small JPEG of the candidate: a frame from its smallest video file, or the photo itself."""
+    if kind == "photo":
+        r = requests.get(h.get("webformatURL") or h["previewURL"], timeout=30)
+        r.raise_for_status()
+        return r.content
+    sizes = h.get("videos", {})
+    f = next((sizes[k] for k in ("tiny", "small", "medium") if sizes.get(k, {}).get("url")), None)
+    if not f:
+        raise RuntimeError("no video file")
+    clip = CACHE_DIR / f"thumb_{h['id']}.mp4"
+    jpg = CACHE_DIR / f"thumb_{h['id']}.jpg"
+    try:
+        _download(f["url"], clip)
+        run_ffmpeg(["-ss", "1", "-i", clip, "-frames:v", "1", "-vf", "scale=480:-2", "-q:v", "4", jpg])
+        return jpg.read_bytes()
+    finally:
+        for x in (clip, jpg):
+            try:
+                x.unlink()
+            except OSError:
+                pass
+
+
+def _vision_check(hits: list, q: str, question: str, kind: str):
+    """Ask Gemini which of the best-matching candidates really shows the topic. ("skip", None) = no check done."""
+    if not question or not vision.enabled():
+        return ("skip", None)
+    ranked = sorted(hits, key=lambda h: (tag_score(h, q), h.get("likes", 0) + h.get("downloads", 0) / 50),
+                    reverse=True)[:3]
+    cands = []
+    for h in ranked:
+        try:
+            cands.append((h, _thumb(h, kind)))
+        except Exception as e:
+            flog(f"[footage]   could not preview a candidate ({str(e)[:60]})")
+    if not cands:
+        return ("skip", None)
+    verdict, h, _ = vision.choose(cands, question, q)
+    return (verdict, h)
 
 
 PIXABAY_PHOTO_API = "https://pixabay.com/api/"
@@ -134,16 +198,21 @@ def _pixabay_photo_hits(q: str, key: str) -> list:
     return hits
 
 
-def _find_pixabay_photo(q: str, key: str, used: set):
+def _find_pixabay_photo(q: str, key: str, used: set, question: str = ""):
     """Photos have far more coverage than videos for specific topics; the renderer adds a slow zoom."""
-    hits = [h for h in _pixabay_photo_hits(q, key) if ("p%s" % h["id"]) not in used and not _is_junk(h)]
+    blocked = _blocked()
+    hits = [h for h in _pixabay_photo_hits(q, key)
+            if ("p%s" % h["id"]) not in used and str(h["id"]) not in blocked and not _is_junk(h)]
     scored = [(tag_score(h, q), h) for h in hits]
     best = max((sc for sc, _ in scored), default=0)
     hits = [h for sc, h in scored if best >= need_score(q) and sc >= best]
-    print(f"[footage] photo search '{q}': {len(hits)} matching results", flush=True)
+    flog(f"[footage] photo search '{q}': {len(hits)} matching results")
     if not hits:
         return None
-    h = random.choice(hits[:8])
+    verdict, h = _vision_check(hits, q, question, "photo")
+    if verdict == "reject":
+        return None
+    h = h or _pick_best(hits, q)
     url = h.get("largeImageURL") or h.get("webformatURL")
     if not url:
         return None
@@ -151,34 +220,42 @@ def _find_pixabay_photo(q: str, key: str, used: set):
     if not dest.exists():
         _download(url, dest)
     used.add("p%s" % h["id"])
-    print(f"[footage]   -> picked photo tagged: {h.get('tags', '')}", flush=True)
+    flog(f"[footage]   -> picked photo tagged: {h.get('tags', '')}")
     return dest, f"{q}  ->  photo tags: {h.get('tags', '')[:60]}"
 
 
-def _find_pixabay(queries: list, used: set):
+def _find_pixabay(queries: list, used: set, question: str = ""):
     key = env("PIXABAY_API_KEY")
     if not key:
         raise RuntimeError("PIXABAY_API_KEY is missing. Get a free key at pixabay.com/api/docs and put it in .env")
     for q in queries:
+        blocked = _blocked()
         hits = [h for h in _pixabay_hits(q, key)
-                if h["id"] not in used and h.get("duration", 0) >= 4 and not _is_junk(h)]
+                if h["id"] not in used and str(h["id"]) not in blocked and h.get("duration", 0) >= 4
+                and not _is_junk(h)]
         generic = q == "abstract colorful background"
         if not generic:  # only accept videos whose own tags actually match the search
             scored = [(tag_score(h, q), h) for h in hits]
             best = max((sc for sc, _ in scored), default=0)
             hits = [h for sc, h in scored if sc >= max(need_score(q), best)] if best >= need_score(q) else []
-        print(f"[footage] searched '{q}': {len(hits)} matching results", flush=True)
+        flog(f"[footage] searched '{q}': {len(hits)} matching results")
         if not hits and not generic:
             try:
-                photo = _find_pixabay_photo(q, key, used)
+                photo = _find_pixabay_photo(q, key, used, question)
             except Exception as e:  # keep going with the next query
-                print(f"[footage] photo search failed: {e}", flush=True)
+                flog(f"[footage] photo search failed: {e}")
                 photo = None
             if photo:
                 return photo
         if not hits:
             continue
-        h = random.choice(hits[:8])
+        if generic:
+            h = random.choice(hits[:8])
+        else:
+            verdict, h = _vision_check(hits, q, question, "video")
+            if verdict == "reject":
+                continue
+            h = h or _pick_best(hits, q)
         sizes = h.get("videos", {})
         f = next((sizes[k] for k in ("medium", "large", "small") if sizes.get(k, {}).get("url")), None)
         if not f:
@@ -187,12 +264,12 @@ def _find_pixabay(queries: list, used: set):
         if not dest.exists():
             _download(f["url"], dest)
         used.add(h["id"])
-        print(f"[footage]   -> picked video tagged: {h.get('tags', '')}", flush=True)
+        flog(f"[footage]   -> picked video tagged: {h.get('tags', '')}")
         return dest, f"{q}  ->  video tags: {h.get('tags', '')[:60]}"
     raise RuntimeError(f"No Pixabay videos found for any of: {queries}")
 
 
-def find_background(queries: list, used: set):
+def find_background(queries: list, used: set, question: str = ""):
     """Return a local path to a video matching the first query that has results."""
     if is_mock():
         return _mock_clip(), queries[0] if queries else "mock"
@@ -200,7 +277,7 @@ def find_background(queries: list, used: set):
     if src is None:
         raise RuntimeError("No video API key found. Add PEXELS_API_KEY or PIXABAY_API_KEY to the .env file.")
     if src == "pixabay":
-        return _find_pixabay(queries, used)
+        return _find_pixabay(queries, used, question)
     key = env("PEXELS_API_KEY")
     if not key:
         raise RuntimeError("PEXELS_API_KEY is missing. Add it to .env, or use PIXABAY_API_KEY instead.")

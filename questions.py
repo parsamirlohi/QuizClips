@@ -244,19 +244,34 @@ CATEGORY_LABELS = {
 
 
 def _fetch_category(cid: int, amount: int = 20):
-    url = f"https://opentdb.com/api.php?amount={amount}&category={cid}&type=multiple&difficulty=easy&encode=url3986"
-    for _ in range(3):
-        try:
-            r = requests.get(url, timeout=30)
-            if r.status_code == 200:
-                data = r.json()
-                if data.get("response_code") == 0:
-                    return data["results"]
-                if data.get("response_code") in (1, 2):  # not enough questions in this category
-                    return []
-        except requests.RequestException:
-            pass
-        time.sleep(6)  # Open Trivia DB allows one request per 5 seconds
+    """Easy questions for one category. Small categories (Mythology, Art...) have fewer than `amount` easy
+    questions and Open Trivia DB then returns nothing at all, so ask for less, then allow any difficulty."""
+    base = f"https://opentdb.com/api.php?category={cid}&type=multiple&encode=url3986"
+    attempts = [(amount, "easy"), (10, "easy"), (5, "easy"), (amount, None), (10, None), (5, None)]
+    seen = set()
+    for amt, diff in attempts:
+        if (amt, diff) in seen:
+            continue
+        seen.add((amt, diff))
+        url = f"{base}&amount={amt}" + (f"&difficulty={diff}" if diff else "")
+        for _ in range(3):
+            try:
+                r = requests.get(url, timeout=30)
+                if r.status_code == 200:
+                    data = r.json()
+                    if data.get("response_code") == 0:
+                        if diff is None:
+                            print(f"[questions] category {cid}: too few easy questions, mixed in other difficulties",
+                                  flush=True)
+                        return data["results"]
+                    if data.get("response_code") in (1, 2):  # not enough questions: try a smaller ask
+                        break
+            except requests.RequestException:
+                pass
+            time.sleep(6)  # Open Trivia DB allows one request per 5 seconds
+        else:
+            continue
+        time.sleep(5.5)
     return []
 
 
@@ -276,7 +291,7 @@ def _from_opentdb(categories=None, avoid=()) -> list:
             cat = u(item["category"])
             if not _usable(q, correct, wrong):
                 continue
-            out.append({"question": q, "correct": correct, "wrong": wrong, "category": cat,
+            out.append({"question": q, "correct": correct, "wrong": wrong, "category": cat, "_cid": cid,
                         "video_queries": keywords_from(q, correct, cat)})
     if not out:
         raise RuntimeError("Could not fetch questions from Open Trivia DB. Try again in a few seconds.")
@@ -349,6 +364,23 @@ def _mock_pool() -> list:
              "video_queries": [vq, "abstract background"]} for q, c, w, cat, vq in _MOCK_BANK]
 
 
+def _interleave(items: list) -> list:
+    """Shuffle, then take one question from each category in turn so every chosen category is represented."""
+    groups = {}
+    for q in items:
+        groups.setdefault(q.get("_cid", q.get("category")), []).append(q)
+    lists = list(groups.values())
+    for g in lists:
+        random.shuffle(g)
+    random.shuffle(lists)
+    out = []
+    while any(lists):
+        for g in lists:
+            if g:
+                out.append(g.pop())
+    return out
+
+
 def get_questions(n: int, categories=None) -> list:
     history = _load_history()
     if is_mock():
@@ -365,9 +397,8 @@ def get_questions(n: int, categories=None) -> list:
             pool = _from_opentdb(categories)
     fresh = [q for q in pool if _qid(q["question"]) not in history]
     stale = [q for q in pool if _qid(q["question"]) in history]
-    random.shuffle(fresh)
-    random.shuffle(stale)
-    picked = (fresh + stale)[:n]
+    picked = (_interleave(fresh) + _interleave(stale))[:n]
+    random.shuffle(picked)  # the categories are mixed in order too, not grouped
     if len(picked) < n:
         raise RuntimeError(f"Only found {len(picked)} usable questions, needed {n}. Try again.")
     return picked

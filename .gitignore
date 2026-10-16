@@ -13,3 +13,9 @@ __pycache__/
 # Editor / OS
 .vscode/
 .DS_Store
+
+footage.log
+blocked_clips.json
+.env.*
+!.env.example
+bg_options/

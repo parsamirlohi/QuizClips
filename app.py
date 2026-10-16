@@ -13,8 +13,9 @@ from pydantic import BaseModel, Field
 from config import BASE, ENV_STATUS, OUTPUT_DIR, env, is_mock
 from videos import has_video_key
 from pipeline import build_quiz
+import looks
 from questions import CATEGORY_LABELS
-from tts import VOICES
+import tts
 
 app = FastAPI(title="Quiz Video Maker")
 jobs: dict = {}
@@ -26,6 +27,7 @@ class GenerateRequest(BaseModel):
     questions: int = Field(default=5, ge=3, le=10)
     voice: str = Field(default="en-US-AriaNeural", max_length=60)
     categories: list[int] = Field(default_factory=list, max_length=24)  # empty = mix of all
+    style: str = Field(default=looks.DEFAULT, max_length=40)  # a look key from /api/config, or "random"
     watermark_on: bool = True
     watermark_platform: str = Field(default="tiktok", max_length=20)
     watermark_handle: str = Field(default="", max_length=60)
@@ -62,7 +64,7 @@ def run_job(job_id: str, req: GenerateRequest):
 
     try:
         cats = [c for c in req.categories if c in CATEGORY_LABELS]
-        result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req))
+        result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style)
         job.update(status="done", progress=1.0, message="Done!", video_url=f"/output/{result['file']}",
                    questions=result["questions"], duration=result["duration"])
     except Exception as e:
@@ -80,15 +82,31 @@ def config():
         "env_path": ENV_STATUS["path"],
         "env_loaded_from": ENV_STATUS["loaded_from"],
         "claude_key": bool(env("ANTHROPIC_API_KEY")),
-        "voices": [{"id": v, "label": label} for v, label in VOICES],
+        "voices": tts.available_voices(),
+        "default_voice": tts.DEFAULT_VOICE,
         "categories": [{"id": i, "label": label} for i, label in CATEGORY_LABELS.items()],
+        "looks": looks.listing(),
+        "groups": looks.GROUPS,
+        "default_look": looks.DEFAULT,
     }
+
+
+@app.get("/api/voice-preview")
+def voice_preview(voice: str):
+    """A short audio sample of one narrator voice, for the Preview buttons."""
+    if not re.fullmatch(r"[A-Za-z]{2,3}-[A-Za-z]{2,4}-[A-Za-z0-9\-]{2,60}", voice):
+        raise HTTPException(400, "Unknown voice.")
+    try:
+        path, media = tts.preview_file(voice)
+    except Exception as e:
+        raise HTTPException(502, f"Could not make a sample ({str(e)[:100]}). Check your internet connection.")
+    return FileResponse(path, media_type=media, headers={"Cache-Control": "no-cache"})
 
 
 @app.post("/api/generate")
 def generate(req: GenerateRequest):
     if not has_video_key():
-        raise HTTPException(400, "Add PEXELS_API_KEY or PIXABAY_API_KEY to the .env file first.")
+        raise HTTPException(400, "Add PIXABAY_API_KEY to the .env file first.")
     with lock:
         if current["id"]:
             raise HTTPException(409, "A video is already being made. Wait for it to finish.")
@@ -114,6 +132,7 @@ def videos():
 
 
 app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
+app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 
 @app.get("/")
