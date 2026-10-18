@@ -17,6 +17,7 @@ import content
 import formats
 import gemini
 import looks
+import pipeline
 import site_routes
 from questions import CATEGORY_LABELS
 import tts
@@ -37,7 +38,12 @@ class GenerateRequest(BaseModel):
     watermark_on: bool = True
     watermark_platform: str = Field(default="tiktok", max_length=20)
     watermark_handle: str = Field(default="", max_length=60)
+    think_seconds: int | None = Field(default=None, ge=5, le=15)  # seconds viewers get to answer; None = the type's default
 
+
+# the timer each video type uses unless the person picks another (read once, before any job changes them)
+THINK_DEFAULTS = {"trivia": pipeline.THINK, "personality": formats.THINK_PERSONALITY, "wyr": formats.THINK_WYR}
+THINK_CHOICES = [5, 8, 12, 15]
 
 FORMATS = [
     {"key": "trivia", "title": "Trivia quiz", "desc": "Multiple-choice questions with a reveal.", "noun": "questions",
@@ -52,6 +58,10 @@ FORMATS = [
         "Short, surprising facts with a clip for each.",
     ])
 ]
+
+for _f in FORMATS:
+    _f["think_default"] = THINK_DEFAULTS.get(_f["key"])   # None = this type has no countdown
+    _f["think_choices"] = THINK_CHOICES if _f["key"] in THINK_DEFAULTS else []
 
 PLATFORMS = {
     "tiktok": "tiktok.com/@{}",
@@ -97,6 +107,13 @@ def run_job(job_id: str, req: GenerateRequest):
         print(f"[timing] total {time.time() - t0:.0f}s: {parts}", flush=True)
 
     try:
+        if req.think_seconds and req.kind in THINK_DEFAULTS:   # one job runs at a time, so module-level timers are safe
+            if req.kind == "trivia":
+                pipeline.THINK = req.think_seconds
+            elif req.kind == "personality":
+                formats.THINK_PERSONALITY = req.think_seconds
+            else:
+                formats.THINK_WYR = req.think_seconds
         cats = [c for c in req.categories if c in CATEGORY_LABELS]
         if req.kind == "trivia":
             result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style)
@@ -109,6 +126,9 @@ def run_job(job_id: str, req: GenerateRequest):
     except Exception as e:
         job.update(status="error", error=str(e), message="Failed")
     finally:
+        pipeline.THINK = THINK_DEFAULTS["trivia"]
+        formats.THINK_PERSONALITY = THINK_DEFAULTS["personality"]
+        formats.THINK_WYR = THINK_DEFAULTS["wyr"]
         with lock:
             current["id"] = None
 

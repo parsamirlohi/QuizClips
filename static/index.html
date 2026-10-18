@@ -104,6 +104,9 @@
   .prog-top { display:flex; justify-content:space-between; font-weight:600; margin-bottom:10px; }
   #pmsg { color:var(--muted); }
   #pct { font-variant-numeric:tabular-nums; }
+  .prog-right { display:flex; align-items:baseline; gap:10px; }
+  #elapsed { font-size:12px; font-weight:500; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .pnote { margin:12px 0 0; font-size:14px; color:var(--muted); }
 
   /* result */
   #result { display:none; margin-top:20px; }
@@ -260,6 +263,7 @@
   .vpick[aria-checked="true"] .tick { visibility:visible; }
   .vmsg { color:var(--err); font-size:13px; margin:10px 0 0; min-height:0; }
   .seg { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; }
+  .seg4 { grid-template-columns:repeat(4,1fr); }
   .seg button { border:1px solid var(--line-strong); background:var(--surface); border-radius:10px; padding:10px 0; font-weight:600; font-variant-numeric:tabular-nums; }
   .seg button:hover { border-color:var(--muted); }
   .seg button[aria-pressed="true"], .chip[aria-pressed="true"] { background:var(--primary-soft); border-color:var(--primary); color:var(--primary); }
@@ -362,6 +366,7 @@
         </div>
         <dl class="rows" style="margin:0">
           <div class="row"><dt id="k-count">Questions</dt><dd class="v" id="s-questions" style="margin:0"></dd><button class="link" data-edit="questions" aria-label="Change number of questions">Change</button></div>
+          <div class="row" id="row-timer"><dt>Timer</dt><dd class="v" id="s-timer" style="margin:0"></dd><button class="link" data-edit="timer" aria-label="Change answer timer">Change</button></div>
           <div class="row"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice">Change</button></div>
           <div class="row" id="row-topics"><dt>Topics</dt><dd class="v" id="s-topics" style="margin:0"></dd><button class="link" data-edit="topics" aria-label="Change topics">Change</button></div>
           <div class="row"><dt>Look</dt><dd class="v" id="s-look" style="margin:0"></dd><button class="link" data-edit="look" aria-label="Change look">Change</button></div>
@@ -375,8 +380,9 @@
       <div class="err" id="err" role="alert"></div>
 
       <div class="card" id="progress" aria-live="polite">
-        <div class="prog-top"><span id="pmsg">Starting</span><span id="pct">0%</span></div>
+        <div class="prog-top"><span id="pmsg">Starting</span><span class="prog-right"><span id="elapsed" title="Time since you pressed Generate">0:00</span><span id="pct">0%</span></span></div>
         <div class="bar"><i id="fill"></i></div>
+        <p class="pnote" id="pnote" hidden>Going through lots of videos to find the best one. Hang tight!</p>
         <ol class="steps" id="steps">
           <li>Script</li><li>Narration</li><li>Footage</li><li>Scenes</li><li>Finishing</li>
         </ol>
@@ -446,6 +452,11 @@
         <p class="help">More questions make a longer video.</p>
         <div class="seg" id="seg" role="group" aria-labelledby="q-lab"></div>
       </div>
+      <div class="field" id="f-timer">
+        <span class="lab" id="tm-lab">Time to answer</span>
+        <p class="help" id="tm-help">How many seconds viewers get to think. Longer timers make a longer video.</p>
+        <div class="seg seg4" id="tm-seg" role="group" aria-labelledby="tm-lab"></div>
+      </div>
       <div class="field" id="f-voice">
         <span class="lab" id="v-lab">Narrator voice</span>
         <p class="help">Reads each question and answer aloud. Press play to hear a sample.</p>
@@ -499,13 +510,13 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
 
 /* ---------------- settings (remembered in this browser) ---------------- */
-const S = { kind: "trivia", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "" };
+const S = { think: {}, kind: "trivia", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "" };
 let CFG = null;
 function loadSettings() {
   try {
     const j = JSON.parse(localStorage.getItem("qvm_settings") || "null");
     if (j) {
-      S.kind = j.kind || "trivia"; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.cats = new Set(j.cats || []);
+      S.kind = j.kind || "trivia"; S.think = j.think || {}; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.cats = new Set(j.cats || []);
       S.look = j.look || S.look; S.wmOn = j.wmOn !== false; S.wmPlat = j.wmPlat || "tiktok"; S.wmHandle = j.wmHandle || "";
     } else {  // older versions of this page
       S.look = localStorage.getItem("lookKey") || S.look;
@@ -542,6 +553,7 @@ function setTab(name) {
 }
 const SECTIONS = {
   questions: { panel: "content", field: "f-questions", title: "Number of questions" },
+  timer: { panel: "content", field: "f-timer", title: "Time to answer" },
   voice: { panel: "content", field: "f-voice", title: "Narrator voice" },
   topics: { panel: "content", field: "f-topics", title: "Topics" },
   look: { panel: "look", title: "Look" },
@@ -552,8 +564,8 @@ function openDrawer(sect, from) {
   opener = from || document.activeElement;
   const one = SECTIONS[sect];
   $("drawer").classList.toggle("scoped", !!one);
-  ["f-questions", "f-voice", "f-topics"].forEach((id) => {
-    $(id).hidden = one ? one.field !== id : (id === "f-topics" && S.kind !== "trivia");
+  ["f-questions", "f-timer", "f-voice", "f-topics"].forEach((id) => {
+    $(id).hidden = one ? one.field !== id : ((id === "f-topics" && S.kind !== "trivia") || (id === "f-timer" && !fmt().think_default));
   });
   $("d-title").textContent = !one ? "Customize" : sect === "questions" ? "Number of " + fmt().noun : one.title;
   $("d-close").setAttribute("aria-label", one ? "Close" : "Close customize panel");
@@ -629,11 +641,30 @@ function wmText() {
 const mode = () => S.modes[S.kind] || "random";
 const topic = () => (mode() === "custom" ? (S.topics[S.kind] || "").trim() : "");
 function fmt() { return CFG.formats.find((f) => f.key === S.kind) || CFG.formats[0]; }
+const thinkFor = (f) => (f.think_choices || []).includes(S.think[f.key]) ? S.think[f.key] : f.think_default;
+function estLength(f) {   // rough: intro/outro plus, per item, reading it aloud and the answer reveal around the countdown
+  const s = 7 + S.questions * (thinkFor(f) + 9), m = Math.floor(s / 60);
+  return m + ":" + String(Math.round(s % 60)).padStart(2, "0");
+}
+function buildTimer() {
+  const f = fmt(), box = $("tm-seg"); box.innerHTML = "";
+  if (!f.think_default) return;
+  f.think_choices.forEach((n) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = n + "s";
+    b.setAttribute("aria-pressed", String(n === thinkFor(f)));
+    b.onclick = () => { S.think[f.key] = n; saveSettings(); buildTimer(); renderSummary(); };
+    box.appendChild(b);
+  });
+  $("tm-help").textContent = "How many seconds viewers get to think. Default is " + f.think_default + ". Your video will run about " + estLength(f) + ".";
+}
 function renderSummary() {
   const f = fmt();
   $("k-count").textContent = f.noun[0].toUpperCase() + f.noun.slice(1);
   $("s-questions").textContent = S.questions + " " + f.noun;
   $("row-topics").hidden = f.needs_topic; $("topic-card").hidden = !f.needs_topic;
+  $("row-timer").hidden = !f.think_default;
+  if (f.think_default) $("s-timer").textContent = thinkFor(f) + " seconds" + (thinkFor(f) === f.think_default ? " (default)" : "") + " · about " + estLength(f);
   const v = CFG.voices.find((x) => x.id === S.voice);
   $("s-voice").textContent = v ? v.label : "";
   const names = CFG.categories.filter((c) => S.cats.has(c.id)).map((c) => c.label);
@@ -655,7 +686,7 @@ function buildKinds() {
     b.innerHTML = "<b>" + esc(f.title) + "</b><span>" + esc(f.desc) + "</span>";
     b.onclick = () => {
       S.kind = f.key; $("topic-in").value = S.topics[S.kind] || ""; S.questions = Math.max(f.min, Math.min(f.max, S.questions));
-      saveSettings(); paintKinds(); buildSeg(); buildTopicChips(); renderSummary();
+      saveSettings(); paintKinds(); buildSeg(); buildTimer(); buildTopicChips(); renderSummary();
     };
     box.appendChild(b);
   });
@@ -669,7 +700,7 @@ function buildSeg() {
   for (let n = f.min; n <= f.max; n++) {
     const b = document.createElement("button");
     b.type = "button"; b.textContent = n;
-    b.onclick = () => { S.questions = n; paintSeg(); saveSettings(); renderSummary(); };
+    b.onclick = () => { S.questions = n; paintSeg(); saveSettings(); buildTimer(); renderSummary(); };
     seg.appendChild(b);
   }
   const paintSeg = () => [...seg.children].forEach((b, i) => b.setAttribute("aria-pressed", String(i + f.min === S.questions)));
@@ -712,7 +743,7 @@ document.querySelectorAll("#tmode .kind").forEach((b) => b.addEventListener("cli
 }));
 $("topic-in").addEventListener("input", (e) => { S.topics[S.kind] = e.target.value; saveSettings(); });
 function buildContent() {
-  buildKinds(); buildSeg(); buildTopicChips();
+  buildKinds(); buildSeg(); buildTimer(); buildTopicChips();
   buildVoices();
 
   const box = $("chips"); box.innerHTML = "";
@@ -880,8 +911,16 @@ function setBusy(on) { $("go").disabled = on || $("go").dataset.blocked === "1";
 function setProgress(frac, msg) {
   const p = Math.max(2, Math.round(frac * 100));
   $("fill").style.width = p + "%"; $("pct").textContent = p + "%"; $("pmsg").textContent = msg || "Working";
+  $("pnote").hidden = !/^Finding/i.test(msg || "");   // finding footage is the slowest step, so say so
   updateBuild(frac, msg);
 }
+let clockT = null;
+function startClock() {
+  const t0 = Date.now(), el = $("elapsed");
+  const tick = () => { const s = Math.floor((Date.now() - t0) / 1000); el.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  stopClock(); tick(); clockT = setInterval(tick, 1000);
+}
+function stopClock() { if (clockT) { clearInterval(clockT); clockT = null; } }
 $("go").addEventListener("click", async () => {
   $("err").textContent = ""; $("result").style.display = "none"; $("dl-icon").hidden = true;
   if (fmt().needs_topic && mode() === "custom" && !topic()) {
@@ -892,18 +931,19 @@ $("go").addEventListener("click", async () => {
     $("err").textContent = "This video type needs a free Gemini key to write the script. Add GEMINI_API_KEY to your .env file and restart the app.";
     return;
   }
-  setBusy(true); $("progress").style.display = "block"; startBuild(); setProgress(0.02, "Starting");
+  setBusy(true); $("progress").style.display = "block"; startBuild(); startClock(); setProgress(0.02, "Starting");
   try {
     const r = await fetch("/api/generate", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ kind: S.kind, topic: topic(), questions: S.questions, voice: S.voice, categories: [...S.cats], style: S.look,
-        watermark_on: S.wmOn, watermark_platform: S.wmPlat, watermark_handle: S.wmHandle }),
+        think_seconds: fmt().think_default ? thinkFor(fmt()) : null, watermark_on: S.wmOn, watermark_platform: S.wmPlat, watermark_handle: S.wmHandle }),
     });
     if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || "The request failed. Try again."); }
     const job = await r.json();
     await poll(job.id);
   } catch (e) {
     $("err").textContent = e.message;
+    stopClock();
     $("progress").style.display = "none";
     site = null; showLookPreview();
   } finally {
@@ -920,6 +960,7 @@ async function poll(id) {
   }
 }
 function finish(job) {
+  stopClock();
   $("progress").style.display = "none";
   site = null;
   const v = document.createElement("video");

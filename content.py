@@ -82,6 +82,15 @@ def _need(cond, msg="the script came back incomplete"):
         raise RuntimeError(f"Could not write the script just now ({msg}). Please try again.")
 
 
+PEOPLE_RULE = (
+    "When a question or option is about the viewer's own habits, feelings, personality, social life, choices or "
+    "preferences (for example 'What is your social style?' or 'How do you spend a free weekend?'), film the real human "
+    "situation it describes: 'friends laughing', 'group of friends', 'people at a party', 'person reading a book', "
+    "'city commute', 'cooking dinner'. Never use an animal, object or symbol as a metaphor for a trait (no peacock for "
+    "confidence, no butterfly for being social, no owl for being wise) unless the quiz theme itself is about that animal."
+)
+
+
 # ---------------------------------------------------------------- personality
 def _personality(topic: str, n: int) -> dict:
     p = (
@@ -101,6 +110,7 @@ def _personality(topic: str, n: int) -> dict:
         "stock-footage search terms (1-3 words each) naming concrete things a camera can film, most specific first: the "
         "first term may combine the theme's franchise or world with the subject if stock sites would likely have it, the "
         "rest are plainer filmable terms. Never use the names of real people or fictional characters.\n"
+        f"{PEOPLE_RULE}\n"
         "Keep everything family friendly."
     )
     d = _ask(p)
@@ -129,7 +139,8 @@ def _wyr(topic: str, n: int) -> dict:
         "  trait_a and trait_b say what choosing that option says about you: 2-4 words starting with 'a' or 'an', "
         "max 26 characters, playful and flattering (for example 'a bold adventurer').\n"
         "  search_a and search_b: 3 short stock-footage search terms each (1-3 words), concrete things a camera can film, "
-        "most specific first, no brand, franchise or real people's names.\n"
+        "most specific first, no brand, franchise or real people's names. Film the situation the option describes "
+        "(the place, activity or scene), not a symbol for it.\n"
         "Keep everything family friendly."
     )
     d = _ask(p)

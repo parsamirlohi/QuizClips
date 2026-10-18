@@ -18,8 +18,8 @@ from render import concat_videos, mux, render_segment
 from tts import synthesize_all
 from videos import find_background
 
-THINK_PERSONALITY = int(env("THINK_PERSONALITY_SECONDS", "10"))   # seconds to pick an answer
-THINK_WYR = int(env("THINK_WYR_SECONDS", "8"))   # seconds to choose A or B
+THINK_PERSONALITY = int(env("THINK_PERSONALITY_SECONDS", "15"))   # seconds to pick an answer
+THINK_WYR = int(env("THINK_WYR_SECONDS", "11"))   # seconds to choose A or B
 RANKS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
 LETTERS = "ABCD"
 

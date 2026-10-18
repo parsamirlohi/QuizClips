@@ -20,7 +20,7 @@ INTRO_QUERIES = ["neon lights abstract", "colorful abstract background", "light 
                  "glowing lines", "bokeh lights", "abstract waves"]
 PROMPTS = ["Pick your answer!", "Comment your guess!", "Lock it in!", "No cheating!", "Think fast!",
            "Shout it out in the comments!", "Which one is it?"]
-THINK = int(env("THINK_SECONDS", "7"))
+THINK = int(env("THINK_SECONDS", "8"))
 POP_ANIM = (0.55, 1.08, 0.96, 1.0)
 
 

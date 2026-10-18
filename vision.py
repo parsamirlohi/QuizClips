@@ -41,7 +41,7 @@ def choose(cands: list, question: str, term: str):
         "shows something a viewer would naturally associate with the question's subject (a place, object, activity or "
         "scene about the topic). 0 = unrelated or misleading, 10 = obviously about this topic. Example: for 'Who was "
         "the 45th US president?' a White House exterior, US flag or Capitol scores high; a snowy log cabin, a random "
-        "landscape or abstract lights score 0-2. Do not try to answer the question. "
+        "landscape or abstract lights score 0-2. Do not try to answer the question. A picture that only works as a symbol or metaphor (for example a peacock for a question about being confident or social) scores 0-3; people or a setting that actually match what the question describes score high. "
         f"Reply with ONLY a JSON array of {len(cands)} integers."
     )
     parts = [{"text": prompt}]
