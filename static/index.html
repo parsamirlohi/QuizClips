@@ -75,12 +75,12 @@
 
   .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; }
   .card-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 22px; border-bottom:1px solid var(--line); }
-  .card-head h2 { margin:0; font-size:16px; font-weight:700; letter-spacing:-.01em; }
+  .card-head h2 { margin:0; font-size:25px; font-weight:800; letter-spacing:-.02em; }
   .rows { margin:0; padding:0; list-style:none; }
   .row { display:grid; grid-template-columns:150px minmax(0,1fr) auto; align-items:center; gap:16px; padding:16px 22px; border-bottom:1px solid var(--line); }
   .row:last-child { border-bottom:0; }
-  .row dt, .row .k { color:var(--muted); font-size:14px; }
-  .row .v { font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:10px; }
+  .row dt, .row .k { color:var(--ink); font-size:15px; font-weight:700; }
+  .row .v { color:var(--muted); font-weight:500; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:10px; }
   .row .v img { width:22px; height:39px; border-radius:5px; object-fit:cover; border:1px solid var(--line); flex:none; }
 
   .btn { border:1px solid var(--line-strong); background:var(--surface); border-radius:10px; padding:9px 16px; font-weight:600; }
@@ -91,6 +91,11 @@
   .btn:disabled { opacity:.5; cursor:not-allowed; }
   .link { border:0; background:none; color:var(--primary); font-weight:600; padding:4px 2px; }
   .link:hover { text-decoration:underline; }
+  .row .link[data-edit] { width:28px; height:28px; display:grid; place-items:center; padding:0; color:var(--muted); opacity:.55; transition:opacity .15s, color .15s, transform .15s; }
+  .row:has([data-edit]) { cursor:pointer; transition:background .15s; }
+  .row:has([data-edit]):hover { background:var(--primary-soft); }
+  .row:has([data-edit]):hover .link[data-edit], .row .link[data-edit]:focus-visible { opacity:1; color:var(--primary); transform:translateX(2px); }
+  .row .link[data-edit]:hover { text-decoration:none; }
 
   .actions { display:flex; align-items:center; gap:14px; margin-top:20px; }
   #go { flex:1; padding:16px 22px; font-size:17px; font-weight:700; border-radius:12px; }
@@ -263,7 +268,14 @@
   .vpick[aria-checked="true"] .tick { visibility:visible; }
   .vmsg { color:var(--err); font-size:13px; margin:10px 0 0; min-height:0; }
   .seg { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; }
-  .seg4 { grid-template-columns:repeat(4,1fr); }
+  .row-timer .v { overflow:visible; white-space:normal; flex-direction:column; align-items:stretch; gap:8px; }
+  .tm-val { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  .tm-val { color:var(--ink); }
+  .tm-val small { color:var(--ink); font-weight:500; font-size:13px; white-space:nowrap; }
+  #tm-range { -webkit-appearance:none; appearance:none; width:100%; height:8px; border-radius:99px; outline-offset:4px;
+    background:linear-gradient(to right,var(--primary) var(--p,50%),var(--line-strong) var(--p,50%)); }
+  #tm-range::-webkit-slider-thumb { -webkit-appearance:none; width:24px; height:24px; border-radius:50%; background:#fff; border:3px solid var(--primary); cursor:pointer; }
+  #tm-range::-moz-range-thumb { width:18px; height:18px; border-radius:50%; background:#fff; border:3px solid var(--primary); cursor:pointer; }
   .seg button { border:1px solid var(--line-strong); background:var(--surface); border-radius:10px; padding:10px 0; font-weight:600; font-variant-numeric:tabular-nums; }
   .seg button:hover { border-color:var(--muted); }
   .seg button[aria-pressed="true"], .chip[aria-pressed="true"] { background:var(--primary-soft); border-color:var(--primary); color:var(--primary); }
@@ -365,12 +377,12 @@
           <button class="btn btn-sm" id="open-custom">Customize</button>
         </div>
         <dl class="rows" style="margin:0">
-          <div class="row"><dt id="k-count">Questions</dt><dd class="v" id="s-questions" style="margin:0"></dd><button class="link" data-edit="questions" aria-label="Change number of questions">Change</button></div>
-          <div class="row" id="row-timer"><dt>Timer</dt><dd class="v" id="s-timer" style="margin:0"></dd><button class="link" data-edit="timer" aria-label="Change answer timer">Change</button></div>
-          <div class="row"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice">Change</button></div>
-          <div class="row" id="row-topics"><dt>Topics</dt><dd class="v" id="s-topics" style="margin:0"></dd><button class="link" data-edit="topics" aria-label="Change topics">Change</button></div>
-          <div class="row"><dt>Look</dt><dd class="v" id="s-look" style="margin:0"></dd><button class="link" data-edit="look" aria-label="Change look">Change</button></div>
-          <div class="row"><dt>Link on video</dt><dd class="v" id="s-link" style="margin:0"></dd><button class="link" data-edit="link" aria-label="Change link on video">Change</button></div>
+          <div class="row"><dt id="k-count">Questions</dt><dd class="v" id="s-questions" style="margin:0"></dd><button class="link" data-edit="questions" aria-label="Change number of questions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row row-timer" id="row-timer"><dt id="tm-lab">Timer</dt><dd class="v" id="s-timer" style="margin:0"></dd></div>
+          <div class="row"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row" id="row-topics"><dt>Topics</dt><dd class="v" id="s-topics" style="margin:0"></dd><button class="link" data-edit="topics" aria-label="Change topics"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row"><dt>Look</dt><dd class="v" id="s-look" style="margin:0"></dd><button class="link" data-edit="look" aria-label="Change look"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row"><dt>Link on video</dt><dd class="v" id="s-link" style="margin:0"></dd><button class="link" data-edit="link" aria-label="Change link on video"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
         </dl>
       </div>
 
@@ -451,11 +463,6 @@
         <span class="lab" id="q-lab">Number of questions</span>
         <p class="help">More questions make a longer video.</p>
         <div class="seg" id="seg" role="group" aria-labelledby="q-lab"></div>
-      </div>
-      <div class="field" id="f-timer">
-        <span class="lab" id="tm-lab">Time to answer</span>
-        <p class="help" id="tm-help">How many seconds viewers get to think. Longer timers make a longer video.</p>
-        <div class="seg seg4" id="tm-seg" role="group" aria-labelledby="tm-lab"></div>
       </div>
       <div class="field" id="f-voice">
         <span class="lab" id="v-lab">Narrator voice</span>
@@ -553,7 +560,6 @@ function setTab(name) {
 }
 const SECTIONS = {
   questions: { panel: "content", field: "f-questions", title: "Number of questions" },
-  timer: { panel: "content", field: "f-timer", title: "Time to answer" },
   voice: { panel: "content", field: "f-voice", title: "Narrator voice" },
   topics: { panel: "content", field: "f-topics", title: "Topics" },
   look: { panel: "look", title: "Look" },
@@ -564,8 +570,8 @@ function openDrawer(sect, from) {
   opener = from || document.activeElement;
   const one = SECTIONS[sect];
   $("drawer").classList.toggle("scoped", !!one);
-  ["f-questions", "f-timer", "f-voice", "f-topics"].forEach((id) => {
-    $(id).hidden = one ? one.field !== id : ((id === "f-topics" && S.kind !== "trivia") || (id === "f-timer" && !fmt().think_default));
+  ["f-questions", "f-voice", "f-topics"].forEach((id) => {
+    $(id).hidden = one ? one.field !== id : ((id === "f-topics" && S.kind !== "trivia"));
   });
   $("d-title").textContent = !one ? "Customize" : sect === "questions" ? "Number of " + fmt().noun : one.title;
   $("d-close").setAttribute("aria-label", one ? "Close" : "Close customize panel");
@@ -575,6 +581,14 @@ function openDrawer(sect, from) {
   document.body.style.overflow = "hidden";
   setTimeout(() => $("d-close").focus(), 30);
 }
+const QUICK_MS = 300;   // how close together two clicks must be to count as "pick and close"
+function quick(el, fn) {
+  let last = 0;
+  el.addEventListener("click", () => {
+    const now = performance.now();
+    if (now - last < QUICK_MS) { last = 0; fn(); } else last = now;
+  });
+}
 function closeDrawer() {
   stopSample();
   $("drawer").classList.remove("open"); $("scrim").classList.remove("open");
@@ -583,6 +597,10 @@ function closeDrawer() {
 }
 $("open-custom").onclick = (e) => openDrawer("all", e.currentTarget);
 document.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => openDrawer(b.dataset.edit, b)));
+document.querySelectorAll(".row").forEach((row) => {   // the whole row opens its setting; the arrow is just a hint
+  const b = row.querySelector("[data-edit]");
+  if (b) row.addEventListener("click", (e) => { if (!e.target.closest("button")) openDrawer(b.dataset.edit, b); });
+});
 document.querySelectorAll(".d-tab").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 $("d-close").onclick = $("d-done").onclick = $("scrim").onclick = closeDrawer;
 document.addEventListener("keydown", (e) => {
@@ -641,30 +659,32 @@ function wmText() {
 const mode = () => S.modes[S.kind] || "random";
 const topic = () => (mode() === "custom" ? (S.topics[S.kind] || "").trim() : "");
 function fmt() { return CFG.formats.find((f) => f.key === S.kind) || CFG.formats[0]; }
-const thinkFor = (f) => (f.think_choices || []).includes(S.think[f.key]) ? S.think[f.key] : f.think_default;
+const thinkFor = (f) => S.think[f.key] >= 5 && S.think[f.key] <= 15 ? S.think[f.key] : f.think_default;
 function estLength(f) {   // rough: intro/outro plus, per item, reading it aloud and the answer reveal around the countdown
   const s = 7 + S.questions * (thinkFor(f) + 9), m = Math.floor(s / 60);
   return m + ":" + String(Math.round(s % 60)).padStart(2, "0");
 }
 function buildTimer() {
-  const f = fmt(), box = $("tm-seg"); box.innerHTML = "";
-  if (!f.think_default) return;
-  f.think_choices.forEach((n) => {
-    const b = document.createElement("button");
-    b.type = "button"; b.textContent = n + "s";
-    b.setAttribute("aria-pressed", String(n === thinkFor(f)));
-    b.onclick = () => { S.think[f.key] = n; saveSettings(); buildTimer(); renderSummary(); };
-    box.appendChild(b);
-  });
-  $("tm-help").textContent = "How many seconds viewers get to think. Default is " + f.think_default + ". Your video will run about " + estLength(f) + ".";
+  const f = fmt(), box = $("s-timer");
+  $("row-timer").hidden = !f.think_default;
+  if (!f.think_default) { box.innerHTML = ""; return; }
+  box.innerHTML = '<input type="range" id="tm-range" min="5" max="15" step="1" aria-labelledby="tm-lab"><span class="tm-val"><span><b id="tm-out"></b> <small id="tm-def"></small></span><small id="tm-est"></small></span>';
+  const r = $("tm-range"), paint = () => {
+    const n = +r.value;
+    $("tm-out").textContent = n + " seconds";
+    $("tm-def").textContent = n === f.think_default ? "(default)" : "";
+    $("tm-est").textContent = "about " + estLength(f);
+    r.style.setProperty("--p", ((n - 5) / 10 * 100) + "%");
+  };
+  r.value = thinkFor(f); paint();
+  r.oninput = () => { S.think[f.key] = +r.value; saveSettings(); paint(); };
 }
 function renderSummary() {
   const f = fmt();
+  buildTimer();
   $("k-count").textContent = f.noun[0].toUpperCase() + f.noun.slice(1);
   $("s-questions").textContent = S.questions + " " + f.noun;
   $("row-topics").hidden = f.needs_topic; $("topic-card").hidden = !f.needs_topic;
-  $("row-timer").hidden = !f.think_default;
-  if (f.think_default) $("s-timer").textContent = thinkFor(f) + " seconds" + (thinkFor(f) === f.think_default ? " (default)" : "") + " · about " + estLength(f);
   const v = CFG.voices.find((x) => x.id === S.voice);
   $("s-voice").textContent = v ? v.label : "";
   const names = CFG.categories.filter((c) => S.cats.has(c.id)).map((c) => c.label);
@@ -686,7 +706,7 @@ function buildKinds() {
     b.innerHTML = "<b>" + esc(f.title) + "</b><span>" + esc(f.desc) + "</span>";
     b.onclick = () => {
       S.kind = f.key; $("topic-in").value = S.topics[S.kind] || ""; S.questions = Math.max(f.min, Math.min(f.max, S.questions));
-      saveSettings(); paintKinds(); buildSeg(); buildTimer(); buildTopicChips(); renderSummary();
+      saveSettings(); paintKinds(); buildSeg(); buildTopicChips(); renderSummary();
     };
     box.appendChild(b);
   });
@@ -701,6 +721,7 @@ function buildSeg() {
     const b = document.createElement("button");
     b.type = "button"; b.textContent = n;
     b.onclick = () => { S.questions = n; paintSeg(); saveSettings(); buildTimer(); renderSummary(); };
+    quick(b, closeDrawer);
     seg.appendChild(b);
   }
   const paintSeg = () => [...seg.children].forEach((b, i) => b.setAttribute("aria-pressed", String(i + f.min === S.questions)));
@@ -761,6 +782,10 @@ function buildContent() {
     S.cats.has(c.id) ? S.cats.delete(c.id) : S.cats.add(c.id);
     paint(); saveSettings(); renderSummary();
   }));
+  quick(mix, closeDrawer);
+  chips.forEach((b, i) => quick(b, () => {   // two quick clicks toggle twice, so make sure it ends up selected, then close
+    S.cats.add(CFG.categories[i].id); paint(); saveSettings(); renderSummary(); closeDrawer();
+  }));
   paint();
 }
 
@@ -807,6 +832,7 @@ function buildVoices() {
     pick.type = "button"; pick.className = "vpick"; pick.setAttribute("role", "radio");
     pick.innerHTML = "<span><b>" + esc(v.name) + "</b><small>" + (v.gender === "female" ? "Female" : "Male") + '</small></span><span class="tick"></span>';
     pick.onclick = () => { S.voice = v.id; paint(); saveSettings(); renderSummary(); };
+    quick(pick, closeDrawer);
     row.appendChild(play); row.appendChild(pick); box.appendChild(row);
     picks.push([v.id, pick]);
   });
@@ -824,6 +850,7 @@ function buildLooks() {
     b.type = "button"; b.className = "look"; b.setAttribute("aria-label", title);
     b.innerHTML = inner + "<em>" + esc(title) + "</em>";
     b.onclick = () => { S.look = key; paint(); saveSettings(); renderSummary(); showLookPreview(); };
+    quick(b, closeDrawer);   // two quick clicks = pick it and be done
     grid.appendChild(b); tiles.push([key, b]);
   };
   const group = (title, fill) => {
