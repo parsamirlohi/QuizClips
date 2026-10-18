@@ -224,12 +224,12 @@ def _number_circle(img, label, reveal, timer, think, urgent):
     _place(img, c, cx, cy)
 
 
-def _frame_border(img, color, frac=1.0, t=24):
+def _border_path(img, color, frac=1.0, t=24, track=(255, 255, 255)):
     """Border around the screen that doubles as the timer: it shrinks clockwise from the top centre."""
     if frac <= 0:
         return
-    if frac < 1.0:  # white track of the same size behind the pink, so you can see the timer deplete
-        _frame_border(img, (255, 255, 255), 1.0, t)
+    if frac < 1.0 and track:  # a track of the same size behind the bar, so you can see the timer deplete
+        _border_path(img, track, 1.0, t, None)
     d = ImageDraw.Draw(img)
     c = color + (255,)
     # clockwise path: top-centre -> top-right -> bottom-right -> bottom-left -> top-left -> top-centre
@@ -254,6 +254,24 @@ def _frame_border(img, color, frac=1.0, t=24):
         left -= use
 
 
+def _lum(c):
+    return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255
+
+
+def _frame_border(img, color, frac=1.0, t=24):
+    """The border / countdown bar. A white (or nearly white) border would vanish against the white track and bright
+    backgrounds, so it is drawn black; other light colours keep their colour but get a dark track."""
+    if frac <= 0:
+        return
+    color, track = tuple(color), (255, 255, 255)
+    lum = _lum(color)
+    if lum >= 0.9:
+        color = (0, 0, 0)
+    elif lum >= 0.75:
+        track = (30, 30, 40)
+    _border_path(img, color, frac, t, track)
+
+
 def _clip_frame(img):
     x0, y0, x1, y1 = CLIP
     t = 14
@@ -273,7 +291,7 @@ def _outline_label(img, cx, cy, text, size, fill=(255, 255, 255)):
 
 def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choices=(), letters="ABCD",
                visible=0, anim=1.0, correct_idx=None, reveal=False, timer=None, think=5, q_num=1,
-               plus=0.0, clip=True, num_label=None, border=True, **_):
+               plus=0.0, clip=True, num_label=None, border=True, bar_dy=0, **_):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     shown = "green" if reveal else theme
     if timer is not None:
@@ -295,7 +313,7 @@ def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choice
             continue
         style = "green" if reveal else bar_style
         layer = _bar(choices[i], letters[i], style)
-        cy = BAR_Y0 + i * BAR_STEP + BAR_H / 2
+        cy = BAR_Y0 + i * BAR_STEP + BAR_H / 2 + bar_dy
         if i == visible - 1 and anim < 1.0 or (i == visible - 1 and anim > 1.0):
             _place(img, layer, 50 + layer.width / 2, cy, anim, min(1.0, max(0.2, (anim - 0.4) * 2.5)))
         else:
@@ -316,6 +334,41 @@ def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choice
     if name and name.lower() != "none":
         _ctext(img, 540, 1850, name, font(36), (255, 255, 255, 255), stroke=5)
     return img
+
+
+def _caption_box(text):
+    """White rounded box with the text in the look's accent colour (same style as an answer bar)."""
+    s = BAR_STYLES["purple"]
+    f, lines = _fit(text, 840, 400, 80, 44, 1.12)
+    h = max(190, int(len(lines) * f.size * 1.12) + 96)
+    layer = _box(960, h, 12, s["fill"], s["line"], 8)
+    _words(layer, 480, h // 2, text, 840, h - 70, 80, 44, s["text"], stroke=0)
+    return layer
+
+
+def draw_card(theme="purple", header="", lit=None, hscale=1.0, label="", caption="", anim=1.0, badge="", border=True,
+              clip=True, tag="", **_):
+    """One item of a list: header (name), footage window, small label, caption box with a sentence, number badge."""
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    if border:
+        _frame_border(img, THEMES[theme]["border"], 1.0)
+    hx0, hy0, hx1, hy1 = HEADER
+    _place(img, _header(theme, header, lit), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale)
+    if clip:
+        _clip_frame(img)
+    if label:
+        _outline_label(img, 540, 566, label, 50)
+    if caption:
+        box = _caption_box(caption)
+        cy = 1040 + box.height / 2
+        _place(img, box, 540, cy, anim, min(1.0, max(0.0, (anim - 0.4) * 2.5)) if anim != 1.0 else 1.0)
+    if badge:
+        _number_circle(img, str(badge), False, None, 5, False)
+    name = WATERMARK if WATERMARK is not None else env("CHANNEL_NAME")
+    if name and name.lower() != "none":
+        _ctext(img, 540, 1850, name, font(36), (255, 255, 255, 255), stroke=5)
+    return img
+
 
 
 def _siren(color_on, on):
@@ -503,10 +556,65 @@ def draw_hook(text="", hl=0, hscale=1.0, **_):
     return img
 
 
+_BRAND_MARK = []
+
+
+def _brand_mark():
+    """The 'Made with Quizclips' stamp drawn on every frame: a round white sticker with a spiky edge, like a seal.
+    Built once and reused."""
+    import math
+    if _BRAND_MARK:
+        return _BRAND_MARK[0]
+    S = 3                          # drawn at triple size, then shrunk, so the edges are smooth
+    D = 236                        # sticker size on the video
+    ink, purple = (20, 22, 31, 255), (112, 84, 240, 255)
+    cx = cy = D * S // 2
+    big = Image.new("RGBA", (D * S, D * S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(big)
+
+    def burst(r_out, r_in, teeth, fill):
+        pts = []
+        for k in range(teeth * 2):
+            r = r_out if k % 2 == 0 else r_in
+            a = math.pi * k / teeth
+            pts.append((cx + r * S * math.cos(a), cy + r * S * math.sin(a)))
+        d.polygon(pts, fill=fill)
+
+    burst(112, 101, 24, ink)       # dark edge
+    burst(108, 97, 24, (255, 255, 255, 255))
+    d.ellipse((cx - 93 * S, cy - 93 * S, cx + 93 * S, cy + 93 * S), outline=purple, width=3 * S)
+    try:
+        logo = Image.open(ASSETS_DIR / "quizclips_logo.png").convert("RGBA").resize((84 * S, 84 * S), Image.LANCZOS)
+        big.alpha_composite(logo, (cx - 42 * S, cy - 50 * S))
+    except OSError:
+        pass
+    small, name = font(17 * S), font(30 * S)
+    d.text((cx, cy - 60 * S), "MADE WITH", font=small, fill=purple, anchor="mm")
+    d.text((cx, cy + 48 * S), "Quizclips", font=name, fill=ink, anchor="mm")
+    big = big.rotate(8, resample=Image.BICUBIC, expand=False)
+    D = 180
+    sticker = big.resize((D, D), Image.LANCZOS)
+    shadow = Image.new("RGBA", (D + 20, D + 20), (0, 0, 0, 0))
+    shadow.paste((0, 0, 0, 90), (10, 14), sticker.getchannel("A"))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(5))
+    shadow.alpha_composite(sticker, (10, 10))
+    _BRAND_MARK.append(shadow)
+    return shadow
+
+
+BRAND_POS = (44, 1673)   # bottom left: clear of the answer bars, the number circle and the channel name
+
+
 def make_overlay(kind, args):
     if kind == "hook":
-        return draw_hook(**args)
-    return draw_challenge(**args) if kind == "challenge" else draw_scene(**args)
+        img = draw_hook(**args)
+    elif kind == "card":
+        img = draw_card(**args)
+    else:
+        img = draw_challenge(**args) if kind == "challenge" else draw_scene(**args)
+    if env("BRAND_MARK", "1") != "0":   # set BRAND_MARK=0 to leave it off (for a paid plan, later)
+        img.alpha_composite(_brand_mark(), BRAND_POS)
+    return img
 
 
 def _vcodec_args():

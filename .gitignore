@@ -19,3 +19,5 @@ blocked_clips.json
 .env.*
 !.env.example
 bg_options/
+waitlist.jsonl
+waitlist.csv

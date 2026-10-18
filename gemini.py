@@ -17,7 +17,7 @@ def available() -> bool:
     return bool(env("GEMINI_API_KEY"))
 
 
-def generate(parts: list, timeout: int = 60) -> str:
+def generate(parts: list, timeout: int = 60, temperature: float = 0.2) -> str:
     """Send text and/or {"inline_data": ...} parts, get JSON text back."""
     key = env("GEMINI_API_KEY")
     models = ([env("GEMINI_MODEL")] if env("GEMINI_MODEL") else []) + MODELS
@@ -30,7 +30,7 @@ def generate(parts: list, timeout: int = 60) -> str:
                     f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
                     headers={"x-goog-api-key": key, "content-type": "application/json"},
                     json={"contents": [{"parts": parts}],
-                          "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}},
+                          "generationConfig": {"temperature": temperature, "responseMimeType": "application/json"}},
                     timeout=timeout,
                 )
             except (requests.Timeout, requests.ConnectionError) as e:

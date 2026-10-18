@@ -13,17 +13,23 @@ from pydantic import BaseModel, Field
 from config import BASE, ENV_STATUS, OUTPUT_DIR, env, is_mock
 from videos import has_video_key
 from pipeline import build_quiz
+import content
+import formats
+import gemini
 import looks
+import site_routes
 from questions import CATEGORY_LABELS
 import tts
 
-app = FastAPI(title="Quiz Video Maker")
+app = FastAPI(title="Quizclips")
 jobs: dict = {}
 current = {"id": None}
 lock = threading.Lock()
 
 
 class GenerateRequest(BaseModel):
+    kind: str = Field(default="trivia", pattern="^(trivia|personality|wyr|toplist|facts)$")
+    topic: str = Field(default="", max_length=80)  # for every type except trivia
     questions: int = Field(default=5, ge=3, le=10)
     voice: str = Field(default="en-US-AriaNeural", max_length=60)
     categories: list[int] = Field(default_factory=list, max_length=24)  # empty = mix of all
@@ -32,6 +38,20 @@ class GenerateRequest(BaseModel):
     watermark_platform: str = Field(default="tiktok", max_length=20)
     watermark_handle: str = Field(default="", max_length=60)
 
+
+FORMATS = [
+    {"key": "trivia", "title": "Trivia quiz", "desc": "Multiple-choice questions with a reveal.", "noun": "questions",
+     "min": 3, "max": 10, "default": 5, "needs_topic": False},
+] + [
+    {"key": k, "title": v["title"], "desc": d, "noun": v["noun"], "min": v["min"], "max": v["max"],
+     "default": v["default"], "needs_topic": True, "hint": v["hint"], "examples": content.EXAMPLES[k]}
+    for (k, v), d in zip(content.KINDS.items(), [
+        "Answers add up to a result, like Which house are you?",
+        "Two tempting options, a countdown, then what each pick says.",
+        "A countdown from the last place to number one.",
+        "Short, surprising facts with a clip for each.",
+    ])
+]
 
 PLATFORMS = {
     "tiktok": "tiktok.com/@{}",
@@ -58,13 +78,32 @@ def watermark_text(req: GenerateRequest) -> str:
 def run_job(job_id: str, req: GenerateRequest):
     job = jobs[job_id]
 
+    t0 = time.time()
+    phases = {}      # how long each step took, printed when the video is done (shows what is slow)
+    last = [t0, ""]
+
     def progress(msg: str, frac: float):
+        now = time.time()
+        if last[1]:
+            phases[last[1]] = phases.get(last[1], 0.0) + now - last[0]
+        last[0], last[1] = now, re.sub(r"\s*\d+ of \d+|\.\.\.|\d+", "", msg).strip() or msg
         job["message"] = msg
         job["progress"] = round(frac, 3)
 
+    def timing_report():
+        if last[1]:
+            phases[last[1]] = phases.get(last[1], 0.0) + time.time() - last[0]
+        parts = ", ".join(f"{k} {v:.0f}s" for k, v in phases.items() if v >= 0.5)
+        print(f"[timing] total {time.time() - t0:.0f}s: {parts}", flush=True)
+
     try:
         cats = [c for c in req.categories if c in CATEGORY_LABELS]
-        result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style)
+        if req.kind == "trivia":
+            result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style)
+        else:
+            result = formats.build_video(req.kind, req.topic, req.questions, req.voice, progress, watermark_text(req),
+                                         req.style)
+        timing_report()
         job.update(status="done", progress=1.0, message="Done!", video_url=f"/output/{result['file']}",
                    questions=result["questions"], duration=result["duration"])
     except Exception as e:
@@ -82,6 +121,8 @@ def config():
         "env_path": ENV_STATUS["path"],
         "env_loaded_from": ENV_STATUS["loaded_from"],
         "claude_key": bool(env("ANTHROPIC_API_KEY")),
+        "gemini": gemini.available(),
+        "formats": FORMATS,
         "voices": tts.available_voices(),
         "default_voice": tts.DEFAULT_VOICE,
         "categories": [{"id": i, "label": label} for i, label in CATEGORY_LABELS.items()],
@@ -135,9 +176,7 @@ app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 
-@app.get("/")
-def index():
-    return FileResponse(BASE / "static" / "index.html", headers={"Cache-Control": "no-store"})
+app.include_router(site_routes.router)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-# Quiz Video Maker
+# Quizclips
 
 Click **Generate** and get a new vertical (1080x1920) trivia quiz video for TikTok:
 
@@ -33,6 +33,18 @@ Prefer the terminal? `pip install -r requirements.txt`, then `python set_key.py`
 - **"Could not fetch questions":** the free question site allows one request every few seconds. Wait a bit and retry.
 - **Narration fails:** the voices come from Microsoft's free service and need an internet connection.
 
+## Video types
+
+Pick a type at the top of the Create page. Everything except Trivia needs a free `GEMINI_API_KEY` in `.env`, because Gemini writes the script from your topic.
+
+- **Trivia quiz**: multiple-choice questions with a reveal (Open Trivia DB).
+- **Personality quiz**: "Which season are you?" Questions whose choices each lead to one of four results, shown as "Mostly A, B, C, D" at the end.
+- **Would you rather**: two options, a countdown, then what each pick says about you.
+- **Top list**: a countdown from the last place to number one, one clip per item.
+- **Did you know**: short surprising facts, one clip per fact.
+
+Leave the topic blank for a surprise. `content.py` writes the scripts and `formats.py` builds the videos.
+
 ## Looks
 
 The page has a **Look** section with 24 styles (background + matching header/answer-bar colours); pick one, or
@@ -52,7 +64,7 @@ The page has a **Look** section with 24 styles (background + matching header/ans
   provider; `GEMINI_MODEL=` overrides the model.
 - `blocked_clips.json` (optional): a list of Pixabay clip ids to never use, e.g. `[12345, 67890]`. The id is the
   number in the clip's filename in `cache` (`pixabay_12345.mp4`).
-- `THINK_SECONDS=5` length of the countdown before each reveal.
+- `THINK_SECONDS=7` length of the trivia countdown before each reveal. `THINK_PERSONALITY_SECONDS=10` is the time to pick an answer in personality quizzes.
 - `VIDEO_ENCODER=h264_videotoolbox` faster rendering on a Mac (`h264_nvenc` on an NVIDIA GPU).
 - `PEXELS_API_KEY=` use Pexels instead (sharper portrait video). If both keys are set, Pexels is used; force
   one with `VIDEO_SOURCE=pixabay`.

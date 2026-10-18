@@ -3,24 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Quiz Video Maker</title>
+<title>Quizclips</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=6">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("qvm_theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <style>
   :root {
-    color-scheme: light dark;
+    color-scheme: light;
     --ink:#14161f; --muted:#646b82; --canvas:#f2f3f8; --surface:#ffffff; --sunken:#f6f7fb;
     --line:#e1e4ee; --line-strong:#c9cee0;
-    --primary:#5a3df0; --primary-hover:#4a2fd8; --on-primary:#ffffff; --primary-soft:#eeeaff;
+    --primary:#7054f0; --primary-hover:#6046dc; --on-primary:#ffffff; --primary-soft:#eeeaff;
     --pink:#ff3d81; --ok:#17915f; --err:#c62828;
     --warn-bg:#fff4e0; --warn-line:#f1d29a; --warn-ink:#7a4a00;
     --shadow-float:0 24px 60px -20px rgba(20,22,31,.45);
     --chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%23646b82' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
     --font:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
+  :root[data-theme="dark"] {
       --ink:#eef0f7; --muted:#9aa1b8; --canvas:#0d0f16; --surface:#161924; --sunken:#11131c;
       --line:#262a39; --line-strong:#383d52;
       --primary:#8d77ff; --primary-hover:#a290ff; --on-primary:#100c2e; --primary-soft:#241f48;
@@ -29,10 +30,11 @@
       --shadow-float:0 24px 60px -20px rgba(0,0,0,.8);
       --chev:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%239aa1b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
     }
-  }
+:root[data-theme="light"] { color-scheme:light; }
+:root[data-theme="dark"] { color-scheme:dark; }
   * { box-sizing:border-box; }
   html { scroll-padding-top:80px; }
-  body { margin:0; background:var(--canvas); color:var(--ink); font:400 15px/1.55 var(--font); -webkit-font-smoothing:antialiased; }
+  body { margin:0; background:var(--canvas); color:var(--ink); font:400 15px/1.55 var(--font); -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; text-rendering:optimizeLegibility; }
   button, select, input { font:inherit; color:inherit; }
   button { cursor:pointer; }
   :focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
@@ -40,19 +42,24 @@
 
   /* ---------- top bar ---------- */
   .top { position:sticky; top:0; z-index:20; background:color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter:blur(10px); border-bottom:1px solid var(--line); }
-  .top-in { max-width:1160px; margin:0 auto; padding:0 24px; height:64px; display:flex; align-items:center; gap:32px; }
-  .brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:17px; letter-spacing:-.02em; white-space:nowrap; }
-  .mark { width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg,var(--primary),var(--pink)); display:grid; place-items:center; }
-  .mark svg { width:14px; height:14px; fill:#fff; margin-left:2px; }
+  .top-in { max-width:1360px; margin:0 auto; padding:0 24px; height:72px; display:flex; align-items:center; gap:32px; }
+  .brand { display:flex; align-items:center; gap:3px; font-weight:800; font-size:23px; letter-spacing:-.02em; white-space:nowrap; }
+  .mark { width:64px; height:64px; display:grid; place-items:center; }
+  .mark img { width:100%; height:100%; display:block; }
+  @font-face { font-family:"Lilita One"; src:url("/static/fonts/LilitaOne-Regular.ttf") format("truetype"); font-display:swap; }
+  .brand .name { font-family:"Lilita One","Plus Jakarta Sans",system-ui,sans-serif; font-weight:400; font-size:30px; letter-spacing:.01em; line-height:1; margin-left:0; margin-bottom:0; padding-top:2px; color:#fff; -webkit-text-stroke:5px #14161f; paint-order:stroke fill; }
   .tabs { display:flex; gap:4px; height:100%; }
   .tab { border:0; background:none; padding:0 14px; height:100%; color:var(--muted); font-weight:600; position:relative; }
   .tab:hover { color:var(--ink); }
   .tab[aria-current="page"] { color:var(--ink); }
   .tab[aria-current="page"]::after { content:""; position:absolute; left:14px; right:14px; bottom:-1px; height:2px; background:var(--primary); border-radius:2px; }
   .top-end { margin-left:auto; }
+  .toplink { color:var(--muted); font-weight:600; text-decoration:none; padding:8px 10px; border-radius:8px; }
+  .toplink:hover { color:var(--ink); background:var(--sunken); }
+  a.brand { color:inherit; text-decoration:none; }
 
   /* ---------- layout ---------- */
-  main { max-width:1160px; margin:0 auto; padding:40px 24px 72px; }
+  main { max-width:1360px; margin:0 auto; padding:40px 24px 72px; }
   .create { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:56px; align-items:start; }
   h1 { font-size:30px; line-height:1.2; letter-spacing:-.025em; font-weight:800; margin:0 0 6px; }
   .lede { color:var(--muted); margin:0 0 28px; max-width:52ch; }
@@ -109,8 +116,11 @@
   .screen > * { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   .screen .in-fade { opacity:0; transition:opacity .24s ease; }
   .screen .in-fade.on { opacity:1; }
+  .screen .lookprev img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .screen .pclip { position:absolute; left:20.65%; top:32.7%; width:58.7%; height:17.4%; object-fit:cover; border-radius:9px; opacity:0; transition:opacity .3s ease; pointer-events:none; }
+  .screen .pclip.show { opacity:1; }
   .screen .rand { display:grid; place-items:center; font-size:64px; font-weight:800; color:#fff; background:linear-gradient(160deg,#2b2160,#6b2352); }
-  .caption { text-align:center; color:var(--muted); font-size:13px; margin:18px auto 0; max-width:30ch; }
+  .caption { text-align:center; color:var(--muted); font-size:13px; margin:14px auto 0; max-width:30ch; }
   .caption b { color:var(--ink); }
 
 
@@ -125,7 +135,7 @@
   .part .inside { opacity:0; transition:opacity .45s; }
   .part.done .shape { stroke-dasharray:none; stroke:#fff; }
   .part.done .inside { opacity:1; }
-  .part-header.done .shape { fill:#5a3df0; }
+  .part-header.done .shape { fill:#7054f0; }
   .part-bar.done .shape { fill:#fff; stroke:#ff4eb2; }
   .part-circle.done .shape { fill:#0b0b10; }
   .part-clip.done .shape { fill:url(#skyg); }
@@ -152,6 +162,29 @@
   @keyframes flash { 0%,70% { opacity:0; } 75%,92% { opacity:1; } 100% { opacity:0; } }
   @keyframes spark { from { opacity:0; } to { opacity:1; } }
   @keyframes wave { 0%,100% { opacity:0; } 40% { opacity:1; } }
+
+  .kinds { display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:10px; padding:16px 20px 20px; }
+  .kind { text-align:left; display:flex; flex-direction:column; gap:3px; border:1px solid var(--line-strong); background:var(--surface); border-radius:12px; padding:12px 14px; }
+  .kind b { font-weight:700; font-size:15px; }
+  .kind span { color:var(--muted); font-size:13px; line-height:1.4; }
+  .kind:hover { border-color:var(--muted); }
+  .kind[aria-pressed="true"] { border-color:var(--primary); background:var(--primary-soft); box-shadow:0 0 0 1px var(--primary) inset; }
+  .kind[aria-pressed="true"] b { color:var(--primary); }
+
+  .topic-body { padding:16px 20px 20px; }
+  .tmode { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+  #topic-custom { margin-top:18px; }
+  #topic-custom label { display:block; font-weight:700; margin-bottom:8px; }
+  .topic-body input[type=text] { font-size:16px; padding:13px 14px; }
+  .topic-body .help { color:var(--muted); font-size:13px; margin:8px 0 16px; }
+  .dl-wrap { margin-top:16px; }
+  .dl-btn { display:flex; align-items:center; justify-content:center; gap:10px; width:300px; max-width:100%; margin:0 auto; padding:13px 18px; border-radius:12px; background:var(--primary); color:var(--on-primary); font-weight:700; font-size:16px; text-decoration:none; transition:background .15s, transform .15s; }
+  .dl-btn:hover { background:var(--primary-hover); transform:translateY(-1px); }
+  .dl-btn svg { width:20px; height:20px; }
+  .dl-btn[hidden] { display:none; }
+  .try { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+  .chip.more { border-style:dashed; color:var(--primary); font-weight:600; }
+  .try > span { color:var(--muted); font-size:13px; }
 
   /* library */
   .lib-head { display:flex; align-items:end; justify-content:space-between; gap:16px; margin-bottom:24px; }
@@ -261,22 +294,24 @@
     .row .link { justify-self:end; }
     main { padding-top:28px; }
     .top-in { gap:12px; padding:0 16px; }
-    .brand { font-size:15px; gap:8px; }
+    .brand { font-size:15px; gap:3px; }
     .tab { padding:0 10px; }
   }
   @media (prefers-reduced-motion: reduce) {
     * { transition:none !important; animation:none !important; }
   }
+
 </style>
 </head>
 <body>
 <header class="top">
   <div class="top-in">
-    <div class="brand"><span class="mark" aria-hidden="true"><svg viewBox="0 0 14 14"><path d="M1 0l12 7-12 7z"/></svg></span>Quiz Video Maker</div>
+    <a class="brand" href="/" title="Back to the home page"><span class="mark" aria-hidden="true"><img src="/static/logo.svg?v=16" alt="" width="64" height="64"></span><span class="name">Quizclips</span></a>
     <nav class="tabs" aria-label="Main">
       <button class="tab" id="tab-create" aria-current="page">Create</button>
       <button class="tab" id="tab-library">Library</button>
     </nav>
+    <div class="top-end"><a class="toplink" href="/pricing">Plans</a></div>
   </div>
 </header>
 
@@ -284,9 +319,30 @@
   <!-- ================= CREATE ================= -->
   <section id="view-create" class="create">
     <div>
-      <h1>New quiz video</h1>
-      <p class="lede">Choose your settings, then generate a vertical trivia video ready to post. Videos take a minute or two.</p>
+      <h1>Create a video</h1>
+      <p class="lede">Pick a video type, choose your settings, then generate a vertical video ready to post. Videos take a minute or two.</p>
       <div class="banner" id="warn" role="alert"></div>
+
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-head"><h2>Video type</h2></div>
+        <div class="kinds" id="kinds" role="group" aria-label="Video type"></div>
+      </div>
+
+      <div class="card" id="topic-card" style="margin-bottom:20px" hidden>
+        <div class="card-head"><h2>Topic</h2></div>
+        <div class="topic-body">
+          <div class="tmode" id="tmode" role="group" aria-label="Choose a topic">
+            <button type="button" class="kind" data-mode="random"><b>Surprise me</b><span>A fresh, random topic every time.</span></button>
+            <button type="button" class="kind" data-mode="custom"><b>My own topic</b><span>Type anything you like.</span></button>
+          </div>
+          <div id="topic-custom" hidden>
+            <label for="topic-in" id="topic-lab">Your topic</label>
+            <input type="text" id="topic-in" maxlength="80" autocomplete="off">
+            <p class="help" id="topic-help"></p>
+            <div class="try"><span>Need an idea?</span><div class="chips" id="topic-ex"></div></div>
+          </div>
+        </div>
+      </div>
 
       <div class="card">
         <div class="card-head">
@@ -294,9 +350,9 @@
           <button class="btn btn-sm" id="open-custom">Customize</button>
         </div>
         <dl class="rows" style="margin:0">
-          <div class="row"><dt>Questions</dt><dd class="v" id="s-questions" style="margin:0"></dd><button class="link" data-edit="questions" aria-label="Change number of questions">Change</button></div>
+          <div class="row"><dt id="k-count">Questions</dt><dd class="v" id="s-questions" style="margin:0"></dd><button class="link" data-edit="questions" aria-label="Change number of questions">Change</button></div>
           <div class="row"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice">Change</button></div>
-          <div class="row"><dt>Topics</dt><dd class="v" id="s-topics" style="margin:0"></dd><button class="link" data-edit="topics" aria-label="Change topics">Change</button></div>
+          <div class="row" id="row-topics"><dt>Topics</dt><dd class="v" id="s-topics" style="margin:0"></dd><button class="link" data-edit="topics" aria-label="Change topics">Change</button></div>
           <div class="row"><dt>Look</dt><dd class="v" id="s-look" style="margin:0"></dd><button class="link" data-edit="look" aria-label="Change look">Change</button></div>
           <div class="row"><dt>Link on video</dt><dd class="v" id="s-link" style="margin:0"></dd><button class="link" data-edit="link" aria-label="Change link on video">Change</button></div>
         </dl>
@@ -311,7 +367,7 @@
         <div class="prog-top"><span id="pmsg">Starting</span><span id="pct">0%</span></div>
         <div class="bar"><i id="fill"></i></div>
         <ol class="steps" id="steps">
-          <li>Questions</li><li>Narration</li><li>Footage</li><li>Scenes</li><li>Finishing</li>
+          <li>Script</li><li>Narration</li><li>Footage</li><li>Scenes</li><li>Finishing</li>
         </ol>
       </div>
 
@@ -319,11 +375,10 @@
         <div class="card-head"><h2>Your video is ready</h2></div>
         <div class="result-body">
           <div class="result-actions">
-            <a class="btn btn-primary btn-link" id="dl" download>Download video</a>
             <button class="btn" id="again">Make another</button>
           </div>
           <details>
-            <summary>Questions and footage used</summary>
+            <summary>Script and footage used</summary>
             <ol class="q" id="qlist"></ol>
           </details>
         </div>
@@ -332,6 +387,9 @@
 
     <aside class="stage" aria-label="Preview">
       <div class="phone"><div class="screen" id="screen"></div></div>
+      <div class="dl-wrap"><a class="dl-btn" id="dl-icon" href="#" download hidden aria-label="Download video">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>Download video
+      </a></div>
       <p class="caption" id="caption"></p>
     </aside>
   </section>
@@ -353,7 +411,7 @@
     </div>
   </section>
 
-  <p class="credit">Stock footage from <a href="https://pixabay.com">Pixabay</a>.</p>
+  <p class="credit">Stock footage from <a href="https://pixabay.com">Pixabay</a>. Trivia questions from <a href="https://opentdb.com">Open Trivia DB</a> (CC BY-SA 4.0). <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p>
 </main>
 
 <!-- ================= CUSTOMIZE DRAWER ================= -->
@@ -430,13 +488,13 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
 
 /* ---------------- settings (remembered in this browser) ---------------- */
-const S = { questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "" };
+const S = { kind: "trivia", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "" };
 let CFG = null;
 function loadSettings() {
   try {
     const j = JSON.parse(localStorage.getItem("qvm_settings") || "null");
     if (j) {
-      S.questions = j.questions || 5; S.voice = j.voice || ""; S.cats = new Set(j.cats || []);
+      S.kind = j.kind || "trivia"; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.cats = new Set(j.cats || []);
       S.look = j.look || S.look; S.wmOn = j.wmOn !== false; S.wmPlat = j.wmPlat || "tiktok"; S.wmHandle = j.wmHandle || "";
     } else {  // older versions of this page
       S.look = localStorage.getItem("lookKey") || S.look;
@@ -456,6 +514,7 @@ function show(view) {
   $("tab-create").setAttribute("aria-current", lib ? "false" : "page");
   $("tab-library").setAttribute("aria-current", lib ? "page" : "false");
   if (lib) loadLibrary();
+  try { history.replaceState(null, "", lib ? "#library" : location.pathname); } catch (e) {}
   window.scrollTo(0, 0);
 }
 $("tab-create").onclick = () => show("create");
@@ -482,8 +541,10 @@ function openDrawer(sect, from) {
   opener = from || document.activeElement;
   const one = SECTIONS[sect];
   $("drawer").classList.toggle("scoped", !!one);
-  ["f-questions", "f-voice", "f-topics"].forEach((id) => { $(id).hidden = !!one && one.field !== id; });
-  $("d-title").textContent = one ? one.title : "Customize";
+  ["f-questions", "f-voice", "f-topics"].forEach((id) => {
+    $(id).hidden = one ? one.field !== id : (id === "f-topics" && S.kind !== "trivia");
+  });
+  $("d-title").textContent = !one ? "Customize" : sect === "questions" ? "Number of " + fmt().noun : one.title;
   $("d-close").setAttribute("aria-label", one ? "Close" : "Close customize panel");
   stopSample(); $("vmsg").textContent = "";
   setTab(one ? one.panel : "content");
@@ -526,10 +587,23 @@ function swapScreen(node) {
 function showLookPreview() {
   const look = S.look === "random" ? null : CFG.looks.find((l) => l.key === S.look);
   let node;
-  if (look) { node = new Image(); node.alt = "Preview of the " + look.title + " look"; node.src = "/static/looks/" + look.key + ".jpg"; }
+  if (look) {
+    node = document.createElement("div"); node.className = "lookprev";
+    const img = new Image(); img.alt = "Preview of the " + look.title + " look"; img.src = "/static/looks/hd/" + look.key + ".webp";
+    node.appendChild(img);
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {   // the matching stock-footage loop plays inside the picture box
+      const v = document.createElement("video");
+      v.className = "pclip"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.setAttribute("aria-hidden", "true");
+      v.addEventListener("playing", () => v.classList.add("show"));
+      v.addEventListener("error", () => v.classList.remove("show"));
+      v.src = "/static/looks/clips/" + look.key + ".mp4";
+      node.appendChild(v);
+      v.play().catch(() => {});
+    }
+  }
   else { node = document.createElement("div"); node.className = "rand"; node.textContent = "?"; }
   swapScreen(node);
-  $("caption").innerHTML = look ? "Preview of the <b>" + esc(look.title) + "</b> look. Footage comes from each question's topic."
+  $("caption").innerHTML = look ? "Preview of the <b>" + esc(look.title) + "</b> look. Footage is matched to each scene."
                                 : "<b>Surprise me</b> picks a different look for every video.";
 }
 
@@ -541,8 +615,14 @@ function wmText() {
   const PREFIX = { tiktok: "tiktok.com/@", youtube: "youtube.com/@", instagram: "instagram.com/", x: "x.com/", facebook: "facebook.com/", custom: "" };
   return h ? PREFIX[S.wmPlat] + h : "";
 }
+const mode = () => S.modes[S.kind] || "random";
+const topic = () => (mode() === "custom" ? (S.topics[S.kind] || "").trim() : "");
+function fmt() { return CFG.formats.find((f) => f.key === S.kind) || CFG.formats[0]; }
 function renderSummary() {
-  $("s-questions").textContent = S.questions + " questions";
+  const f = fmt();
+  $("k-count").textContent = f.noun[0].toUpperCase() + f.noun.slice(1);
+  $("s-questions").textContent = S.questions + " " + f.noun;
+  $("row-topics").hidden = f.needs_topic; $("topic-card").hidden = !f.needs_topic;
   const v = CFG.voices.find((x) => x.id === S.voice);
   $("s-voice").textContent = v ? v.label : "";
   const names = CFG.categories.filter((c) => S.cats.has(c.id)).map((c) => c.label);
@@ -556,17 +636,72 @@ function renderSummary() {
 }
 
 /* ---------------- customize controls ---------------- */
-function buildContent() {
-  const seg = $("seg"); seg.innerHTML = "";
-  for (let n = 3; n <= 10; n++) {
+function buildKinds() {
+  const box = $("kinds"); box.innerHTML = "";
+  CFG.formats.forEach((f) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "kind"; b.dataset.key = f.key;
+    b.innerHTML = "<b>" + esc(f.title) + "</b><span>" + esc(f.desc) + "</span>";
+    b.onclick = () => {
+      S.kind = f.key; $("topic-in").value = S.topics[S.kind] || ""; S.questions = Math.max(f.min, Math.min(f.max, S.questions));
+      saveSettings(); paintKinds(); buildSeg(); buildTopicChips(); renderSummary();
+    };
+    box.appendChild(b);
+  });
+  if (!CFG.formats.some((f) => f.key === S.kind)) S.kind = "trivia";
+  paintKinds();
+}
+function paintKinds() { document.querySelectorAll("#kinds .kind").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.key === S.kind))); }
+function buildSeg() {
+  const f = fmt(), seg = $("seg"); seg.innerHTML = "";
+  S.questions = Math.max(f.min, Math.min(f.max, S.questions));
+  for (let n = f.min; n <= f.max; n++) {
     const b = document.createElement("button");
     b.type = "button"; b.textContent = n;
     b.onclick = () => { S.questions = n; paintSeg(); saveSettings(); renderSummary(); };
     seg.appendChild(b);
   }
-  const paintSeg = () => [...seg.children].forEach((b, i) => b.setAttribute("aria-pressed", String(i + 3 === S.questions)));
+  const paintSeg = () => [...seg.children].forEach((b, i) => b.setAttribute("aria-pressed", String(i + f.min === S.questions)));
   paintSeg();
-
+  $("q-lab").textContent = "Number of " + f.noun;
+}
+const TOPIC_HELP = {
+  personality: "Any quiz idea works, like \"Which season are you?\".",
+  wyr: "Any theme works, like \"School life\" or \"Superpowers\".",
+  toplist: "Type what should be ranked, like \"Fastest animals\".",
+  facts: "Type any subject you want facts about.",
+};
+function buildTopicChips() {
+  const f = fmt(), box = $("topic-ex"); box.innerHTML = "";
+  $("topic-in").value = S.topics[S.kind] || "";
+  $("topic-in").placeholder = f.hint ? "For example: " + f.hint : "";
+  $("topic-help").textContent = TOPIC_HELP[S.kind] || "";
+  const pool = [...(f.examples || [])].sort(() => Math.random() - 0.5).slice(0, 6);
+  pool.forEach((t) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = t;
+    b.onclick = () => { S.topics[S.kind] = t; S.modes[S.kind] = "custom"; $("topic-in").value = t; saveSettings(); paintTopic(); };
+    box.appendChild(b);
+  });
+  if ((f.examples || []).length > 6) {
+    const more = document.createElement("button");
+    more.type = "button"; more.className = "chip more"; more.textContent = "More ideas";
+    more.onclick = () => { buildTopicChips(); $("topic-ex").lastChild.focus(); };
+    box.appendChild(more);
+  }
+  paintTopic();
+}
+function paintTopic() {
+  document.querySelectorAll("#tmode .kind").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode())));
+  $("topic-custom").hidden = mode() !== "custom";
+}
+document.querySelectorAll("#tmode .kind").forEach((b) => b.addEventListener("click", () => {
+  S.modes[S.kind] = b.dataset.mode; saveSettings(); paintTopic();
+  if (b.dataset.mode === "custom") $("topic-in").focus();
+}));
+$("topic-in").addEventListener("input", (e) => { S.topics[S.kind] = e.target.value; saveSettings(); });
+function buildContent() {
+  buildKinds(); buildSeg(); buildTopicChips();
   buildVoices();
 
   const box = $("chips"); box.innerHTML = "";
@@ -701,11 +836,11 @@ function buildSite() {
     '<g class="part part-header"><rect class="shape" x="18" y="22" width="234" height="92" rx="6"/><g class="inside"><rect x="40" y="42" width="190" height="9" rx="4.5" fill="#fff"/><rect x="58" y="62" width="154" height="9" rx="4.5" fill="#fff"/><rect x="80" y="82" width="110" height="9" rx="4.5" fill="#ff4eb2"/></g></g>' +
     '<g class="part part-clip"><rect class="shape" x="48" y="134" width="174" height="92" rx="10"/><g class="inside"><circle cx="170" cy="164" r="11" fill="#ffeebd"/><path d="M48 214q40-34 80-8t94-12v24q0 6-6 6H54q-6 0-6-6z" fill="#4a3c7e"/></g></g>' +
     bars + '<g class="part part-circle"><circle class="shape" cx="135" cy="452" r="17"/><g class="inside"><text x="135" y="460" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="22" fill="#ff4eb2">1</text></g></g>' +
-    '<image class="paint" href="' + (look ? "/static/looks/" + look.key + ".jpg" : "") + '" width="270" height="480" preserveAspectRatio="xMidYMid slice"/>' +
+    '<image class="paint" href="' + (look ? "/static/looks/hd/" + look.key + ".webp" : "") + '" width="270" height="480" preserveAspectRatio="xMidYMid slice"/>' +
     builder(0, 34, 132) + builder(1, 52, 474) + builder(2, 236, 244) + builder(3, 244, 330) + builder(4, 200, 474) + "</svg>";
   return el;
 }
-const STAGE_CAPS = ["Picking your questions", "Recording the narration", "Finding footage for each question", "Building the scenes", "Mixing the sound and finishing"];
+const STAGE_CAPS = ["Writing your script", "Recording the narration", "Finding footage for each question", "Building the scenes", "Mixing the sound and finishing"];
 let site = null;
 function stageOf(f) { return f < 0.07 ? 0 : f < 0.14 ? 1 : f < 0.40 ? 2 : f < 0.90 ? 3 : 4; }
 function startBuild() {
@@ -737,12 +872,20 @@ function setProgress(frac, msg) {
   updateBuild(frac, msg);
 }
 $("go").addEventListener("click", async () => {
-  $("err").textContent = ""; $("result").style.display = "none";
+  $("err").textContent = ""; $("result").style.display = "none"; $("dl-icon").hidden = true;
+  if (fmt().needs_topic && mode() === "custom" && !topic()) {
+    $("err").textContent = "Type a topic, or choose Surprise me.";
+    return;
+  }
+  if (fmt().needs_topic && !CFG.gemini && !CFG.mock) {
+    $("err").textContent = "This video type needs a free Gemini key to write the script. Add GEMINI_API_KEY to your .env file and restart the app.";
+    return;
+  }
   setBusy(true); $("progress").style.display = "block"; startBuild(); setProgress(0.02, "Starting");
   try {
     const r = await fetch("/api/generate", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ questions: S.questions, voice: S.voice, categories: [...S.cats], style: S.look,
+      body: JSON.stringify({ kind: S.kind, topic: topic(), questions: S.questions, voice: S.voice, categories: [...S.cats], style: S.look,
         watermark_on: S.wmOn, watermark_platform: S.wmPlat, watermark_handle: S.wmHandle }),
     });
     if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || "The request failed. Try again."); }
@@ -772,12 +915,12 @@ function finish(job) {
   v.src = job.video_url; v.controls = true; v.playsInline = true; v.autoplay = true;
   swapScreen(v); v.play().catch(() => {});
   $("caption").textContent = "Your video";
-  $("dl").href = job.video_url;
+  $("dl-icon").href = job.video_url; $("dl-icon").hidden = false;
   $("qlist").innerHTML = job.questions.map((q) => "<li>" + esc(q.question) + " <b>" + esc(q.answer) + "</b> <i>(footage search: " + esc(q.footage || "?") + ")</i></li>").join("");
   $("result").style.display = "block";
   $("result").scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
-$("again").onclick = () => { $("result").style.display = "none"; showLookPreview(); window.scrollTo({ top: 0, behavior: "smooth" }); };
+$("again").onclick = () => { $("result").style.display = "none"; $("dl-icon").hidden = true; showLookPreview(); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
 /* ---------------- library ---------------- */
 async function loadLibrary() {
@@ -798,9 +941,16 @@ async function loadLibrary() {
 /* ---------------- start ---------------- */
 async function init() {
   loadSettings();
+  try {
+    const qs = new URLSearchParams(location.search), q = qs.get("kind"), ql = qs.get("look");
+    if (q) S.kind = q;
+    if (ql) S.look = ql;   // an unknown look falls back to the default when the looks are built
+    if (q || ql) { saveSettings(); history.replaceState(null, "", location.pathname); }
+  } catch (e) {}
   CFG = await (await fetch("/api/config")).json();
   buildContent(); buildLooks(); buildBrand();
   renderSummary(); showLookPreview();
+  const h = location.hash.slice(1); if (h === "library") show("library");
   const warns = [];
   if (CFG.mock) warns.push("Test mode is on (MOCK=1): placeholder questions, backgrounds and voice.");
   else if (!CFG.video_key) {

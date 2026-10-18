@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#7054f0">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=6">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("qvm_theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="stylesheet" href="/static/site.css?v=69">
+<title>Settings: Quizclips</title>
+<meta name="robots" content="noindex">
+</head>
+<body>
+<div id="site-header"></div>
+<main class="acct">
+  <h1>Settings</h1>
+  <p class="sub">How the site looks and what it remembers.</p>
+  <div class="pcard">
+    <h2>Appearance</h2>
+    <p class="hint">Pages start in light mode. Switch to dark mode here any time.</p>
+    <div class="themes" role="radiogroup" aria-label="Theme">
+      <button class="theme-opt" role="radio" data-theme-opt="light"><span class="sw sw-light"><i></i><i><em></em></i></span><b>Light</b></button>
+      <button class="theme-opt" role="radio" data-theme-opt="dark"><span class="sw sw-dark"><i></i><i><em></em></i></span><b>Dark</b></button>
+    </div>
+  </div>
+  <div class="pcard">
+    <h2>Saved choices</h2>
+    <div class="set-row"><div><b>Reset video choices</b><span>Video type, topics, voice, look and watermark go back to the defaults.</span></div><button class="btn" id="reset-settings">Reset</button></div>
+    <div class="set-row"><div><b>Plans and pricing</b><span>See what each plan will include.</span></div><a class="btn" href="/pricing">View plans</a></div>
+    <div class="set-row"><div><b>Legal</b><span>How the service works and how data is handled.</span></div><span><a href="/terms">Terms</a> &middot; <a href="/privacy">Privacy</a></span></div>
+  </div>
+</main>
+<div id="site-footer"></div>
+<script src="/static/site.js?v=48"></script>
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  function mode() { try { var t = localStorage.getItem("qvm_theme"); return t === "dark" ? "dark" : "light"; } catch (e) { return "light"; } }
+  function paint() { var m = mode(); document.querySelectorAll("[data-theme-opt]").forEach(function (b) { b.setAttribute("aria-checked", b.dataset.themeOpt === m ? "true" : "false"); }); }
+  document.querySelectorAll("[data-theme-opt]").forEach(function (b) {
+    b.onclick = function () {
+      var m = b.dataset.themeOpt;
+      try { if (m === "light") localStorage.removeItem("qvm_theme"); else localStorage.setItem("qvm_theme", m); } catch (e) {}
+      if (m === "light") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", m);
+      paint();
+    };
+  });
+  paint();
+  $("#reset-settings").onclick = function () {
+    if (!confirm("Reset your video type, topics, voice, look and watermark to the defaults?")) return;
+    try { localStorage.removeItem("qvm_settings"); localStorage.removeItem("lookKey"); localStorage.removeItem("qvm_wm"); } catch (e) {}
+    $("#reset-settings").textContent = "Done";
+  };
+})();
+</script>
+</body>
+</html>

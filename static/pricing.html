@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#7054f0">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=6">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("qvm_theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="stylesheet" href="/static/site.css?v=69">
+<title>Plans: Quizclips</title>
+<meta name="description" content="Plans for making quiz videos, from $5 a month. Upgrade when you post every week.">
+</head>
+<body>
+<div id="site-header"></div>
+<main>
+  <section class="sec" style="padding-bottom:40px">
+    <div class="wrap">
+      <h2 style="max-width:18ch">Pick a plan when you're ready</h2>
+      <p class="lead" style="margin-bottom:0">Start small. Upgrade when you're posting every week.</p>
+    </div>
+  </section>
+
+  <section style="padding-bottom:84px">
+    <div class="wrap">
+      <div class="plans">
+        <div class="plan">
+          <h3>Starter</h3>
+          <p class="for">To try it out and see how it feels.</p>
+          <p class="price">$5<small>/ month</small></p>
+          <ul>
+            <li>15 videos each month</li>
+            <li>All five video types</li>
+            <li>8 looks</li>
+            <li>5 narrator voices</li>
+          </ul>
+          <a class="btn" href="#join" data-plan="starter">Join the waitlist</a>
+        </div>
+        <div class="plan">
+          <h3>Creator</h3>
+          <p class="for">For channels that post every week.</p>
+          <p class="price">$15<small>/ month</small></p>
+          <ul>
+            <li>60 videos each month</li>
+            <li>All 24 looks</li>
+            <li>Every narrator voice</li>
+            <li>Your link on every video</li>
+            <li class="soon">Narrate in your own voice, recorded once (soon)</li>
+            <li class="soon">Your own custom quizzes (soon)</li>
+          </ul>
+          <a class="btn" href="#join" data-plan="creator">Join the waitlist</a>
+        </div>
+        <div class="plan">
+          <h3>Studio</h3>
+          <p class="for">For teams and busy channels.</p>
+          <p class="price">$25<small>/ month</small></p>
+          <ul>
+            <li>100 videos each month</li>
+            <li>Everything in Creator</li>
+            <li class="soon">Narrate in your own voice, recorded once (soon)</li>
+            <li class="soon">Batch download of every video (soon)</li>
+            <li class="soon">Automatic and scheduled posting to TikTok, Shorts and Reels (soon)</li>
+            <li class="soon">Your logo and brand colors (soon)</li>
+          </ul>
+          <a class="btn" href="#join" data-plan="studio">Join the waitlist</a>
+        </div>
+      </div>
+      <div class="tryfree">
+        <div><b>Not ready to pick a plan?</b><span>Make a video free and see how it looks. No card needed.</span></div>
+        <a class="btn btn-primary" href="/app">Try it free</a>
+      </div>
+      <p class="fine">These plans are a preview. Nothing is charged yet, and prices and limits may change before launch.</p>
+    </div>
+  </section>
+
+  <section class="sec alt" id="faq">
+    <div class="wrap">
+      <h2>Pricing questions</h2>
+      <div class="faq" style="margin-top:36px">
+        <details><summary>Can I pay today?</summary><p>Not yet. Join the waitlist for the plan you want and we'll email you when billing opens.</p></details>
+        <details><summary>What counts as a video?</summary><p>Each finished video you generate counts as one, whatever its type or length.</p></details>
+        <details><summary>Can I cancel any time?</summary><p>Yes. Plans will be monthly with no contract.</p></details>
+        <details><summary>What happens if I go over my limit?</summary><p>You'll see how many videos you have left, and you can upgrade or wait for the next month.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="join">
+    <div class="wrap">
+      <h2>Join the waitlist</h2>
+      <p id="join-sub">Leave your email and tell us which plan you're after.</p>
+      <form class="wl" data-waitlist data-plan="" novalidate>
+        <label class="sr" for="wl-email">Email address</label>
+        <input type="email" id="wl-email" name="email" placeholder="you@example.com" autocomplete="email" required>
+        <input type="text" name="website" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <button class="btn" type="submit">Join the waitlist</button>
+      </form>
+      <p class="wl-msg" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+</main>
+<div id="site-footer"></div>
+<script src="/static/site.js?v=48"></script>
+<script>
+  document.querySelectorAll("a[data-plan]").forEach(function (a) {
+    a.addEventListener("click", function () {
+      var f = document.querySelector("form[data-waitlist]");
+      f.dataset.plan = a.dataset.plan;
+      var names = { starter: "Starter", creator: "Creator", studio: "Studio" };
+      document.getElementById("join-sub").textContent = "You picked the " + names[a.dataset.plan] + " plan. Leave your email and we'll tell you when it opens.";
+      setTimeout(function () { document.getElementById("wl-email").focus(); }, 350);
+    });
+  });
+</script>
+</body>
+</html>

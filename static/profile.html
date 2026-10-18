@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#7054f0">
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=6">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>try{var t=localStorage.getItem("qvm_theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<link rel="stylesheet" href="/static/site.css?v=69">
+<title>Profile: Quizclips</title>
+<meta name="robots" content="noindex">
+</head>
+<body>
+<div id="site-header"></div>
+<main class="acct">
+  <h1>Profile</h1>
+  <p class="sub">Your details and plan. Sign-in is coming, so for now these stay in this browser.</p>
+  <div class="pcard flush">
+    <div class="who"><div class="avatar" id="pf-avatar" aria-hidden="true">?</div><div><b id="pf-name-show">Your name</b><span id="pf-email-show">Add an email below</span></div></div>
+    <div class="fields">
+      <label>Name<input id="pf-name" maxlength="60" autocomplete="name" placeholder="Alex Rivera"></label>
+      <label>Email<input id="pf-email" type="email" maxlength="120" autocomplete="email" placeholder="you@example.com"></label>
+      <label class="full">Channel or handle<input id="pf-handle" maxlength="60" placeholder="@yourchannel"></label>
+    </div>
+    <div class="save-row"><button class="btn btn-primary" id="pf-save">Save profile</button><span class="ok-note" id="pf-ok" hidden>Saved</span></div>
+  </div>
+  <div class="pcard flush">
+    <div class="myplan"><div><b>Early access<span class="pill">Preview</span></b><span class="d">Nothing is charged yet. Paid plans are on the waitlist.</span></div><a class="btn btn-primary" href="/pricing">See plans</a></div>
+    <div class="stats">
+      <div class="stat"><b id="st-videos">0</b><span>Videos in Library</span></div>
+      <div class="stat"><b id="st-look">-</b><span>Default look</span></div>
+      <div class="stat"><b id="st-type">-</b><span>Default video type</span></div>
+    </div>
+    <div class="save-row"><a class="btn" href="/app#library">Open Library</a></div>
+  </div>
+</main>
+<div id="site-footer"></div>
+<script src="/static/site.js?v=48"></script>
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  function get() { try { return JSON.parse(localStorage.getItem("qvm_profile") || "{}") || {}; } catch (e) { return {}; } }
+  function who(p) {
+    $("#pf-name-show").textContent = p.name || "Your name";
+    $("#pf-email-show").textContent = p.email || "Add an email below";
+    $("#pf-avatar").textContent = ((p.name || p.email || "?").trim()[0] || "?").toUpperCase();
+  }
+  var p = get(); $("#pf-name").value = p.name || ""; $("#pf-email").value = p.email || ""; $("#pf-handle").value = p.handle || ""; who(p);
+  $("#pf-save").onclick = function () {
+    var q = { name: $("#pf-name").value.trim(), email: $("#pf-email").value.trim(), handle: $("#pf-handle").value.trim() };
+    try { localStorage.setItem("qvm_profile", JSON.stringify(q)); } catch (e) {}
+    who(q); var ok = $("#pf-ok"); ok.hidden = false; setTimeout(function () { ok.hidden = true; }, 2200);
+  };
+  var saved = {}; try { saved = JSON.parse(localStorage.getItem("qvm_settings") || "{}") || {}; } catch (e) {}
+  fetch("/api/videos").then(function (r) { return r.json(); }).then(function (v) { $("#st-videos").textContent = Array.isArray(v) ? v.length : 0; }).catch(function () {});
+  fetch("/api/config").then(function (r) { return r.json(); }).then(function (c) {
+    var l = (c.looks || []).filter(function (x) { return x.key === (saved.look || c.default_look); })[0];
+    $("#st-look").textContent = l ? l.title : "Random";
+    var k = (c.formats || []).filter(function (x) { return x.key === (saved.kind || "trivia"); })[0];
+    $("#st-type").textContent = k ? k.title : "Trivia quiz";
+  }).catch(function () {});
+})();
+</script>
+</body>
+</html>
