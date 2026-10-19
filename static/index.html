@@ -133,8 +133,10 @@
   .screen .in-fade { opacity:0; transition:opacity .24s ease; }
   .screen .in-fade.on { opacity:1; }
   .screen .lookprev img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-  .screen .pclip { position:absolute; left:20.65%; top:32.7%; width:58.7%; height:17.4%; object-fit:cover; border-radius:9px; opacity:0; transition:opacity .3s ease; pointer-events:none; }
+  .screen .pclip { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .3s ease; pointer-events:none; }
   .screen .pclip.show { opacity:1; }
+  .screen .lookprev img.povl { opacity:0; transition:opacity .3s ease; pointer-events:none; }
+  .screen .lookprev img.povl.show { opacity:1; }
   .screen .rand { display:grid; place-items:center; font-size:64px; font-weight:800; color:#fff; background:linear-gradient(160deg,#2b2160,#6b2352); }
   .caption { text-align:center; color:var(--muted); font-size:13px; margin:14px auto 0; max-width:30ch; }
   .caption b { color:var(--ink); }
@@ -734,13 +736,14 @@ function showLookPreview() {
     node = document.createElement("div"); node.className = "lookprev";
     const img = new Image(); img.alt = "Preview of the " + look.title + " look"; img.src = "/static/looks/hd/" + look.key + ".webp";
     node.appendChild(img);
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {   // the matching stock-footage loop plays inside the picture box
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {   // the look's moving background and clip as a video, with the question graphics laid over it as a separate sharp picture; the home page phone does the same (static/site.js): change both together
       const v = document.createElement("video");
       v.className = "pclip"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.setAttribute("aria-hidden", "true");
-      v.addEventListener("playing", () => v.classList.add("show"));
-      v.addEventListener("error", () => v.classList.remove("show"));
-      v.src = "/static/looks/clips/" + look.key + ".mp4";
-      node.appendChild(v);
+      const ov = new Image(); ov.className = "povl"; ov.alt = ""; ov.decoding = "async"; ov.src = "/static/looks/overlay/" + look.key + ".webp?v=3";
+      v.addEventListener("playing", () => { v.classList.add("show"); ov.classList.add("show"); });
+      v.addEventListener("error", () => { v.classList.remove("show"); ov.classList.remove("show"); });
+      v.src = "/static/looks/loops/hd/" + look.key + ".mp4?v=3";
+      node.appendChild(v); node.appendChild(ov);
       v.play().catch(() => {});
     }
   }
@@ -1412,6 +1415,7 @@ async function init() {
   try {
     const qs = new URLSearchParams(location.search), q = qs.get("kind"), ql = qs.get("look");
     if (q) S.kind = q;
+    if (q && qs.get("write") === "1") S.build[q] = true;   // from the home page's "Write your own" card
     if (ql) S.look = ql;   // an unknown look falls back to the default when the looks are built
     if (q || ql) { saveSettings(); history.replaceState(null, "", location.pathname); }
   } catch (e) {}

@@ -95,29 +95,33 @@
           screen.appendChild(img);
         });
         var imgs = screen.querySelectorAll("img"), n = 0;
-        /* the stock-video loop that plays in the picture box of the look showing now */
-        var vids = [], cur = 0, vid = null, clipSrc = function (i) { return "/static/looks/clips/" + order[i % order.length].key + ".mp4"; };
+        /* the animated look showing now: its moving background and clip as a video, with the question graphics laid over it as a separate sharp picture (so the text and edges stay crisp at any video quality). Both fade over the still together. */
+        var stages = [], cur = 0;
+        var clipSrc = function (i) { return "/static/looks/loops/hd/" + order[i % order.length].key + ".mp4?v=3"; };
+        var ovlSrc = function (i) { return "/static/looks/overlay/" + order[i % order.length].key + ".webp?v=3"; };
         var okPlay = function (v) { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); };
+        var load = function (st, i) { st.v.src = clipSrc(i); st.o.src = ovlSrc(i); st.idx = i % order.length; };
         if (!reduce) {
           for (var k = 0; k < 2; k++) {
-            var v = document.createElement("video");
-            v.className = "clipvid"; v.muted = true; v.loop = true; v.playsInline = true; v.setAttribute("aria-hidden", "true"); v.preload = "auto";
-            screen.appendChild(v); vids.push(v);
+            var el = document.createElement("div"); el.className = "pstage"; el.setAttribute("aria-hidden", "true");
+            var v = document.createElement("video"); v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto";
+            var o = new Image(); o.alt = ""; o.decoding = "async";
+            el.appendChild(v); el.appendChild(o); screen.appendChild(el);
+            stages.push({ el: el, v: v, o: o, idx: -1 });
           }
-          vid = vids[0];
-          vid.addEventListener("playing", function once() { vid.classList.add("show"); vid.removeEventListener("playing", once); });
-          vid.src = clipSrc(0); okPlay(vid);
-          vids[1].src = clipSrc(1); vids[1].load();
+          var first = stages[0];
+          first.v.addEventListener("playing", function once() { first.el.classList.add("show"); first.v.removeEventListener("playing", once); });
+          load(first, 0); okPlay(first.v);
+          load(stages[1], 1); stages[1].v.load();
         }
-        /* the clip changes with the same 0.4s fade as the picture behind it: the new clip (already loaded) fades in while the old one fades out */
+        /* the animation changes with the same 0.4s fade as the picture behind it: the next one (already loaded) fades in while the old one fades out */
         var playClip = function () {
-          if (!vids.length) return;
-          var old = vids[cur]; cur = 1 - cur; vid = vids[cur];
-          var want = clipSrc(n);
-          if (vid.getAttribute("src") !== want) vid.src = want;
-          try { vid.currentTime = 0; } catch (e) {}
-          okPlay(vid); vid.classList.add("show"); old.classList.remove("show");
-          setTimeout(function () { if (old !== vid) { old.pause(); old.src = clipSrc(n + 1); old.load(); } }, 450);
+          if (!stages.length) return;
+          var old = stages[cur]; cur = 1 - cur; var st = stages[cur];
+          if (st.idx !== n % order.length) load(st, n);
+          try { st.v.currentTime = 0; } catch (e) {}
+          okPlay(st.v); st.el.classList.add("show"); old.el.classList.remove("show");
+          setTimeout(function () { if (old !== st) { old.v.pause(); load(old, n + 1); old.v.load(); } }, 450);
         };
         var setCap = function () { if (cap) cap.innerHTML = "Look: <b>" + order[n].title + "</b>"; };
         setCap();
@@ -141,24 +145,24 @@
             '<img src="/static/looks/strip/' + l.key + '.webp" alt="' + (dup ? "" : l.title + " look") + '"></a>';
         }).join("");
         strip.innerHTML = html;
-        /* pointing at a tile pauses the strip and plays that look's clip in its picture box; moving away stops it. Nothing plays while the strip is just scrolling, which keeps the scroll smooth. */
+        /* the strip scrolls as plain pictures (smooth). Pointing at a tile plays that look's short loop in it (moving background, picture and question); moving away stops it. The strip keeps scrolling the whole time. */
         if (!reduce && window.matchMedia && matchMedia("(hover: hover) and (min-width: 901px)").matches) {
           Array.prototype.forEach.call(strip.querySelectorAll(".look-tile"), function (t, k) {
             var key = list[k % list.length].key;
             t.addEventListener("mouseenter", function () {
-              var v = t._clip;
+              var v = t._loop;
               if (!v) {
-                v = t._clip = document.createElement("video");
-                v.className = "tclip"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.setAttribute("aria-hidden", "true");
+                v = t._loop = document.createElement("video");
+                v.className = "tloop"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.disablePictureInPicture = true; v.setAttribute("aria-hidden", "true");
                 v.addEventListener("playing", function () { v.classList.add("show"); });
                 v.addEventListener("error", function () { v.classList.remove("show"); });
-                v.src = "/static/looks/clips/" + key + ".mp4";
+                v.src = "/static/looks/loops/strip/" + key + ".mp4";
                 t.appendChild(v);
               }
               var pr = v.play(); if (pr && pr.catch) pr.catch(function () {});
             });
             t.addEventListener("mouseleave", function () {
-              var v = t._clip; if (!v) return;
+              var v = t._loop; if (!v) return;
               v.pause(); v.classList.remove("show");
             });
           });

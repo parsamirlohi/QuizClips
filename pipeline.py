@@ -6,7 +6,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from audio import SR, Mixer, bing, challenge_sting, pop, siren, sparkle, tick, whoosh
+from audio import Mixer, SR, bing, challenge_sting, effects, pop, siren, sparkle, tick, whoosh
 from chalkboard import ensure_chalkboard
 from config import ASSETS_DIR, CACHE_DIR, OUTPUT_DIR, WORK_DIR, env
 from videos import UsedSet, find_background, find_many
@@ -60,7 +60,7 @@ def _plan_hook(clip, n, sfx):
         frames.append((t0 + dur * acc / sum(weights), "hook", dict(text=text, hl=k, hscale=1.0)))
         acc += wt
     frames.append((t0 + dur, "hook", dict(text=text, hl=-1, hscale=1.0)))
-    events = [(0.0, sfx["whoosh"], 0.8), (0.05, sfx["pop"], 0.6), (t0, clip, 1.0)]
+    events = [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0), (t0, clip, 1.0)]
     return frames, t0 + dur + 0.9, events, False
 
 
@@ -72,7 +72,7 @@ def _plan_challenge(clip, sfx):
         times.append(round(t, 4))
         t += 1 / 24 if t < 1.7 else 1 / 15
     frames = [(t, "challenge", dict(t=t, dur=dur)) for t in times]
-    events = [(0.0, sfx["sting"], 0.95), (1.25, clip, 1.0)]
+    events = [(0.0, sfx["sting"], 1.0), (1.25, clip, 1.0)]
     return frames, dur, events, False
 
 
@@ -84,22 +84,21 @@ def _plan_question(i, total, q, clips, sfx, challenge=False):
                 label=f"QUESTION {i + 1}/{total}", think=THINK)
     frames = [(0.0, "scene", dict(base, visible=0, hscale=0.8)), (0.05, "scene", dict(base, visible=0, hscale=1.06)),
               (0.1, "scene", dict(base, visible=0))]
-    events = [(0.0, sfx["whoosh"], 0.8), (0.05, sfx["pop"], 0.6), (0.4, cq, 1.0)]
+    events = [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0), (0.4, cq, 1.0)]
     t = 0.4 + len(cq) / SR + 0.3
     for k in range(len(q["choices"])):
         _pops(frames, t, dict(base, visible=k + 1))
-        events.append((t, sfx["pop"], 0.6))
+        events.append((t, sfx["pop"], 1.0))
         t += 0.5
     t += 0.1
     events.append((t, cp, 1.0))
     for s_left in range(THINK, 0, -1):
-        events.append((t, sfx["tick"], 0.4))
-        for sub in range(6):
-            frames.append((t + sub / 6, "scene", dict(base, visible=len(q["choices"]), timer=s_left - sub / 6)))
+        events.append((t, sfx["tick"], 1.0))
+        frames.append((t, "scene", dict(base, visible=len(q["choices"]), timer=s_left, smooth=True)))   # the bar itself is drawn smoothly by ffmpeg
         t += 1.0
     full = dict(base, visible=len(q["choices"]), reveal=True)
     frames.append((t, "scene", full))
-    events += [(t, sfx["bing"], 0.9), (t + 0.05, sfx["sparkle"], 0.7), (t + 0.5, cr, 1.0)]
+    events += [(t, sfx["bing"], 1.0), (t + 0.05, sfx["sparkle"], 1.0), (t + 0.5, cr, 1.0)]
     t += 0.5 + len(cr) / SR + 1.2
     return frames, t, events, True
 
@@ -109,12 +108,12 @@ def _plan_outro(clip, sfx):
                 letters="SAB", choices=["All correct: Quiz Master", "Most correct: Sharp Mind", "Few correct: Keep Trying"])
     frames = [(0.0, "scene", dict(base, lit=0, hscale=0.8)), (0.05, "scene", dict(base, lit=0, hscale=1.06)),
               (0.1, "scene", dict(base, lit=0))]
-    events = [(0.0, sfx["whoosh"], 0.8), (0.05, sfx["pop"], 0.5), (0.4, clip, 1.0)]
+    events = [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0), (0.4, clip, 1.0)]
     dur = 0.4 + len(clip) / SR + 1.0
     for k in range(3):
         t = 0.9 + 0.6 * k
         _pops(frames, t, dict(base, lit=3, visible=k + 1))
-        events.append((t, sfx["pop"], 0.6))
+        events.append((t, sfx["pop"], 1.0))
     frames.sort(key=lambda f: f[0])
     return frames, max(dur, 3.0), events, True
 
@@ -183,7 +182,7 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
         used = UsedSet()
         gate = threading.Lock()
         box = {}
-        sfx = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle(), "siren": siren(), "sting": challenge_sting()}
+        sfx = effects()
         # one entry per scene, in order: what its background is
         kinds = [("intro", None)]
         for i in range(n):

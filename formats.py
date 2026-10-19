@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import content
 import looks
 import render
-from audio import SR, Mixer, bing, pop, sparkle, tick, whoosh
+from audio import Mixer, SR, bing, effects, pop, sparkle, tick, whoosh
 from config import OUTPUT_DIR, WORK_DIR, env
 from pipeline import INTRO_QUERIES, POP_ANIM, _intro_background, cleanup_disk
 from render import concat_videos, mux, render_segment
@@ -39,7 +39,7 @@ def _pops(frames, t, kind, base, key="anim"):
 
 def _intro(frames, kind, base, events, sfx, hs=True):
     frames += [(0.0, kind, dict(base, hscale=0.8)), (0.05, kind, dict(base, hscale=1.06)), (0.1, kind, dict(base))]
-    events += [(0.0, sfx["whoosh"], 0.8), (0.05, sfx["pop"], 0.6)]
+    events += [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0)]
 
 
 # ------------------------------------------------------------------ scene plans
@@ -56,7 +56,7 @@ def _plan_title(spec, clips, sfx):
         frames.append((t0 + dur * acc / sum(weights), "hook", dict(text=text, hl=k, hscale=1.0)))
         acc += wt
     frames.append((t0 + dur, "hook", dict(text=text, hl=-1, hscale=1.0)))
-    events = [(0.0, sfx["whoosh"], 0.8), (0.05, sfx["pop"], 0.6), (t0, clip, 1.0)]
+    events = [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0), (t0, clip, 1.0)]
     return frames, t0 + dur + 0.9, events, False
 
 
@@ -69,13 +69,12 @@ def _plan_personality_q(spec, clips, sfx):
     t = 0.4 + len(clips[0]) / SR + 0.3
     for k in range(4):
         _pops(frames, t, "scene", dict(base, visible=k + 1))
-        events.append((t, sfx["pop"], 0.6))
+        events.append((t, sfx["pop"], 1.0))
         t += 0.5
     t += 0.1
     for s_left in range(THINK_PERSONALITY, 0, -1):
-        events.append((t, sfx["tick"], 0.4))
-        for sub in range(6):
-            frames.append((t + sub / 6, "scene", dict(base, visible=4, timer=s_left - sub / 6)))
+        events.append((t, sfx["tick"], 1.0))
+        frames.append((t, "scene", dict(base, visible=4, timer=s_left, smooth=True)))   # the bar itself is drawn smoothly by ffmpeg
         t += 1.0
     frames.append((t, "scene", dict(base, visible=4, timer=0.0)))
     return frames, t + 0.4, events, True
@@ -88,9 +87,9 @@ def _plan_card(spec, clips, sfx):
     _intro(frames, "card", base, events, sfx)
     t = 0.4 + len(clips[0]) / SR + 0.25
     _pops(frames, t, "card", dict(base, caption=spec["line"]))
-    events += [(t, sfx["pop"], 0.6), (t + 0.1, clips[1], 1.0)]
+    events += [(t, sfx["pop"], 1.0), (t + 0.1, clips[1], 1.0)]
     if spec.get("reveal"):
-        events.append((t, sfx["sparkle"], 0.5))
+        events.append((t, sfx["sparkle"], 1.0))
     dur = t + 0.1 + len(clips[1]) / SR + 1.1
     return frames, dur, events, True
 
@@ -104,7 +103,7 @@ def _wyr_base(spec, header="WOULD YOU RATHER..."):
 def _plan_wyr_a(spec, clips, sfx):
     """Both options are on screen from the first frame; the narrator reads 'Would you rather A...'"""
     base = _wyr_base(spec)
-    frames, events = [], [(0.35, clips[0], 1.0), (0.0, sfx["whoosh"], 0.8), (0.05, sfx["pop"], 0.6)]
+    frames, events = [], [(0.35, clips[0], 1.0), (0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0)]
     frames += [(0.0, "scene", dict(base, visible=2, hscale=0.8)), (0.05, "scene", dict(base, visible=2, hscale=1.06)),
                (0.1, "scene", dict(base, visible=2))]
     return frames, 0.35 + len(clips[0]) / SR + 0.1, events, True
@@ -116,15 +115,14 @@ def _plan_wyr_b(spec, clips, sfx):
     frames, events = [(0.0, "scene", dict(base, visible=2))], [(0.05, clips[0], 1.0)]
     t = 0.05 + len(clips[0]) / SR + 0.25
     for s_left in range(THINK_WYR, 0, -1):  # countdown to decide
-        events.append((t, sfx["tick"], 0.4))
-        for sub in range(6):
-            frames.append((t + sub / 6, "scene", dict(base, visible=2, timer=s_left - sub / 6)))
+        events.append((t, sfx["tick"], 1.0))
+        frames.append((t, "scene", dict(base, visible=2, timer=s_left, smooth=True)))   # the bar itself is drawn smoothly by ffmpeg
         t += 1.0
     reveal = dict(base, header="WHAT YOUR PICK SAYS", choices=[spec["trait_a"], spec["trait_b"]])
     reveal.pop("think")
     frames += [(t, "scene", dict(reveal, visible=2, hscale=0.85)), (t + 0.05, "scene", dict(reveal, visible=2, hscale=1.05)),
                (t + 0.1, "scene", dict(reveal, visible=2))]
-    events += [(t, sfx["bing"], 0.8), (t, sfx["whoosh"], 0.6)]
+    events += [(t, sfx["bing"], 1.0), (t, sfx["whoosh"], 1.0)]
     t += 0.45
     events.append((t, clips[1], 1.0))
     t += len(clips[1]) / SR + 0.15
@@ -142,7 +140,7 @@ def _plan_end(spec, clips, sfx):
     for k in range(len(spec["choices"])):
         t = 0.9 + 0.6 * k
         _pops(frames, t, "scene", dict(base, lit=3, visible=k + 1))
-        events.append((t, sfx["pop"], 0.6))
+        events.append((t, sfx["pop"], 1.0))
     frames.sort(key=lambda f: f[0])
     return frames, max(0.4 + len(clips[0]) / SR + 1.0, 3.0), events, True
 
@@ -240,7 +238,7 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
         # each scene is rendered as soon as its own footage is in (scenes are handled several at a time).
         progress("Recording narration...", 0.08)
         flat = [t for s in specs for t in s["texts"]]
-        sfx = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle()}
+        sfx = effects()
         used = UsedSet()
         gate = threading.Lock()
         box = {}

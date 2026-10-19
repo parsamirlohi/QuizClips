@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from audio import SR, decode_audio, trim_silence
+from audio import SR, VOICE_GAIN, decode_audio, trim_silence
 from config import CACHE_DIR, WORK_DIR, is_mock
 
 REGIONS = {"US": "United States", "GB": "United Kingdom", "AU": "Australia", "CA": "Canada",
@@ -138,7 +138,7 @@ def synthesize_all(texts: list, voice: str, rate: str = "+8%") -> list:
                         if attempt == 2:
                             raise
                         await asyncio.sleep(1.5)
-            return trim_silence(decode_audio(path))
+            return trim_silence(decode_audio(path)) * VOICE_GAIN
 
         return await asyncio.gather(*[one(t) for t in texts])
 

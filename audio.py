@@ -7,6 +7,12 @@ import numpy as np
 from config import ASSETS_DIR, ffmpeg_exe
 
 SR = 44100
+CEILING = 0.95      # the loudest moment of a finished video sits here (just under clipping)
+TARGET_RMS = 0.2    # the average level every finished video is brought to, whatever its type
+MAX_BOOST = 4.0     # never lift a mix by more than this
+VOICE_GAIN = 1.7    # the narrator, relative to the sound effects
+# How loud each sound effect is, in ONE place so every video type has the same levels
+LEVELS = {"pop": 2.2, "tick": 0.65, "bing": 1.2, "sparkle": 0.8, "whoosh": 0.8, "siren": 1.0, "sting": 0.95}
 
 
 def decode_audio(path) -> np.ndarray:
@@ -39,10 +45,8 @@ class Mixer:
         self.buf[s:e] += clip[: e - s] * gain
 
     def save(self, path, seconds: float) -> None:
-        a = self.buf[: int(seconds * SR)]
-        peak = float(np.max(np.abs(a))) if len(a) else 0.0
-        if peak > 0.98:
-            a = a * (0.98 / peak)
+        a = self.buf[: int(seconds * SR)].copy()
+        a = finish(a)
         pcm = (np.clip(a, -1, 1) * 32767).astype(np.int16)
         stereo = np.repeat(pcm[:, None], 2, axis=1)
         with wave.open(str(path), "wb") as w:
@@ -50,6 +54,21 @@ class Mixer:
             w.setsampwidth(2)
             w.setframerate(SR)
             w.writeframes(stereo.tobytes())
+
+
+def finish(a: np.ndarray) -> np.ndarray:
+    """Final loudness: ONE volume change applied to the whole mix, so the balance between the narrator, the ticking, the
+    pops and the ding is exactly what LEVELS and VOICE_GAIN say, in every video type. The mix is brought up toward a
+    target average level but never past the point where its loudest moment would clip, so nothing is distorted."""
+    peak = float(np.max(np.abs(a))) if len(a) else 0.0
+    if peak <= 0:
+        return a
+    active = a[np.abs(a) > 0.01]
+    rms = float(np.sqrt(np.mean(active ** 2))) if len(active) else 0.0
+    gain = CEILING / peak
+    if rms > 0:
+        gain = min(gain, TARGET_RMS / rms)
+    return (a * min(gain, MAX_BOOST)).astype(np.float32)
 
 
 def _tones(parts, dur, decay, attack=0.002) -> np.ndarray:
@@ -60,7 +79,7 @@ def _tones(parts, dur, decay, attack=0.002) -> np.ndarray:
 
 
 def _override(name: str):
-    """Drop assets/bing.wav (or .mp3/.ogg) next to the app to use your own sound."""
+    """Drop assets/bing.wav or tick.wav (or .mp3/.ogg) into the assets folder to use your own sound."""
     for ext in ("wav", "mp3", "ogg"):
         p = ASSETS_DIR / f"{name}.{ext}"
         if p.exists():
@@ -75,12 +94,38 @@ def bing() -> np.ndarray:
     if custom is not None:
         return custom
     f = 1567.98  # G6, bell-like with a few overtones
-    a = _tones([(f, 1.0), (2 * f, 0.35), (3.01 * f, 0.15), (4.2 * f, 0.06)], 1.6, 3.2)
+    a = _tones([(f, 1.0), (2 * f, 0.3), (3 * f, 0.1)], 1.6, 3.2)
     return a / float(np.max(np.abs(a))) * 0.8
 
 
+def _click(rng, modes, ring, body=0.0, body_f=190.0, dur=0.09) -> np.ndarray:
+    """One mechanical click: a hard 'tk' of filtered noise followed by a short wooden/metal ring."""
+    n = int(SR * dur)
+    t = np.arange(n) / SR
+    noise = np.diff(rng.standard_normal(n + 1)).astype(np.float32)   # differenced noise = bright, no rumble
+    tk = noise * np.exp(-900 * t)
+    tone = sum(a * np.sin(2 * np.pi * f * t) for f, a in modes) * np.exp(-ring * t)
+    thump = body * np.sin(2 * np.pi * body_f * t) * np.exp(-70 * t)
+    out = (0.55 * tk + 0.5 * tone + thump).astype(np.float32)
+    out *= np.minimum(1.0, t / 0.0004)
+    return out / (float(np.max(np.abs(out))) or 1.0)
+
+
 def tick() -> np.ndarray:
-    return _tones([(1200, 1.0)], 0.06, 60) * 0.5
+    """One second of a wind-up kitchen timer: four mechanical clicks, alternating a higher 'tick' and a lower 'tock'.
+    The countdown plays this once per second, so it ticks the whole time the viewer is thinking."""
+    custom = _override("tick")
+    if custom is not None:
+        return custom
+    rng = np.random.default_rng(5)
+    hi = _click(rng, [(2350, 1.0), (3600, 0.5)], 150, body=0.35)
+    lo = _click(rng, [(1650, 1.0), (2700, 0.45)], 130, body=0.5, body_f=150.0)
+    out = np.zeros(SR, dtype=np.float32)
+    for k in range(4):
+        c = (hi if k % 2 == 0 else lo) * (0.95 if k % 2 == 0 else 0.8)
+        s = int(k * 0.25 * SR)
+        out[s:s + len(c)] += c
+    return out * 0.6
 
 
 def pop() -> np.ndarray:
@@ -175,3 +220,10 @@ def challenge_sting() -> np.ndarray:
 
     peak = float(np.max(np.abs(out))) or 1.0
     return out / peak * 0.62
+
+
+def effects() -> dict:
+    """Every sound effect already set to its level (see LEVELS). All video types use this, so they all sound the same."""
+    raw = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle(), "siren": siren(),
+           "sting": challenge_sting()}
+    return {k: v * LEVELS[k] for k, v in raw.items()}

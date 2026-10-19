@@ -281,18 +281,59 @@ def _lum(c):
     return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255
 
 
-def _frame_border(img, color, frac=1.0, t=24):
-    """The border / countdown bar. A white (or nearly white) border would vanish against the white track and bright
-    backgrounds, so it is drawn black; other light colours keep their colour but get a dark track."""
-    if frac <= 0:
-        return
+def _bar_colors(color):
+    """(bar colour, track colour) for the border / countdown bar. A white (or nearly white) border would vanish against
+    the white track and bright backgrounds, so it is drawn black; other light colours keep their colour but get a dark track."""
     color, track = tuple(color), (255, 255, 255)
     lum = _lum(color)
     if lum >= 0.9:
         color = (0, 0, 0)
     elif lum >= 0.75:
         track = (30, 30, 40)
+    return color, track
+
+
+def _frame_border(img, color, frac=1.0, t=24, track_only=False):
+    """The border / countdown bar. track_only draws just the full track: the shrinking bar itself is then drawn
+    by ffmpeg on every video frame (see _bar_filters), which is what makes the countdown smooth."""
+    if frac <= 0:
+        return
+    color, track = _bar_colors(color)
+    if track_only:
+        _border_path(img, track, 1.0, t, None)
+        return
     _border_path(img, color, frac, t, track)
+
+
+def _bar_filters(start, think, color, src, dst, t=24):
+    """ffmpeg filters that draw the countdown bar shrinking smoothly, clockwise from the top centre, on every frame.
+    It starts full at `start` seconds and is gone `think` seconds later. Each of the five edges is a short coloured strip
+    next to a transparent one; a crop window slides along it (crop's x / y are worked out per frame), so only the part
+    of the edge that is still left shows."""
+    Wd, Hd = W, H
+    segs = [  # orientation, length, where it sits, which end the colour is attached to
+        ("h", Wd // 2, (Wd // 2, 0), "start"), ("v", Hd, (Wd - t, 0), "start"), ("h", Wd, (0, Hd - t), "end"),
+        ("v", Hd, (0, 0), "end"), ("h", Wd // 2, (0, 0), "start"),
+    ]
+    total = sum(sg[1] for sg in segs)
+    left = f"{total}*clip(1-(t-{start:.4f})/{think},0,1)"
+    hexc = "0x%02X%02X%02X" % tuple(color)
+    parts, cum, cur = [], 0, src
+    for i, (orient, L, (x, y), anchor) in enumerate(segs):
+        used = f"clip({left}-{cum},0,{L})"
+        size = f"{L}x{t}" if orient == "h" else f"{t}x{L}"
+        a, b = (f"[s{i}c][s{i}t]", None) if anchor == "start" else (f"[s{i}t][s{i}c]", None)
+        stack = "hstack" if orient == "h" else "vstack"
+        parts.append(f"color=c={hexc}:s={size}:r=30,format=rgba[s{i}c];color=c=black@0:s={size}:r=30,format=rgba[s{i}t];"
+                     f"{a}{stack}=inputs=2[s{i}];")
+        off = f"{L}-{used}" if anchor == "start" else used
+        crop = f"crop=w={L}:h={t}:x='{off}':y=0" if orient == "h" else f"crop=w={t}:h={L}:x=0:y='{off}'"
+        parts.append(f"[s{i}]{crop}[w{i}];")
+        nxt = dst if i == len(segs) - 1 else f"o{i}"
+        parts.append(f"[{cur}][w{i}]overlay={x}:{y}:format=auto[{nxt}];")
+        cur = nxt
+        cum += L
+    return "".join(parts)
 
 
 @lru_cache(maxsize=1)
@@ -321,7 +362,7 @@ def _outline_label(img, cx, cy, text, size, fill=(255, 255, 255)):
 
 def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choices=(), letters="ABCD",
                visible=0, anim=1.0, correct_idx=None, reveal=False, timer=None, think=5, q_num=1,
-               plus=0.0, clip=True, num_label=None, border=True, bar_dy=0, **_):
+               plus=0.0, clip=True, num_label=None, border=True, bar_dy=0, smooth=False, **_):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     shown = "green" if reveal else theme
     if timer is not None:
@@ -329,7 +370,7 @@ def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choice
     else:
         bfrac = 0.0 if reveal else 1.0
     if border:
-        _frame_border(img, THEMES[theme]["border"], bfrac)
+        _frame_border(img, THEMES[theme]["border"], bfrac, track_only=bool(smooth) and timer is not None)
     hx0, hy0, hx1, hy1 = HEADER
     _place(img, _header(shown, header, lit), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale)
     if clip:
@@ -728,7 +769,14 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
         else:
             vf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];"
         base = "bg"
-    vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto,format=yuv420p[v]"
+    smooth = [(st, a) for st, k, a in frame_specs if k == "scene" and a.get("smooth") and a.get("timer") is not None]
+    if smooth:   # the countdown bar is drawn by ffmpeg on every video frame, not once per overlay picture
+        a0 = smooth[0][1]
+        color, _track = _bar_colors(THEMES[a0.get("theme", "purple")]["border"])
+        vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto[vo];"
+        vf += _bar_filters(smooth[0][0], a0.get("think", 5), color, "vo", "vb") + "[vb]format=yuv420p[v]"
+    else:
+        vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto,format=yuv420p[v]"
     run_ffmpeg(inputs + ["-f", "concat", "-safe", "0", "-i", lst, "-filter_complex", vf, "-map", "[v]",
                          "-t", f"{duration:.3f}", "-an"]
                + _vcodec_args() + ["-pix_fmt", "yuv420p", "-r", "30", out_path])
