@@ -2,7 +2,7 @@
 Asks for your video API key and saves it to the .env file next to this script."""
 from pathlib import Path
 
-env_file = Path(__file__).resolve().parent / ".env"
+env_file = Path(__file__).resolve().parent.parent / ".env"
 
 print("Which site is your key from?")
 print("  1) Pixabay")

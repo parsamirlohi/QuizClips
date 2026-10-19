@@ -11,7 +11,7 @@ echo "Installing requirements (first run takes a minute)..."
 python3 -m pip install -q -r requirements.txt || { echo "Install failed."; read -n 1 -s -r -p "Press any key to close"; exit 1; }
 
 if [ ! -f .env ] && [ ! -f .env.txt ]; then
-  python3 set_key.py
+  python3 tools/set_key.py
 fi
 
 python3 app.py

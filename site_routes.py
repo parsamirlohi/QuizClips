@@ -1,7 +1,7 @@
 """Public website: page routes, the looks list for the home page, and the early-access waitlist.
 
 Pages live in static/ as plain HTML. The generator itself is at /app.
-Waitlist sign-ups are appended to waitlist.jsonl (ignored by git). Run `python3 export_waitlist.py` for a CSV.
+Waitlist sign-ups are appended to waitlist.jsonl (ignored by git). Run `python3 tools/export_waitlist.py` for a CSV.
 """
 import json
 import re

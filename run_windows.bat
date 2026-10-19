@@ -16,7 +16,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-if not exist .env if not exist .env.txt python set_key.py
+if not exist .env if not exist .env.txt python tools\set_key.py
 
 python app.py
 pause

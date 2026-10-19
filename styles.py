@@ -1,5 +1,5 @@
 """Calmer, more premium look options: each = background + matching colours for header, answer bars and border.
-make_style_previews.py draws them under the real quiz overlay. A background is bg(t, sample) -> RGB uint8 array
+tools/make_style_previews.py draws them under the real quiz overlay. A background is bg(t, sample) -> RGB uint8 array
 (540x960, scaled up later); `sample` is a PIL picture of the question's own clip, used by the blurred-clip styles."""
 import math
 

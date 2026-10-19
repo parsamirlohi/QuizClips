@@ -1,8 +1,8 @@
 """Makes the preview pictures of every look used on the website and in the app.
 Each look shows its own question (see preview_data.py) with a stock video clip in the picture box.
 
-Run:    python3 make_look_thumbs.py --clips     (first time: downloads one short Pixabay clip per look, needs PIXABAY_API_KEY)
-Later:  python3 make_look_thumbs.py              (re-draws the pictures with the clips it already has)
+Run:    python3 tools/make_look_thumbs.py --clips     (first time: downloads one short Pixabay clip per look, needs PIXABAY_API_KEY)
+Later:  python3 tools/make_look_thumbs.py              (re-draws the pictures with the clips it already has)
 
 Writes:
   static/looks/<key>.jpg          270x480, for the look picker in the app
@@ -11,6 +11,11 @@ Writes:
   static/looks/clips/<key>.mp4    short silent loop that plays inside the big phone's picture box on the home page
   static/looks/clips/<key>.jpg    one frame of that clip, drawn into the pictures above
 """
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so the app's modules import from here
 import math
 import sys
 

@@ -1,5 +1,10 @@
 """Optional: pre-make every look's background loop now, so the first video with a new look isn't slower.
-Run:  python3 make_backgrounds.py"""
+Run:  python3 tools/make_backgrounds.py"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so the app's modules import from here
 import time
 
 import looks

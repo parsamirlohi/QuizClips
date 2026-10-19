@@ -1,9 +1,9 @@
-"""Turns waitlist.jsonl into waitlist.csv (open it in Excel or Google Sheets).  Run: python3 export_waitlist.py"""
+"""Turns waitlist.jsonl into waitlist.csv (open it in Excel or Google Sheets).  Run: python3 tools/export_waitlist.py"""
 import csv
 import json
 from pathlib import Path
 
-src = Path(__file__).parent / "waitlist.jsonl"
+src = Path(__file__).resolve().parent.parent / "waitlist.jsonl"
 if not src.exists():
     raise SystemExit("No sign-ups yet.")
 rows = [json.loads(line) for line in src.read_text(encoding="utf-8").splitlines() if line.strip()]

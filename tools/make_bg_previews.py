@@ -1,5 +1,10 @@
 """Draws every background option from backgrounds.py under the real quiz overlay -> bg_options/*.png + sheet.png.
-Run:  python3 make_bg_previews.py"""
+Run:  python3 tools/make_bg_previews.py"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so the app's modules import from here
 import subprocess
 
 import imageio_ffmpeg

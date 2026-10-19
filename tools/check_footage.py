@@ -1,8 +1,13 @@
 """Optional diagnostic: shows what Pixabay returns for every footage search the app can use.
 
-Run:  python3 check_footage.py
+Run:  python3 tools/check_footage.py
 Writes footage_report.txt next to this file (about 1-2 minutes, ~60 requests).
 """
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so the app's modules import from here
 import time
 
 import config
@@ -11,7 +16,7 @@ import videos
 
 key = config.env("PIXABAY_API_KEY")
 if not key:
-    raise SystemExit("No PIXABAY_API_KEY found. Run: python3 set_key.py")
+    raise SystemExit("No PIXABAY_API_KEY found. Run: python3 tools/set_key.py")
 
 searches = []
 for cat, themes in questions.CATEGORY_THEMES.items():

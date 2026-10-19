@@ -21,15 +21,15 @@ Click **Generate** and get a new vertical (1080x1920) trivia quiz video for TikT
 Next time, just double-click the same launcher. Videos are saved in the `output` folder.
 A 5-question video is about 1.5 minutes long and takes a minute or two to render.
 
-Prefer the terminal? `pip install -r requirements.txt`, then `python set_key.py`, then `python app.py`
+Prefer the terminal? `pip install -r requirements.txt`, then `python tools/set_key.py`, then `python app.py`
 (use `python3` / `pip3` on a Mac).
 
 ## Troubleshooting
 
 - **Banner says no key / no settings file:** it shows exactly where it looks. The file must be named `.env`
-  (not `.env.example`) and sit next to `app.py`. Run `python set_key.py` to create it correctly.
+  (not `.env.example`) and sit next to `app.py`. Run `python tools/set_key.py` to create it correctly.
   After changing it, stop the app (Ctrl+C) and start it again.
-- **"Pixabay error 400/401":** the key was pasted wrong. Run `python set_key.py` again.
+- **"Pixabay error 400/401":** the key was pasted wrong. Run `python tools/set_key.py` again.
 - **"Could not fetch questions":** the free question site allows one request every few seconds. Wait a bit and retry.
 - **Narration fails:** the voices come from Microsoft's free service and need an internet connection.
 
@@ -50,17 +50,17 @@ Leave the topic blank for a surprise. `content.py` writes the scripts and `forma
 The page has a **Look** section with 24 styles (background + matching header/answer-bar colours); pick one, or
 "Surprise me" for a random one each video. Your choice is remembered in the browser.
 - Backgrounds are made once, the first time a look is used (a few seconds), into `assets/backgrounds/`. Run
-  `python3 make_backgrounds.py` to make them all now. Delete that folder to regenerate.
+  `python3 tools/make_backgrounds.py` to make them all now. Delete that folder to regenerate.
 - The two "Blurred Clip" looks use each question's own footage, blurred, as the background.
 - `looks.py` lists every look; `styles.py` / `backgrounds.py` draw them. After adding or changing one, run
-  `python3 make_look_thumbs.py` to refresh the pictures in the selector.
+  `python3 tools/make_look_thumbs.py` to refresh the pictures in the selector.
 
 ## Options (all go in `.env`)
 
 - `ANTHROPIC_API_KEY=` Claude writes the questions and picks footage searches that fit the topic without
   giving away the answer. Without it, questions come from the free Open Trivia DB.
 - `GEMINI_API_KEY=` Gemini writes the footage searches so each clip matches its question (free key at
-  aistudio.google.com/apikey; run `python set_key.py` and choose 3). `FOOTAGE_LLM=gemini|claude|none` picks the
+  aistudio.google.com/apikey; run `python tools/set_key.py` and choose 3). `FOOTAGE_LLM=gemini|claude|none` picks the
   provider; `GEMINI_MODEL=` overrides the model.
 - `blocked_clips.json` (optional): a list of Pixabay clip ids to never use, e.g. `[12345, 67890]`. The id is the
   number in the clip's filename in `cache` (`pixabay_12345.mp4`).
@@ -84,7 +84,7 @@ The page has a **Look** section with 24 styles (background + matching header/ans
 | File | What it does |
 | --- | --- |
 | `run_mac.command`, `run_windows.bat` | One-click launchers (install, set key on first run, start) |
-| `set_key.py` | Asks for your key and saves the `.env` file |
+| `tools/set_key.py` | Asks for your key and saves the `.env` file |
 | `app.py` | Web server and the Generate button |
 | `pipeline.py` | Builds one video start to finish and sets the timing |
 | `questions.py` | Gets questions, shuffles answer letters, builds video search words |
@@ -92,3 +92,13 @@ The page has a **Look** section with 24 styles (background + matching header/ans
 | `tts.py` | AI narration |
 | `audio.py` | Mixing and the bing / tick / pop sounds |
 | `render.py` | Draws the quiz graphics and renders each scene with ffmpeg |
+
+### Folders
+
+| Folder | What's in it |
+| --- | --- |
+| `static/` | The website and Studio pages, styles, fonts and look pictures |
+| `assets/` | Fonts, backgrounds, logo and sounds the videos use |
+| `tools/` | Optional one-off scripts (set your key, make previews, check footage, export the waitlist). Run them from the project folder, e.g. `python3 tools/export_waitlist.py` |
+| `design/` | Unused logo and favicon options, kept for reference |
+| `output/`, `cache/`, `work/` | Made videos, downloaded clips, temporary files (not in git) |

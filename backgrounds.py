@@ -1,5 +1,5 @@
 """Animated background options for the question scenes. Each one is a function frame(t) -> RGB uint8 array,
-t in [0,1) is the phase of a seamless loop. make_bg_previews.py draws them under the real quiz overlay."""
+t in [0,1) is the phase of a seamless loop. tools/make_bg_previews.py draws them under the real quiz overlay."""
 import math
 
 import numpy as np

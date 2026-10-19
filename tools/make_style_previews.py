@@ -1,5 +1,10 @@
 """Draws every look option from styles.py under the real quiz overlay -> bg_options/styles_sheet.png (+ one png each).
-Run:  python3 make_style_previews.py"""
+Run:  python3 tools/make_style_previews.py"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so the app's modules import from here
 import subprocess
 
 import imageio_ffmpeg
