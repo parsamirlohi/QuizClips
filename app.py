@@ -38,6 +38,8 @@ class GenerateRequest(BaseModel):
     watermark_on: bool = True
     watermark_platform: str = Field(default="tiktok", max_length=20)
     watermark_handle: str = Field(default="", max_length=60)
+    custom: dict | None = None   # "I'll write it": the person's own content (see content.clean_custom for the shape)
+    colors: dict[str, str] = Field(default_factory=dict)   # question_box, question_outline, answer_box, answer_outline, frame, highlight
     think_seconds: int | None = Field(default=None, ge=5, le=15)  # seconds viewers get to answer; None = the type's default
 
 
@@ -62,6 +64,8 @@ FORMATS = [
 for _f in FORMATS:
     _f["think_default"] = THINK_DEFAULTS.get(_f["key"])   # None = this type has no countdown
     _f["think_choices"] = THINK_CHOICES if _f["key"] in THINK_DEFAULTS else []
+    _f["build_min"] = 1 if _f["key"] == "trivia" else _f["min"]   # fewest / most items when the person writes their own
+    _f["build_max"] = 10 if _f["key"] == "trivia" else _f["max"]
 
 PLATFORMS = {
     "tiktok": "tiktok.com/@{}",
@@ -115,11 +119,13 @@ def run_job(job_id: str, req: GenerateRequest):
             else:
                 formats.THINK_WYR = req.think_seconds
         cats = [c for c in req.categories if c in CATEGORY_LABELS]
+        custom = content.clean_custom(req.kind, req.custom) if req.custom else None
+        colors = req.colors if custom else {}   # colours are only for content the person builds themselves
         if req.kind == "trivia":
-            result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style)
+            result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style, custom, colors)
         else:
             result = formats.build_video(req.kind, req.topic, req.questions, req.voice, progress, watermark_text(req),
-                                         req.style)
+                                         req.style, colors, custom)
         timing_report()
         job.update(status="done", progress=1.0, message="Done!", video_url=f"/output/{result['file']}",
                    questions=result["questions"], duration=result["duration"])
@@ -166,6 +172,11 @@ def voice_preview(voice: str):
 
 @app.post("/api/generate")
 def generate(req: GenerateRequest):
+    if req.custom:
+        try:
+            content.clean_custom(req.kind, req.custom)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
     if not has_video_key():
         raise HTTPException(400, "Add PIXABAY_API_KEY to the .env file first.")
     with lock:

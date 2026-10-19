@@ -5,8 +5,10 @@ content.py and each format has its own scene layouts.
 """
 import random
 import shutil
+import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import content
 import looks
@@ -16,9 +18,10 @@ from config import OUTPUT_DIR, WORK_DIR, env
 from pipeline import INTRO_QUERIES, POP_ANIM, _intro_background, cleanup_disk
 from render import concat_videos, mux, render_segment
 from tts import synthesize_all
-from videos import find_background
+from videos import UsedSet, find_background, find_many
 
 THINK_PERSONALITY = int(env("THINK_PERSONALITY_SECONDS", "15"))   # seconds to pick an answer
+FOOTAGE_WORKERS = int(env("FOOTAGE_WORKERS", "5"))   # scenes (footage search + render) handled side by side
 THINK_WYR = int(env("THINK_WYR_SECONDS", "11"))   # seconds to choose A or B
 RANKS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"}
 LETTERS = "ABCD"
@@ -216,47 +219,71 @@ def _footage(spec, used):
 
 # ------------------------------------------------------------------ build
 def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None,
-                watermark: str = "", style: str = looks.DEFAULT) -> dict:
+                watermark: str = "", style: str = looks.DEFAULT, colors=None, custom=None) -> dict:
     render.WATERMARK = watermark or ""
-    look = looks.resolve(style)
+    look = looks.with_colors(looks.resolve(style), colors)
     render.apply_skin(look["skin"])
     job_dir = WORK_DIR / uuid.uuid4().hex[:8]
     job_dir.mkdir(parents=True)
     try:
         progress("Preparing the look...", 0.02)
         look_info = {"bg": looks.ensure_background(look["key"]), "blur": look["blur"]}
-        progress("Writing the script...", 0.03)
-        data = content.generate(kind, topic, n)
+        if custom:
+            progress("Reading your content...", 0.03)
+            data = dict(content.add_terms(kind, custom), kind=kind, topic="")
+        else:
+            progress("Writing the script...", 0.03)
+            data = content.generate(kind, topic, n)
         specs = _specs(data)
 
+        # Narration, footage and rendering overlap: narration is recorded while the first footage searches run, and
+        # each scene is rendered as soon as its own footage is in (scenes are handled several at a time).
         progress("Recording narration...", 0.08)
         flat = [t for s in specs for t in s["texts"]]
-        all_clips = synthesize_all(flat, voice)
-        pos = 0
-        for s in specs:
-            s["clips"] = all_clips[pos:pos + len(s["texts"])]
-            pos += len(s["texts"])
-
-        progress("Finding background videos...", 0.14)
-        used = set()
-        need = [s for s in specs if s["search"]]
-        for k, s in enumerate(need):
-            progress(f"Finding video {k + 1} of {len(need)}...", 0.14 + 0.24 * k / max(1, len(need)))
-            s["bg"], s["matched"] = _footage(s, used)
-        specs[0]["bg"] = _intro_background(used)
-        specs[-1]["bg"] = find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used)[0]
-
         sfx = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle()}
-        plans = [PLANNERS[s["t"]](s, s["clips"], sfx) for s in specs]
+        used = UsedSet()
+        gate = threading.Lock()
+        box = {}
+
+        def narration():
+            all_clips = synthesize_all(flat, voice)
+            pos = 0
+            for s in specs:
+                s["clips"] = all_clips[pos:pos + len(s["texts"])]
+                pos += len(s["texts"])
+
+        def get_plans():   # needs the narration (clip lengths), so it waits for it
+            with gate:
+                if "plans" not in box:
+                    box["tts"].result()
+                    box["plans"] = [PLANNERS[s["t"]](s, s["clips"], sfx) for s in specs]
+                return box["plans"]
+
+        last = len(specs) - 1
+
+        def scene(si):
+            s = specs[si]
+            if si == 0:
+                s["bg"] = _intro_background(used)
+            elif si == last:
+                s["bg"] = find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used)[0]
+            elif s["search"]:
+                s["bg"], s["matched"] = _footage(s, used)
+            frames, dur, events, has_clip = get_plans()[si]
+            bg = s.get("bg")
+            render_segment(bg if has_clip else None, frames, dur, job_dir / f"seg_{si:02d}.mp4", job_dir,
+                           full=bg if frames[0][1] == "hook" else None, look=look_info)
+
+        progress("Finding footage and rendering...", 0.14)
+        with ThreadPoolExecutor(max_workers=1) as tts_pool:
+            box["tts"] = tts_pool.submit(narration)
+            find_many([(lambda si=si: scene(si)) for si in range(len(specs))], FOOTAGE_WORKERS,
+                      lambda d, t: progress(f"Finding footage and rendering {d} of {t}...", 0.14 + 0.74 * d / max(1, t)))
+        plans = get_plans()
         total = sum(p[1] for p in plans)
         mixer, seg_paths, offset = Mixer(total), [], 0.0
-        for si, ((frames, dur, events, has_clip), s) in enumerate(zip(plans, specs)):
-            progress(f"Rendering scene {si + 1} of {len(plans)}...", 0.40 + 0.48 * si / len(plans))
-            seg = job_dir / f"seg_{si:02d}.mp4"
-            bg = s.get("bg")
-            render_segment(bg if has_clip else None, frames, dur, seg, job_dir,
-                           full=bg if frames[0][1] == "hook" else None, look=look_info)
-            seg_paths.append(seg)
+        for si, (frames, dur, events, has_clip) in enumerate(plans):
+            seg_paths.append(job_dir / f"seg_{si:02d}.mp4")
             for t, clip, gain in events:
                 mixer.add(offset + t, clip, gain)
             offset += dur

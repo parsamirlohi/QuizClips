@@ -258,3 +258,125 @@ def generate(kind: str, topic: str, n: int) -> dict:
         _personality(topic, n) if kind == "personality" else _wyr(topic, n) if kind == "wyr" else _items(kind, topic, n))
     data["kind"], data["topic"] = kind, topic
     return data
+
+
+# ---------------------------------------------------------------- the person's own content ("I'll write it")
+def _text(v, limit: int, what: str, required: bool = True) -> str:
+    s = " ".join(str(v or "").split())
+    if not s:
+        if required:
+            raise ValueError(f"{what} is empty.")
+        return ""
+    if len(s) > limit:
+        raise ValueError(f"{what} is too long (most is {limit} characters).")
+    return s
+
+
+def _rows(v, lo: int, hi: int, what: str) -> list:
+    if not isinstance(v, list) or len(v) < lo:
+        raise ValueError(f"Add at least {lo} {what}.")
+    if len(v) > hi:
+        raise ValueError(f"Most is {hi} {what}.")
+    return v
+
+
+def clean_custom(kind: str, c) -> object:
+    """Check what the person typed. Trivia returns a list of questions, every other type returns the same kind of
+    dict the script writer makes (minus the footage searches). Raises ValueError with a message for the person."""
+    if not isinstance(c, dict):
+        raise ValueError("Nothing to build from yet.")
+    if kind == "trivia":
+        out = []
+        for i, q in enumerate(_rows(c.get("questions"), 1, 10, "questions"), 1):
+            q = q if isinstance(q, dict) else {}
+            text = _text(q.get("question"), 220, f"Question {i}")
+            raw = q.get("choices")
+            choices = [_text(x, 90, f"Question {i}, an answer") for x in (raw if isinstance(raw, list) else [])]
+            if not 2 <= len(choices) <= 4:
+                raise ValueError(f"Question {i} needs 2 to 4 answers.")
+            if len({x.lower() for x in choices}) != len(choices):
+                raise ValueError(f"Question {i} has two answers that are the same.")
+            idx = q.get("correct_idx")
+            if not isinstance(idx, int) or not 0 <= idx < len(choices):
+                raise ValueError(f"Question {i}: pick which answer is right.")
+            out.append({"question": text, "choices": choices, "correct_idx": idx})
+        return out
+    if kind == "wyr":
+        rounds = []
+        for i, r in enumerate(_rows(c.get("rounds"), 3, 10, "rounds"), 1):
+            r = r if isinstance(r, dict) else {}
+            rounds.append({"a": _text(r.get("a"), 46, f"Round {i}, option A"), "b": _text(r.get("b"), 46, f"Round {i}, option B"),
+                           "trait_a": _text(r.get("trait_a"), 30, f"Round {i}, what A says", False) or "a bold pick",
+                           "trait_b": _text(r.get("trait_b"), 30, f"Round {i}, what B says", False) or "a smart pick"})
+        return {"title": _text(c.get("title"), 50, "The title", False) or "Would you rather", "rounds": rounds}
+    if kind in ("toplist", "facts"):
+        items = []
+        word = "Item" if kind == "toplist" else "Fact"
+        for i, it in enumerate(_rows(c.get("items"), 3, 10, "items" if kind == "toplist" else "facts"), 1):
+            it = it if isinstance(it, dict) else {}
+            items.append({"name": _text(it.get("name"), 40, f"{word} {i}, the name" if kind == "toplist" else f"{word} {i}, the headline"),
+                          "line": _text(it.get("line"), 150, f"{word} {i}, the sentence")})
+        default = f"Top {len(items)} list" if kind == "toplist" else "Did you know?"
+        return {"title": _text(c.get("title"), 60, "The title", False) or default, "items": items}
+    if kind == "personality":
+        results = []
+        for k, r in enumerate(_rows(c.get("results"), 4, 4, "results"), 1):
+            r = r if isinstance(r, dict) else {}
+            results.append({"name": _text(r.get("name"), 36, f"Result {k}, the name"),
+                            "description": _text(r.get("description"), 160, f"Result {k}, the description")})
+        qs = []
+        for i, q in enumerate(_rows(c.get("questions"), 3, 8, "questions"), 1):
+            q = q if isinstance(q, dict) else {}
+            opts = q.get("options") if isinstance(q.get("options"), list) else []
+            if len(opts) != 4:
+                raise ValueError(f"Question {i} needs 4 answers, one for each result.")
+            qs.append({"q": _text(q.get("q"), 80, f"Question {i}"),
+                       "options": [_text(o, 30, f"Question {i}, an answer") for o in opts]})
+        return {"title": _text(c.get("title"), 60, "The quiz title"), "questions": qs, "results": results}
+    raise ValueError("Unknown video type.")
+
+
+def _terms_for(texts: list, theme: str = "") -> list:
+    """3 footage searches for each text: written by Gemini when it is available, otherwise plain keywords."""
+    from questions import keywords_from
+    base = [[w for w in keywords_from(t, "", "")[:3] if w] or [_s(t, 30)] for t in texts]
+    if is_mock() or not gemini.available() or not texts:
+        return base
+    numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(texts))
+    p = (f"A short vertical video shows these items one at a time{(' (theme: ' + theme + ')') if theme else ''}:\n{numbered}\n"
+         f"{SEARCH_RULES}\n{PEOPLE_RULE}\n"
+         "Return ONLY a JSON object: {\"terms\": [[3 terms for item 1], [3 terms for item 2], ...]} with exactly "
+         f"{len(texts)} lists, in order.")
+    try:
+        d = _ask(p)
+        terms = d.get("terms")
+        if isinstance(terms, list) and len(terms) == len(texts):
+            out = []
+            for t, fallback in zip(terms, base):
+                got = [_s(x, 40) for x in (t if isinstance(t, list) else []) if _s(x, 40)][:3]
+                out.append(got or fallback)
+            return out
+    except Exception as e:
+        flog(f"[content] search terms for your own content fell back to keywords ({str(e)[:80]})")
+    return base
+
+
+def add_terms(kind: str, data: dict) -> dict:
+    """Give the person's own content its footage searches (the script writer does this for generated content)."""
+    if kind == "wyr":
+        texts = [x for r in data["rounds"] for x in (r["a"], r["b"])]
+        t = _terms_for(texts, data["title"])
+        for i, r in enumerate(data["rounds"]):
+            r["search_a"], r["search_b"] = t[2 * i], t[2 * i + 1]
+    elif kind in ("toplist", "facts"):
+        t = _terms_for([f'{it["name"]}. {it["line"]}' for it in data["items"]], data["title"])
+        for it, s in zip(data["items"], t):
+            it["search"] = s
+    elif kind == "personality":
+        texts = [q["q"] for q in data["questions"]] + [f'{r["name"]}. {r["description"]}' for r in data["results"]]
+        t = _terms_for(texts, data["title"])
+        for q, s in zip(data["questions"], t):
+            q["search"] = s
+        for r, s in zip(data["results"], t[len(data["questions"]):]):
+            r["search"] = s
+    return data

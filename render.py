@@ -4,6 +4,7 @@ Layers per scene:  animated marble background  ->  framed stock clip  ->  Pillow
 """
 import math
 import random
+import threading
 from functools import lru_cache
 
 import numpy as np
@@ -29,9 +30,18 @@ LIT = [PINK]  # colour of the highlighted words in the header; changed by the ch
 _DEFAULT_SKIN = None
 
 
+def _forget_drawn_layers():
+    """The header, answer bars and number circle are remembered while a video is drawn; a new look changes them."""
+    for fn in ("_header", "_bar", "_circle"):
+        f = globals().get(fn)
+        if f is not None and hasattr(f, "cache_clear"):
+            f.cache_clear()
+
+
 def apply_skin(skin):
     """Use a look's colours (header, answer bars, border, accents) for the video being made. None = original pink."""
     global HOT, _DEFAULT_SKIN
+    _forget_drawn_layers()
     if _DEFAULT_SKIN is None:
         _DEFAULT_SKIN = (dict(THEMES["purple"]), dict(BAR_STYLES["purple"]), (246, 36, 140), PINK)
     if not skin:
@@ -44,6 +54,7 @@ def apply_skin(skin):
 
 def reset_skin():
     global HOT
+    _forget_drawn_layers()
     if _DEFAULT_SKIN is not None:
         THEMES["purple"], BAR_STYLES["purple"] = dict(_DEFAULT_SKIN[0]), dict(_DEFAULT_SKIN[1])
         HOT, LIT[0] = _DEFAULT_SKIN[2], _DEFAULT_SKIN[3]
@@ -75,6 +86,11 @@ HOOK_FONTS = [str(ASSETS_DIR / "fonts" / "Bangers-Regular.ttf")]
 
 @lru_cache(maxsize=None)
 def font(size: int, face: str = "main"):
+    return _font(size, face, threading.get_ident())   # scenes are drawn on several threads; each gets its own font objects
+
+
+@lru_cache(maxsize=512)
+def _font(size, face, _thread):
     custom = env("FONT_PATH")
     for p in (HOOK_FONTS if face == "hook" else []) + ([custom] if custom else []) + _FONTS:
         try:
@@ -169,7 +185,8 @@ def _words(layer, cx, cy, text, max_w, max_h, start, minimum, color, lit=None, l
             idx += 1
 
 
-def _header(theme, text, lit=None):
+@lru_cache(maxsize=128)
+def _header(theme, text, lit=None):   # cached: identical on every frame of a countdown (layers are never modified)
     t = THEMES[theme]
     x0, y0, x1, y1 = HEADER
     w, h = x1 - x0, y1 - y0
@@ -178,6 +195,7 @@ def _header(theme, text, lit=None):
     return layer
 
 
+@lru_cache(maxsize=256)
 def _bar(text, letter, style):
     s = BAR_STYLES[style]
     w, h = 960, BAR_H
@@ -212,16 +230,21 @@ def _ring(img, cx, cy, r, thickness, frac, color):
     _place(img, layer.resize((size, size), Image.LANCZOS), cx, cy)
 
 
-def _number_circle(img, label, reveal, timer, think, urgent):
-    cx, cy = NUM_C
+@lru_cache(maxsize=128)
+def _circle(label, reveal, urgent, hot):
     big = Image.new("RGBA", (150 * SS, 150 * SS), (0, 0, 0, 0))
     d = ImageDraw.Draw(big)
     d.ellipse((2 * SS, 2 * SS, 148 * SS, 148 * SS), fill=(255, 255, 255, 255))
     d.ellipse((12 * SS, 12 * SS, 138 * SS, 138 * SS), fill=((255, 255, 255, 255) if reveal else (0, 0, 0, 255)))
     c = big.resize((150, 150), Image.LANCZOS)
-    col = (70, 165, 70) if reveal else ((255, 70, 70) if urgent else HOT)
+    col = (70, 165, 70) if reveal else ((255, 70, 70) if urgent else hot)
     _ctext(c, 75, 75, label, font(92), col + (255,))
-    _place(img, c, cx, cy)
+    return c
+
+
+def _number_circle(img, label, reveal, timer, think, urgent):
+    cx, cy = NUM_C
+    _place(img, _circle(label, bool(reveal), bool(urgent), tuple(HOT)), cx, cy)
 
 
 def _border_path(img, color, frac=1.0, t=24, track=(255, 255, 255)):
@@ -272,7 +295,8 @@ def _frame_border(img, color, frac=1.0, t=24):
     _border_path(img, color, frac, t, track)
 
 
-def _clip_frame(img):
+@lru_cache(maxsize=1)
+def _clip_ring():
     x0, y0, x1, y1 = CLIP
     t = 14
     w, h = x1 - x0 + 2 * t, y1 - y0 + 2 * t
@@ -282,7 +306,13 @@ def _clip_frame(img):
     a = np.clip(np.array(outer, dtype=np.int16) - np.array(inner, dtype=np.int16), 0, 255).astype("uint8")
     ring = Image.new("RGBA", (w, h), (255, 255, 255, 255))
     ring.putalpha(Image.fromarray(a))
-    img.alpha_composite(ring, (x0 - t, y0 - t))
+    return ring
+
+
+def _clip_frame(img):
+    x0, y0, x1, y1 = CLIP
+    t = 14
+    img.alpha_composite(_clip_ring(), (x0 - t, y0 - t))
 
 
 def _outline_label(img, cx, cy, text, size, fill=(255, 255, 255)):
@@ -621,6 +651,8 @@ def _vcodec_args():
     enc = env("VIDEO_ENCODER", "libx264")
     if enc == "libx264":
         return ["-c:v", "libx264", "-preset", env("X264_PRESET", "veryfast"), "-crf", env("VIDEO_CRF", "24")]
+    if enc == "h264_videotoolbox":   # the Mac's hardware encoder: much faster, a little bigger files
+        return ["-c:v", enc, "-b:v", env("VIDEO_BITRATE", "9M"), "-allow_sw", "1"]
     if enc == "h264_nvenc":
         return ["-c:v", "h264_nvenc", "-preset", "p5", "-cq", "22", "-b:v", "0"]
     return ["-c:v", enc]
@@ -669,12 +701,12 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
             else:
                 pre = "[0:v]split=2[s1][s2];"
                 bsrc, src, ov = "s1", "s2", 1
+            # darken / tint at the small size, then enlarge: same picture, a sixteenth of the pixels to process
             bgf = (f"[{bsrc}]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,setsar=1,fps=30,"
-                   f"gblur=sigma=8,scale=1080:1920:flags=bicubic,eq=brightness={-blur.get('dark', 0.3):.2f}:"
-                   f"saturation={blur.get('sat', 0.9):.2f}")
+                   f"gblur=sigma=8,eq=brightness={-blur.get('dark', 0.3):.2f}:saturation={blur.get('sat', 0.9):.2f}")
             if blur.get("tint"):
                 bgf += f",drawbox=x=0:y=0:w=iw:h=ih:color=0x{blur['tint']}@{blur.get('alpha', 0.35)}:t=fill"
-            bgf += "[bg];"
+            bgf += ",scale=1080:1920:flags=bicubic[bg];"
         else:
             inputs += ["-i", str(clip)] if photo else ["-stream_loop", "-1", "-i", str(clip)]
             src, ov = "1:v", 2

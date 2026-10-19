@@ -2,7 +2,9 @@
 import json
 import random
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
@@ -306,3 +308,35 @@ def find_background(queries: list, used: set, question: str = ""):
         used.add(v["id"])
         return dest, q
     raise RuntimeError(f"No Pexels videos found for any of: {queries}")
+
+
+class UsedSet(set):
+    """The clips already chosen for this video. Safe to share between the footage searches that run side by side."""
+    def __init__(self):
+        super().__init__()
+        self._lock = threading.Lock()
+
+    def add(self, x):
+        with self._lock:
+            super().add(x)
+
+
+def find_many(jobs: list, workers: int = 4, on_done=lambda done, total: None) -> list:
+    """Run several footage searches at once. jobs = [callable returning (path, matched)]. Results keep the same order;
+    an error in one search is raised after the others finish (the callers already catch their own failures)."""
+    out, done = [None] * len(jobs), [0]
+    lock = threading.Lock()
+
+    def run(i):
+        try:
+            out[i] = jobs[i]()
+        finally:
+            with lock:
+                done[0] += 1
+                on_done(done[0], len(jobs))
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        futs = [ex.submit(run, i) for i in range(len(jobs))]
+        for f in futs:
+            f.result()
+    return out

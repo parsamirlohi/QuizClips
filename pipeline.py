@@ -1,14 +1,16 @@
 """Builds one complete quiz video: questions -> narration -> backgrounds -> scenes -> final mp4."""
 import random
 import shutil
+import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from audio import SR, Mixer, bing, challenge_sting, pop, siren, sparkle, tick, whoosh
 from chalkboard import ensure_chalkboard
 from config import ASSETS_DIR, CACHE_DIR, OUTPUT_DIR, WORK_DIR, env
-from videos import find_background
-from questions import LETTERS, get_questions, mark_used, pick_letters
+from videos import UsedSet, find_background, find_many
+from questions import LETTERS, get_questions, keywords_from, mark_used, pick_letters
 import looks
 import render
 from footage_plan import refine_queries
@@ -136,25 +138,36 @@ def cleanup_disk() -> None:
 
 
 def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None,
-               categories=None, watermark: str = "", style: str = looks.DEFAULT) -> dict:
+               categories=None, watermark: str = "", style: str = looks.DEFAULT, custom=None, colors=None) -> dict:
+    """custom = the person's own questions: [{"question", "choices", "correct_idx"}]. colors = their colour changes."""
     render.WATERMARK = watermark or ""
-    look = looks.resolve(style)
+    look = looks.with_colors(looks.resolve(style), colors)
     render.apply_skin(look["skin"])
     job_dir = WORK_DIR / uuid.uuid4().hex[:8]
     job_dir.mkdir(parents=True)
     try:
         progress("Preparing the look...", 0.02)
         look_info = {"bg": looks.ensure_background(look["key"]), "blur": look["blur"]}
-        progress("Picking questions...", 0.03)
-        raw = get_questions(n_questions, categories)
-        quiz = []
-        for q, ci in zip(raw, pick_letters(n_questions)):
-            others = list(q["wrong"][:3])
-            random.shuffle(others)
-            quiz.append({**q, "choices": others[:ci] + [q["correct"]] + others[ci:], "correct_idx": ci})
-
-        n = n_questions
-        challenge = n >= 5
+        if custom:
+            progress("Reading your questions...", 0.03)
+            quiz = []
+            for c in custom:
+                correct = c["choices"][c["correct_idx"]]
+                quiz.append({"question": c["question"], "correct": correct, "choices": list(c["choices"]),
+                             "correct_idx": c["correct_idx"], "wrong": [x for x in c["choices"] if x != correct],
+                             "category": "", "video_queries": keywords_from(c["question"], correct, "")})
+            n = len(quiz)
+            challenge = False   # the "challenge round" is only for the generated quizzes
+        else:
+            progress("Picking questions...", 0.03)
+            raw = get_questions(n_questions, categories)
+            quiz = []
+            for q, ci in zip(raw, pick_letters(n_questions)):
+                others = list(q["wrong"][:3])
+                random.shuffle(others)
+                quiz.append({**q, "choices": others[:ci] + [q["correct"]] + others[ci:], "correct_idx": ci})
+            n = n_questions
+            challenge = n >= 5
         word = NUMWORD.get(n, str(n))
         prompts = random.sample(PROMPTS, min(len(PROMPTS), n))
         texts = [f"Only a genius can get {word} out of {word}!"]
@@ -164,48 +177,66 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
             texts += [q["question"], prompts[i % len(prompts)], q["correct"]]
         texts.append("How many did you get right? Comment your score, and follow for more quizzes!")
 
+        # Narration is recorded while the search terms are planned; then each scene is rendered as soon as its own
+        # footage is in, several scenes at a time.
         progress("Recording narration...", 0.08)
-        clips = synthesize_all(texts, voice)
-
-        used = set()
-        progress("Finding background videos...", 0.14)
-        try:
-            refine_queries(quiz)
-        except Exception as e:  # never let search-term planning break the video
-            print(f"[footage] search planning skipped: {e}", flush=True)
-        bgs = []
-        for i, q in enumerate(quiz):
-            progress(f"Finding video for question {i + 1} of {n}...", 0.14 + 0.24 * i / n)
-            path, matched = find_background(q["video_queries"], used, q["question"])
-            q["footage"] = matched
-            bgs.append(path)
-        outro_bg = find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used)[0]
-
+        used = UsedSet()
+        gate = threading.Lock()
+        box = {}
         sfx = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle(), "siren": siren(), "sting": challenge_sting()}
-        plans, scene_bgs, ci = [], [], 1
-        plans.append(_plan_hook(clips[0], n, sfx))
-        scene_bgs.append(_intro_background(used))
-        for i, q in enumerate(quiz):
-            is_ch = challenge and i == n - 1
-            if is_ch:
-                plans.append(_plan_challenge(clips[ci], sfx))
-                scene_bgs.append(None)
-                ci += 1
-            plans.append(_plan_question(i, n, q, clips[ci:ci + 3], sfx, is_ch))
-            scene_bgs.append(bgs[i])
-            ci += 3
-        plans.append(_plan_outro(clips[ci], sfx))
-        scene_bgs.append(outro_bg)
+        # one entry per scene, in order: what its background is
+        kinds = [("intro", None)]
+        for i in range(n):
+            if challenge and i == n - 1:
+                kinds.append(("challenge", None))
+            kinds.append(("q", i))
+        kinds.append(("outro", None))
 
+        def get_plans():   # needs the narration (clip lengths), so it waits for it
+            with gate:
+                if "plans" not in box:
+                    clips = box["tts"].result()
+                    plans, ci = [_plan_hook(clips[0], n, sfx)], 1
+                    for i, q in enumerate(quiz):
+                        is_ch = challenge and i == n - 1
+                        if is_ch:
+                            plans.append(_plan_challenge(clips[ci], sfx))
+                            ci += 1
+                        plans.append(_plan_question(i, n, q, clips[ci:ci + 3], sfx, is_ch))
+                        ci += 3
+                    plans.append(_plan_outro(clips[ci], sfx))
+                    box["plans"] = plans
+                return box["plans"]
+
+        def scene(si):
+            kind, i = kinds[si]
+            bg = None
+            if kind == "intro":
+                bg = _intro_background(used)
+            elif kind == "q":
+                bg, quiz[i]["footage"] = find_background(quiz[i]["video_queries"], used, quiz[i]["question"])
+            elif kind == "outro":
+                bg = find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used)[0]
+            frames, dur, events, has_clip = get_plans()[si]
+            render_segment(bg if has_clip else None, frames, dur, job_dir / f"seg_{si:02d}.mp4", job_dir,
+                           full=bg if frames[0][1] == "hook" else None, look=look_info)
+
+        with ThreadPoolExecutor(max_workers=1) as tts_pool:
+            box["tts"] = tts_pool.submit(synthesize_all, texts, voice)
+            progress("Planning the footage searches...", 0.12)
+            try:
+                refine_queries(quiz)
+            except Exception as e:  # never let search-term planning break the video
+                print(f"[footage] search planning skipped: {e}", flush=True)
+            progress("Finding footage and rendering...", 0.14)
+            find_many([(lambda si=si: scene(si)) for si in range(len(kinds))], int(env("FOOTAGE_WORKERS", "5")),
+                      lambda d, t: progress(f"Finding footage and rendering {d} of {t}...", 0.14 + 0.74 * d / max(1, t)))
+
+        plans = get_plans()
         total = sum(p[1] for p in plans)
         mixer, seg_paths, offset = Mixer(total), [], 0.0
-        for si, ((frames, dur, events, has_clip), bg) in enumerate(zip(plans, scene_bgs)):
-            kind0 = frames[0][1]
-            progress(f"Rendering scene {si + 1} of {len(plans)}...", 0.40 + 0.48 * si / len(plans))
-            seg = job_dir / f"seg_{si:02d}.mp4"
-            render_segment(bg if has_clip else None, frames, dur, seg, job_dir, full=bg if kind0 == 'hook' else None,
-                           look=look_info)
-            seg_paths.append(seg)
+        for si, (frames, dur, events, has_clip) in enumerate(plans):
+            seg_paths.append(job_dir / f"seg_{si:02d}.mp4")
             for t, clip, gain in events:
                 mixer.add(offset + t, clip, gain)
             offset += dur
@@ -218,7 +249,8 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
         name = f"quiz_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
         mux(video_only, audio_wav, OUTPUT_DIR / name)
 
-        mark_used(quiz)
+        if not custom:
+            mark_used(quiz)
         return {
             "look": look["title"],
             "file": name,

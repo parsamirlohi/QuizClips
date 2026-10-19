@@ -267,6 +267,43 @@
   .vpick .tick { flex:none; width:20px; height:20px; border-radius:50%; background:var(--primary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 10.5l3 3 6-6.5' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/20px no-repeat; visibility:hidden; }
   .vpick[aria-checked="true"] .tick { visibility:visible; }
   .vmsg { color:var(--err); font-size:13px; margin:10px 0 0; min-height:0; }
+  .cq-count { color:var(--muted); font-weight:600; font-size:18px; }
+  .cq-tools { display:flex; gap:8px; }
+  .cq-body { padding:18px 22px 22px; display:grid; gap:16px; }
+  #cq-list { display:grid; gap:14px; }
+  .cq { border:1px solid var(--line-strong); border-radius:14px; padding:14px 16px 16px; background:var(--surface); display:grid; gap:10px; }
+  .cq.bad { border-color:#d93a3a; box-shadow:0 0 0 3px rgba(217,58,58,.16); }
+  .cq-top { display:flex; justify-content:space-between; align-items:center; }
+  .cq-top b { font-size:15px; }
+  .cq-del { border:0; background:none; color:var(--muted); width:32px; height:32px; border-radius:8px; font-size:22px; line-height:1; }
+  .cq-del:hover { color:var(--ink); background:var(--sunken); }
+  .cq textarea, #cq-paste-in { width:100%; resize:vertical; background:var(--surface); border:1px solid var(--line-strong); border-radius:10px; padding:11px 12px; font:inherit; min-height:64px; }
+  .cq-ans { display:grid; gap:8px; }
+  .cq-ans-head { display:flex; justify-content:space-between; color:var(--muted); font-size:13px; }
+  .cq-a { display:grid; grid-template-columns:34px minmax(0,1fr) 28px; gap:10px; align-items:center; }
+  .cq-a i { font-style:normal; font-weight:800; width:34px; height:34px; border-radius:50%; display:grid; place-items:center; background:var(--primary-soft); color:var(--primary); }
+  .cq-a.right i { background:var(--primary); color:var(--on-primary); }
+  .cq-a input[type=radio] { width:20px; height:20px; accent-color:var(--primary); justify-self:center; margin:0; }
+  .cq-two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:640px) { .cq-two { grid-template-columns:1fr; } }
+  .cq-f label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px; }
+  .cq-f input[type=text], .cq-f textarea { width:100%; }
+  .cq-sec { display:grid; gap:10px; }
+  .cq-sec > b { font-size:15px; }
+  .cq-sec > .help { margin:0; color:var(--muted); font-size:13px; }
+  .cq-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .cq-paste { display:grid; gap:8px; border:1px dashed var(--line-strong); border-radius:14px; padding:14px 16px; }
+  .cq-paste label { font-weight:700; }
+  .crow { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--line); }
+  .crow b { font-weight:600; }
+  .crow small { display:block; color:var(--muted); font-size:12px; }
+  .crow input[type=color] { width:54px; height:34px; padding:0; border:1px solid var(--line-strong); border-radius:8px; background:none; cursor:pointer; }
+  .cprev { width:176px; margin:6px auto 14px; }
+  .cp-frame { --qb:#7054f0; --ql:#ff4eb2; --ab:#fff; --al:#ff4eb2; --fr:#ff4eb2; --at:#f6248c; --ac:#fff; border:9px solid var(--fr); border-radius:6px; padding:12px 9px 14px; aspect-ratio:9/13; display:flex; flex-direction:column; gap:9px; background:linear-gradient(160deg,#c9bfff,#ffd0ec); justify-content:flex-start; }
+  .cp-q { background:var(--qb); border:3px solid var(--ql); color:#fff; font-weight:800; font-size:13px; line-height:1.15; text-align:center; padding:10px 6px; text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000; margin-bottom:8px; }
+  .cp-a { position:relative; background:var(--ab); border:2px solid var(--al); color:var(--at); font-weight:800; font-size:13px; padding:6px 6px 6px 26px; margin-left:12px; text-align:center; }
+  .cp-a i { position:absolute; left:-12px; top:50%; transform:translateY(-50%); width:24px; height:24px; border-radius:50%; background:var(--al); color:var(--ac); font-style:normal; font-size:12px; display:grid; place-items:center; border:2px solid #fff; }
+  .row .v .sw { width:16px; height:16px; border-radius:50%; border:1px solid rgba(0,0,0,.25); flex:none; }
   .seg { display:grid; grid-template-columns:repeat(8,1fr); gap:6px; }
   .row-timer .v { overflow:visible; white-space:normal; flex-direction:column; align-items:stretch; gap:8px; }
   .tm-val { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
@@ -355,6 +392,43 @@
         <div class="kinds" id="kinds" role="group" aria-label="Video type"></div>
       </div>
 
+      <div class="card" id="mode-card" style="margin-bottom:20px">
+        <div class="card-head"><h2>Content</h2></div>
+        <div class="topic-body">
+          <div class="tmode" id="bmode" role="group" aria-label="Who writes the content">
+            <button type="button" class="kind" data-build="0"><b>Write it for me</b><span id="bm-auto">We pick the questions.</span></button>
+            <button type="button" class="kind" data-build="1"><b>I'll write it</b><span>Type your own content and choose the colors.</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="custom-card" style="margin-bottom:20px" hidden>
+        <div class="card-head">
+          <h2><span id="cq-title">Your questions</span> <span class="cq-count" id="cq-count"></span></h2>
+          <div class="cq-tools" id="cq-tools">
+            <button type="button" class="btn btn-sm" id="cq-paste-btn">Paste many</button>
+            <button type="button" class="btn btn-sm" id="cq-csv-btn">Import CSV</button>
+            <input type="file" id="cq-csv" accept=".csv,.tsv,.txt,text/csv,text/plain" hidden>
+          </div>
+        </div>
+        <div class="cq-body">
+          <div id="cq-titlewrap" hidden>
+            <label for="cq-title-in" id="cq-title-lab" style="font-weight:700;display:block;margin-bottom:6px">Video title</label>
+            <input type="text" id="cq-title-in" maxlength="60" autocomplete="off">
+            <p class="help" id="cq-title-help" style="margin:6px 0 0"></p>
+          </div>
+          <div id="cq-results" hidden></div>
+          <div class="cq-paste" id="cq-paste" hidden>
+            <label for="cq-paste-in">Paste your questions</label>
+            <textarea id="cq-paste-in" rows="9" placeholder="What is the capital of France?&#10;*Paris&#10;Rome&#10;Madrid&#10;&#10;Which planet is red?&#10;Venus&#10;Mars&#10;Jupiter&#10;Answer: B"></textarea>
+            <p class="help">Leave a blank line between questions. The first line is the question, then one answer per line (2 to 4). Put * in front of the right answer, or add a line like "Answer: B". A CSV file works too: question, answer A, B, C, D, then the right letter.</p>
+            <div class="cq-actions"><button type="button" class="btn btn-primary btn-sm" id="cq-paste-add">Add these questions</button><button type="button" class="btn btn-sm" id="cq-paste-cancel">Cancel</button></div>
+          </div>
+          <div id="cq-list"></div>
+          <div class="cq-actions"><button type="button" class="btn" id="cq-add">Add a question</button><span class="help" id="cq-msg" role="status" style="margin:0"></span></div>
+        </div>
+      </div>
+
       <div class="card" id="topic-card" style="margin-bottom:20px" hidden>
         <div class="card-head"><h2>Topic</h2></div>
         <div class="topic-body">
@@ -377,10 +451,11 @@
           <button class="btn btn-sm" id="open-custom">Customize</button>
         </div>
         <dl class="rows" style="margin:0">
-          <div class="row"><dt id="k-count">Questions</dt><dd class="v" id="s-questions" style="margin:0"></dd><button class="link" data-edit="questions" aria-label="Change number of questions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row" id="row-questions"><dt id="k-count">Questions</dt><dd class="v" id="s-questions" style="margin:0"></dd><button class="link" data-edit="questions" aria-label="Change number of questions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row row-timer" id="row-timer"><dt id="tm-lab">Timer</dt><dd class="v" id="s-timer" style="margin:0"></dd></div>
           <div class="row"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row" id="row-topics"><dt>Topics</dt><dd class="v" id="s-topics" style="margin:0"></dd><button class="link" data-edit="topics" aria-label="Change topics"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row" id="row-colors"><dt>Colors</dt><dd class="v" id="s-colors" style="margin:0"></dd><button class="link" data-edit="colors" aria-label="Change colors"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row"><dt>Look</dt><dd class="v" id="s-look" style="margin:0"></dd><button class="link" data-edit="look" aria-label="Change look"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row"><dt>Link on video</dt><dd class="v" id="s-link" style="margin:0"></dd><button class="link" data-edit="link" aria-label="Change link on video"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
         </dl>
@@ -478,8 +553,18 @@
     </div>
 
     <div class="panel" id="p-look" role="tabpanel" hidden>
-      <p class="help" style="margin-top:0;color:var(--muted)">Sets the background, colors and motion for the whole video. The preview updates as you choose.</p>
-      <div id="looks"></div>
+      <p class="help" id="look-help" style="margin-top:0;color:var(--muted)">Sets the background, colors and motion for the whole video. The preview updates as you choose.</p>
+      <div id="f-colors">
+        <span class="lab" id="c-lab" style="display:block;font-weight:700;margin-top:18px">Colors</span>
+        <p class="help">Change the question box, answer boxes and borders. Anything you leave alone keeps the look's own color.</p>
+        <div class="cprev" id="cprev" aria-hidden="true">
+          <div class="cp-frame"><div class="cp-q">Which planet is red?</div>
+            <div class="cp-a"><i>A</i><span>Mars</span></div><div class="cp-a"><i>B</i><span>Venus</span></div></div>
+        </div>
+        <div id="c-rows" role="group" aria-labelledby="c-lab"></div>
+        <button type="button" class="btn btn-sm" id="c-reset" style="margin-top:12px">Use the look's colors</button>
+      </div>
+      <div id="f-looks"><div class="lab" id="l-lab" style="margin:22px 0 8px;font-weight:700">Look</div><div id="looks"></div></div>
     </div>
 
     <div class="panel" id="p-brand" role="tabpanel" hidden>
@@ -517,13 +602,27 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
 
 /* ---------------- settings (remembered in this browser) ---------------- */
-const S = { think: {}, kind: "trivia", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "" };
+const S = { build: {}, cdata: newCData(), colors: {}, think: {}, kind: "trivia", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "" };
+function newCData() {
+  const rows = (n, f) => Array.from({ length: n }, f);
+  return {
+    trivia: [{ q: "", a: ["", "", "", ""], c: 0 }],
+    wyr: rows(3, () => ({ a: "", ta: "", b: "", tb: "" })),
+    toplist: rows(3, () => ({ name: "", line: "" })),
+    facts: rows(3, () => ({ name: "", line: "" })),
+    personality: { title: "", results: rows(4, () => ({ name: "", line: "" })), questions: rows(3, () => ({ q: "", a: ["", "", "", ""] })) },
+    titles: { wyr: "", toplist: "", facts: "" },
+  };
+}
 let CFG = null;
 function loadSettings() {
   try {
     const j = JSON.parse(localStorage.getItem("qvm_settings") || "null");
     if (j) {
-      S.kind = j.kind || "trivia"; S.think = j.think || {}; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.cats = new Set(j.cats || []);
+      S.kind = j.kind || "trivia"; S.think = j.think || {};
+      S.build = j.build && typeof j.build === "object" ? j.build : {};
+      if (j.cdata && typeof j.cdata === "object") S.cdata = Object.assign(newCData(), j.cdata);
+      S.colors = j.colors && typeof j.colors === "object" ? j.colors : {}; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.cats = new Set(j.cats || []);
       S.look = j.look || S.look; S.wmOn = j.wmOn !== false; S.wmPlat = j.wmPlat || "tiktok"; S.wmHandle = j.wmHandle || "";
     } else {  // older versions of this page
       S.look = localStorage.getItem("lookKey") || S.look;
@@ -563,6 +662,7 @@ const SECTIONS = {
   voice: { panel: "content", field: "f-voice", title: "Narrator voice" },
   topics: { panel: "content", field: "f-topics", title: "Topics" },
   look: { panel: "look", title: "Look" },
+  colors: { panel: "look", title: "Colors" },
   link: { panel: "brand", title: "Link on video" },
 };
 /* "all" = the full Customize panel with tabs; any other value opens just that one setting */
@@ -571,8 +671,10 @@ function openDrawer(sect, from) {
   const one = SECTIONS[sect];
   $("drawer").classList.toggle("scoped", !!one);
   ["f-questions", "f-voice", "f-topics"].forEach((id) => {
-    $(id).hidden = one ? one.field !== id : ((id === "f-topics" && S.kind !== "trivia"));
+    $(id).hidden = one ? one.field !== id : ((id === "f-topics" && S.kind !== "trivia") || (id === "f-questions" && building()));
   });
+  $("f-looks").hidden = !!one && sect !== "look"; $("f-colors").hidden = !building() || (!!one && sect !== "colors");
+  $("look-help").hidden = sect === "colors"; $("c-lab").hidden = sect === "colors"; $("l-lab").hidden = sect === "look";
   $("d-title").textContent = !one ? "Customize" : sect === "questions" ? "Number of " + fmt().noun : one.title;
   $("d-close").setAttribute("aria-label", one ? "Close" : "Close customize panel");
   stopSample(); $("vmsg").textContent = "";
@@ -661,7 +763,7 @@ const topic = () => (mode() === "custom" ? (S.topics[S.kind] || "").trim() : "")
 function fmt() { return CFG.formats.find((f) => f.key === S.kind) || CFG.formats[0]; }
 const thinkFor = (f) => S.think[f.key] >= 5 && S.think[f.key] <= 15 ? S.think[f.key] : f.think_default;
 function estLength(f) {   // rough: intro/outro plus, per item, reading it aloud and the answer reveal around the countdown
-  const s = 7 + S.questions * (thinkFor(f) + 9), m = Math.floor(s / 60);
+  const s = 7 + qCount() * (thinkFor(f) + 9), m = Math.floor(s / 60);
   return m + ":" + String(Math.round(s % 60)).padStart(2, "0");
 }
 function buildTimer() {
@@ -684,7 +786,12 @@ function renderSummary() {
   buildTimer();
   $("k-count").textContent = f.noun[0].toUpperCase() + f.noun.slice(1);
   $("s-questions").textContent = S.questions + " " + f.noun;
-  $("row-topics").hidden = f.needs_topic; $("topic-card").hidden = !f.needs_topic;
+  const bld = building();
+  $("row-topics").hidden = f.needs_topic || bld; $("topic-card").hidden = !f.needs_topic || bld;
+  $("row-questions").hidden = bld; $("custom-card").hidden = !bld; $("row-colors").hidden = !bld;
+  $("cq-count").textContent = bld ? "(" + bFilled().length + ")" : "";
+  paintMode();
+  paintColors();
   const v = CFG.voices.find((x) => x.id === S.voice);
   $("s-voice").textContent = v ? v.label : "";
   const names = CFG.categories.filter((c) => S.cats.has(c.id)).map((c) => c.label);
@@ -706,7 +813,7 @@ function buildKinds() {
     b.innerHTML = "<b>" + esc(f.title) + "</b><span>" + esc(f.desc) + "</span>";
     b.onclick = () => {
       S.kind = f.key; $("topic-in").value = S.topics[S.kind] || ""; S.questions = Math.max(f.min, Math.min(f.max, S.questions));
-      saveSettings(); paintKinds(); buildSeg(); buildTopicChips(); renderSummary();
+      saveSettings(); paintKinds(); buildSeg(); buildTopicChips(); renderSummary(); renderBuild();
     };
     box.appendChild(b);
   });
@@ -933,6 +1040,278 @@ function updateBuild(frac, msg) {
   site.querySelector(".paint").style.opacity = st === 4 ? "0.92" : "0";
 }
 
+
+/* ---------------- colors ---------------- */
+const COLOR_FIELDS = [["question_box", "Question box"], ["question_outline", "Question box outline"], ["answer_box", "Answer boxes"],
+                      ["answer_outline", "Answer outline"], ["frame", "Frame and timer"], ["highlight", "Highlight text"]];
+const FALLBACK_COLORS = { question_box: "#7054f0", question_outline: "#ff4eb2", answer_box: "#ffffff", answer_outline: "#ff4eb2", frame: "#ff4eb2", highlight: "#f6248c" };
+const lookColors = () => { const l = CFG && CFG.looks.find((x) => x.key === S.look); return (l && l.colors) || FALLBACK_COLORS; };
+const colorOf = (k) => S.colors[k] || lookColors()[k];
+const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; };
+function buildColors() {
+  const box = $("c-rows"); box.innerHTML = "";
+  COLOR_FIELDS.forEach(([k, label]) => {
+    const row = document.createElement("div"); row.className = "crow"; row.dataset.k = k;
+    row.innerHTML = '<div><b>' + esc(label) + '</b><small></small></div><input type="color" aria-label="' + esc(label) + '">';
+    const inp = row.querySelector("input");
+    inp.oninput = () => { S.colors[k] = inp.value; saveSettings(); renderSummary(); };
+    box.appendChild(row);
+  });
+  $("c-reset").onclick = () => { S.colors = {}; saveSettings(); renderSummary(); };
+}
+function paintColors() {
+  const pv = $("cprev"); if (!pv || !CFG) return;
+  document.querySelectorAll("#c-rows .crow").forEach((row) => {
+    const k = row.dataset.k, inp = row.querySelector("input");
+    if (document.activeElement !== inp) inp.value = colorOf(k);
+    row.querySelector("small").textContent = S.colors[k] ? "Changed" : "From the look";
+  });
+  const c = Object.fromEntries(COLOR_FIELDS.map(([k]) => [k, colorOf(k)]));
+  const text = Math.abs(lum(c.answer_box) - lum(c.highlight)) > 0.35 ? c.highlight : (lum(c.answer_box) > 0.5 ? "#191923" : "#ffffff");
+  const f = pv.querySelector(".cp-frame").style;
+  f.setProperty("--qb", c.question_box); f.setProperty("--ql", c.question_outline); f.setProperty("--ab", c.answer_box);
+  f.setProperty("--al", c.answer_outline); f.setProperty("--fr", c.frame); f.setProperty("--at", text);
+  f.setProperty("--ac", lum(c.answer_outline) < 0.6 ? "#ffffff" : "#191923");
+  const changed = Object.keys(S.colors).length;
+  $("s-colors").innerHTML = changed ? COLOR_FIELDS.map(([k]) => '<span class="sw" style="background:' + colorOf(k) + '"></span>').join("") + "<span>Custom</span>" : "<span>Look's colors</span>";
+  $("c-reset").disabled = !changed;
+}
+
+/* ---------------- "I'll write it": the person's own content, for every video type ---------------- */
+const building = () => !!S.build[S.kind];
+const BK = {
+  trivia: { title: "Your questions", noun: "question" }, wyr: { title: "Your rounds", noun: "round" },
+  toplist: { title: "Your list", noun: "item" }, facts: { title: "Your facts", noun: "fact" }, personality: { title: "Your quiz", noun: "question" },
+};
+const BLANK = {
+  trivia: () => ({ q: "", a: ["", "", "", ""], c: 0 }), wyr: () => ({ a: "", ta: "", b: "", tb: "" }),
+  toplist: () => ({ name: "", line: "" }), facts: () => ({ name: "", line: "" }), personality: () => ({ q: "", a: ["", "", "", ""] }),
+};
+const bItems = () => (S.kind === "personality" ? S.cdata.personality.questions : S.cdata[S.kind]);
+const isBlank = (c) => JSON.stringify(c) === JSON.stringify(BLANK[S.kind]());
+const bFilled = () => bItems().filter((c) => !isBlank(c) && !(S.kind === "trivia" && c.c === 0 && !c.q.trim() && !c.a.some((x) => x.trim())));
+const qCount = () => (building() ? Math.max(1, bFilled().length) : S.questions);
+function cqSave() { document.querySelectorAll(".cq.bad").forEach((x) => x.classList.remove("bad")); saveSettings(); renderSummary(); }
+
+function field(parent, label, value, opt, onInput) {
+  const wrap = document.createElement("div"); wrap.className = "cq-f";
+  const id = "f" + Math.random().toString(36).slice(2, 8);
+  wrap.innerHTML = '<label for="' + id + '">' + esc(label) + "</label>" + (opt.area ? '<textarea id="' + id + '" rows="2"></textarea>' : '<input type="text" id="' + id + '" autocomplete="off">');
+  const el = wrap.querySelector("#" + id); el.maxLength = opt.max; el.placeholder = opt.ph || ""; el.value = value;
+  el.oninput = () => onInput(el.value);
+  parent.appendChild(wrap); return el;
+}
+function cardShell(i, label, onDel, bad) {
+  const card = document.createElement("div"); card.className = "cq" + (bad ? " bad" : "");
+  card.innerHTML = '<div class="cq-top"><b>' + esc(label) + '</b><button type="button" class="cq-del" aria-label="Remove ' + esc(label) + '">&times;</button></div>';
+  card.querySelector(".cq-del").onclick = onDel;
+  return card;
+}
+function triviaCard(c, i, bad, del) {
+  const card = cardShell(i, "Question " + (i + 1), del, bad);
+  const ta = document.createElement("textarea"); ta.rows = 2; ta.maxLength = 220; ta.placeholder = "Type your question"; ta.setAttribute("aria-label", "Question " + (i + 1)); ta.value = c.q;
+  ta.oninput = () => { c.q = ta.value; cqSave(); }; card.appendChild(ta);
+  const ans = document.createElement("div"); ans.className = "cq-ans";
+  ans.innerHTML = '<div class="cq-ans-head"><span>Answers (2 to 4)</span><span>Right one</span></div>';
+  for (let k = 0; k < 4; k++) {
+    const row = document.createElement("div"); row.className = "cq-a" + (c.c === k ? " right" : "");
+    row.innerHTML = '<i>' + "ABCD"[k] + '</i><input type="text" maxlength="90" autocomplete="off" placeholder="' + (k < 2 ? "Answer " : "Answer (optional) ") + "ABCD"[k] + '" aria-label="Question ' + (i + 1) + ", answer " + "ABCD"[k] + '">' +
+      '<input type="radio" name="cqok' + i + '" aria-label="Answer ' + "ABCD"[k] + ' is the right one">';
+    const t = row.querySelector("input[type=text]"), r = row.querySelector("input[type=radio]");
+    t.value = c.a[k]; r.checked = c.c === k;
+    t.oninput = () => { c.a[k] = t.value; cqSave(); };
+    r.onchange = () => { c.c = k; ans.querySelectorAll(".cq-a").forEach((x, j) => x.classList.toggle("right", j === k)); cqSave(); };
+    ans.appendChild(row);
+  }
+  card.appendChild(ans); return card;
+}
+function wyrCard(c, i, bad, del) {
+  const card = cardShell(i, "Round " + (i + 1), del, bad), g = document.createElement("div"); g.className = "cq-two";
+  const l = document.createElement("div"), r = document.createElement("div"); l.className = r.className = "cq-sec";
+  field(l, "Would you rather (option A)", c.a, { max: 46, ph: "Be able to fly" }, (v) => { c.a = v; cqSave(); });
+  field(l, "Choosing A says you're", c.ta, { max: 30, ph: "a free spirit" }, (v) => { c.ta = v; cqSave(); });
+  field(r, "...or (option B)", c.b, { max: 46, ph: "Breathe underwater" }, (v) => { c.b = v; cqSave(); });
+  field(r, "Choosing B says you're", c.tb, { max: 30, ph: "a calm thinker" }, (v) => { c.tb = v; cqSave(); });
+  g.appendChild(l); g.appendChild(r); card.appendChild(g); return card;
+}
+function listCard(c, i, bad, del) {
+  const top = S.kind === "toplist", n = bItems().length;
+  const card = cardShell(i, top ? "Number " + (n - i) : "Fact " + (i + 1), del, bad);
+  field(card, top ? "Name" : "Headline", c.name, { max: 40, ph: top ? "Cheetah" : "An octopus has three hearts" }, (v) => { c.name = v; cqSave(); });
+  field(card, top ? "One interesting sentence about it" : "The fact, in one sentence", c.line, { max: 150, area: true, ph: top ? "Reaches 100 km/h in about three seconds." : "Two pump blood to the gills and one to the rest of the body." }, (v) => { c.line = v; cqSave(); });
+  return card;
+}
+function persQCard(c, i, bad, del) {
+  const card = cardShell(i, "Question " + (i + 1), del, bad);
+  field(card, "Question", c.q, { max: 80, area: true, ph: "Pick a weekend plan" }, (v) => { c.q = v; cqSave(); });
+  const names = S.cdata.personality.results.map((r) => r.name.trim());
+  const box = document.createElement("div"); box.className = "cq-sec";
+  box.innerHTML = '<span class="help">One answer for each result. Answer A adds a point to result A, B to result B, and so on.</span>';
+  for (let k = 0; k < 4; k++) {
+    const row = document.createElement("div"); row.className = "cq-a"; row.style.gridTemplateColumns = "34px minmax(0,1fr)";
+    row.innerHTML = '<i>' + "ABCD"[k] + '</i><input type="text" maxlength="30" autocomplete="off" aria-label="Question ' + (i + 1) + ", answer " + "ABCD"[k] + '">';
+    const t = row.querySelector("input"); t.value = c.a[k]; t.placeholder = names[k] ? "Leads to " + names[k] : "Answer " + "ABCD"[k];
+    t.oninput = () => { c.a[k] = t.value; cqSave(); };
+    box.appendChild(row);
+  }
+  card.appendChild(box); return card;
+}
+const CARD = { trivia: triviaCard, wyr: wyrCard, toplist: listCard, facts: listCard, personality: persQCard };
+function renderBuild(badIdx) {
+  const f = fmt(), k = S.kind, list = $("cq-list"); list.innerHTML = "";
+  $("cq-title").textContent = BK[k].title;
+  $("cq-tools").hidden = k !== "trivia";
+  if (k !== "trivia") $("cq-paste").hidden = true;
+  // title box (every type except trivia)
+  $("cq-titlewrap").hidden = k === "trivia";
+  if (k !== "trivia") {
+    const tin = $("cq-title-in");
+    tin.value = k === "personality" ? S.cdata.personality.title : S.cdata.titles[k];
+    $("cq-title-lab").textContent = k === "personality" ? "Quiz title" : "Video title (optional)";
+    tin.placeholder = { personality: "Which season are you?", wyr: "Would you rather", toplist: "Top 5 fastest animals", facts: "Wild facts about the ocean" }[k];
+    $("cq-title-help").textContent = k === "personality" ? "Shown and read out at the start, like a question to the viewer." : "Shown and read out at the start. Leave it empty to use a simple default.";
+    tin.oninput = () => { if (k === "personality") S.cdata.personality.title = tin.value; else S.cdata.titles[k] = tin.value; cqSave(); };
+  }
+  // personality: the four results
+  const rs = $("cq-results"); rs.hidden = k !== "personality"; rs.innerHTML = "";
+  if (k === "personality") {
+    rs.className = "cq-sec";
+    rs.innerHTML = '<b>The four results</b><span class="help">Viewers get the result they pick most often. Result A goes with the A answers, B with the B answers, and so on.</span>';
+    S.cdata.personality.results.forEach((r, i) => {
+      const card = cardShell(i, "Result " + "ABCD"[i], () => {}, false); card.querySelector(".cq-del").remove();
+      field(card, "Name", r.name, { max: 36, ph: ["Spring", "Summer", "Autumn", "Winter"][i] }, (v) => { r.name = v; cqSave(); });
+      field(card, "Description (what you say about them)", r.line, { max: 160, area: true, ph: "You're fresh, hopeful and always starting something new." }, (v) => { r.line = v; cqSave(); });
+      rs.appendChild(card);
+    });
+  }
+  const items = bItems();
+  items.forEach((c, i) => list.appendChild(CARD[k](c, i, badIdx === i, () => { items.splice(i, 1); if (!items.length) items.push(BLANK[k]()); cqSave(); renderBuild(); })));
+  const max = f.build_max || 10;
+  $("cq-add").textContent = "Add " + (k === "wyr" ? "a round" : k === "toplist" ? "an item" : k === "facts" ? "a fact" : "a question");
+  $("cq-add").disabled = items.length >= max;
+  $("cq-msg").textContent = items.length >= max ? "That's the most one video can hold (" + max + ")." : (k === "toplist" ? "First card is shown first (the biggest number); the last card is number 1." : "");
+  renderSummary();
+}
+function customPayload() {
+  const k = S.kind, f = fmt(), items = bItems(), noun = BK[k].noun;
+  const filled = items.map((c, i) => [c, i]).filter(([c, i]) => !isBlank(c) || (k === "trivia" && false));
+  const T = (s) => String(s || "").trim();
+  const bad = (msg, i) => ({ error: msg, bad: i });
+  if (filled.length < (f.build_min || 1)) return bad("Add at least " + (f.build_min || 1) + " " + noun + (f.build_min > 1 ? "s" : "") + " first.", 0);
+  if (k === "trivia") {
+    const list = [];
+    for (const [c, i] of filled) {
+      if (!T(c.q)) return bad("Question " + (i + 1) + " needs the question text.", i);
+      const choices = [], map = [];
+      c.a.forEach((x, j) => { if (T(x)) { map[j] = choices.length; choices.push(T(x)); } });
+      if (choices.length < 2) return bad("Question " + (i + 1) + " needs at least two answers.", i);
+      if (map[c.c] === undefined) return bad("Question " + (i + 1) + ": pick which answer is right (and fill it in).", i);
+      if (new Set(choices.map((x) => x.toLowerCase())).size !== choices.length) return bad("Question " + (i + 1) + " has two answers that are the same.", i);
+      list.push({ question: T(c.q), choices, correct_idx: map[c.c] });
+    }
+    return { data: { questions: list } };
+  }
+  if (k === "wyr") {
+    for (const [c, i] of filled) { if (!T(c.a) || !T(c.b)) return bad("Round " + (i + 1) + " needs both options.", i); }
+    return { data: { title: T(S.cdata.titles.wyr), rounds: filled.map(([c]) => ({ a: T(c.a), b: T(c.b), trait_a: T(c.ta), trait_b: T(c.tb) })) } };
+  }
+  if (k === "toplist" || k === "facts") {
+    for (const [c, i] of filled) { if (!T(c.name) || !T(c.line)) return bad((k === "toplist" ? "Number " + (items.length - i) : "Fact " + (i + 1)) + " needs both a " + (k === "toplist" ? "name" : "headline") + " and a sentence.", i); }
+    return { data: { title: T(S.cdata.titles[k]), items: filled.map(([c]) => ({ name: T(c.name), line: T(c.line) })) } };
+  }
+  const P = S.cdata.personality;
+  if (!T(P.title)) return { error: "Give your quiz a title.", bad: -1 };
+  for (let r = 0; r < 4; r++) if (!T(P.results[r].name) || !T(P.results[r].line)) return { error: "Result " + "ABCD"[r] + " needs a name and a description.", bad: -1 };
+  for (const [c, i] of filled) { if (!T(c.q) || c.a.some((x) => !T(x))) return bad("Question " + (i + 1) + " needs the question and all four answers.", i); }
+  return { data: { title: T(P.title), results: P.results.map((r) => ({ name: T(r.name), description: T(r.line) })), questions: filled.map(([c]) => ({ q: T(c.q), options: c.a.map(T) })) } };
+}
+function parseBulk(text) {
+  const out = [];
+  text.replace(/\r/g, "").split(/\n\s*\n/).map((b) => b.split("\n").map((l) => l.trim()).filter(Boolean)).filter((b) => b.length >= 3).forEach((lines) => {
+    const q = lines[0].replace(/^(question\s*)?\d+\s*[.):\-]\s*/i, "").replace(/^q\s*:\s*/i, "");
+    let raw = [], star = -1, said = null;
+    lines.slice(1).forEach((l) => {
+      const m = l.match(/^(answer|ans|correct)\s*[:\-]\s*(.+)$/i);
+      if (m) { said = m[2].trim(); return; }
+      let mark = false;
+      if (/^[*✓✔]/.test(l)) { mark = true; l = l.replace(/^[*✓✔]\s*/, ""); }
+      if (/\*$/.test(l)) { mark = true; l = l.replace(/\s*\*$/, ""); }
+      raw.push(l); if (mark) star = raw.length - 1;
+    });
+    const lab = /^\(?[A-Da-d][).:]\s+/;
+    if (raw.length && raw.every((l) => lab.test(l))) raw = raw.map((l) => l.replace(lab, ""));
+    raw = raw.slice(0, 4);
+    let c = star;
+    if (said) {
+      const m = said.match(/^\(?([A-Da-d])\)?\.?$/);
+      if (m) c = m[1].toUpperCase().charCodeAt(0) - 65;
+      else { const j = raw.findIndex((a) => a.toLowerCase() === said.toLowerCase()); if (j >= 0) c = j; }
+    }
+    if (c >= raw.length) c = -1;
+    out.push({ q: q.slice(0, 220), a: [0, 1, 2, 3].map((k) => (raw[k] || "").slice(0, 90)), c });
+  });
+  return out;
+}
+function parseCsv(text) {
+  const delim = text.split("\n")[0].includes("\t") ? "\t" : ",";
+  const rows = []; let row = [], cell = "", inq = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inq) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else inq = false; } else cell += ch; }
+    else if (ch === '"') inq = true;
+    else if (ch === delim) { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") { if (ch === "\r" && text[i + 1] === "\n") i++; row.push(cell); rows.push(row); row = []; cell = ""; }
+    else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  const out = [];
+  rows.filter((r) => r.some((x) => x.trim())).forEach((r, idx) => {
+    if (idx === 0 && /^question$/i.test((r[0] || "").trim())) return;   // header row
+    const answers = [1, 2, 3, 4].map((k) => (r[k] || "").trim()), key = (r[5] || "").trim();
+    let c = -1;
+    const m = key.match(/^\(?([A-Da-d1-4])\)?\.?$/);
+    if (m) c = /\d/.test(m[1]) ? +m[1] - 1 : m[1].toUpperCase().charCodeAt(0) - 65;
+    else if (key) c = answers.findIndex((a) => a && a.toLowerCase() === key.toLowerCase());
+    if (c >= 0 && !answers[c]) c = -1;
+    out.push({ q: (r[0] || "").trim().slice(0, 220), a: answers.map((a) => a.slice(0, 90)), c });
+  });
+  return out.filter((x) => x.q);
+}
+function addImported(items, what) {
+  if (!items.length) { $("cq-msg").textContent = "No questions found. Check the format and try again."; return; }
+  const isEmpty = (c) => !c.q.trim() && !c.a.some((x) => x.trim());
+  let list = S.cdata.trivia.filter((c) => !isEmpty(c));
+  const room = 10 - list.length, take = items.slice(0, Math.max(0, room));
+  list = list.concat(take); if (!list.length) list = [BLANK.trivia()];
+  S.cdata.trivia = list; cqSave(); renderBuild();
+  const noKey = take.filter((x) => x.c < 0).length;
+  $("cq-msg").textContent = "Added " + take.length + " from " + what + "." + (items.length > take.length ? " The rest did not fit (10 is the most)." : "") + (noKey ? " " + noKey + " still need the right answer marked." : "");
+}
+function paintMode() {
+  document.querySelectorAll("#bmode .kind").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.build === "1") === building())));
+  const f = fmt();
+  $("bm-auto").textContent = S.kind === "trivia" ? "We pick the questions." : "Gemini writes it from a topic you choose.";
+}
+function buildCustom() {
+  document.querySelectorAll("#bmode .kind").forEach((b) => { b.onclick = () => { S.build[S.kind] = b.dataset.build === "1"; saveSettings(); renderSummary(); renderBuild(); }; });
+  $("cq-add").onclick = () => { const items = bItems(); items.push(BLANK[S.kind]()); cqSave(); renderBuild(); const t = $("cq-list").lastElementChild; const el = t && t.querySelector("textarea, input[type=text]"); if (el) el.focus(); };
+  $("cq-paste-btn").onclick = () => { $("cq-paste").hidden = !$("cq-paste").hidden; if (!$("cq-paste").hidden) $("cq-paste-in").focus(); };
+  $("cq-paste-cancel").onclick = () => { $("cq-paste").hidden = true; };
+  $("cq-paste-add").onclick = () => {
+    const text = $("cq-paste-in").value;
+    const items = /\t|,/.test(text.split("\n")[0]) && !/\n\s*\n/.test(text.trim()) ? parseCsv(text) : parseBulk(text);
+    addImported(items, "your paste"); if (items.length) { $("cq-paste-in").value = ""; $("cq-paste").hidden = true; }
+  };
+  $("cq-csv-btn").onclick = () => $("cq-csv").click();
+  $("cq-csv").onchange = async (e) => {
+    const file = e.target.files[0]; e.target.value = "";
+    if (!file) return;
+    if (file.size > 300000) { $("cq-msg").textContent = "That file is too large."; return; }
+    addImported(parseCsv(await file.text()), file.name);
+  };
+  renderBuild();
+}
+
 /* ---------------- generate ---------------- */
 function setBusy(on) { $("go").disabled = on || $("go").dataset.blocked === "1"; $("go").textContent = on ? "Generating" : "Generate video"; }
 function setProgress(frac, msg) {
@@ -950,11 +1329,21 @@ function startClock() {
 function stopClock() { if (clockT) { clearInterval(clockT); clockT = null; } }
 $("go").addEventListener("click", async () => {
   $("err").textContent = ""; $("result").style.display = "none"; $("dl-icon").hidden = true;
-  if (fmt().needs_topic && mode() === "custom" && !topic()) {
+  let customData = null;
+  if (building()) {
+    const r = customPayload();
+    if (r.error) {
+      $("err").textContent = r.error; renderBuild(r.bad);
+      const bad = r.bad >= 0 ? $("cq-list").children[r.bad] : $("custom-card"); if (bad) bad.scrollIntoView({ block: "center", behavior: "smooth" });
+      return;
+    }
+    customData = r.data;
+  }
+  if (!customData && fmt().needs_topic && mode() === "custom" && !topic()) {
     $("err").textContent = "Type a topic, or choose Surprise me.";
     return;
   }
-  if (fmt().needs_topic && !CFG.gemini && !CFG.mock) {
+  if (!customData && fmt().needs_topic && !CFG.gemini && !CFG.mock) {
     $("err").textContent = "This video type needs a free Gemini key to write the script. Add GEMINI_API_KEY to your .env file and restart the app.";
     return;
   }
@@ -962,7 +1351,7 @@ $("go").addEventListener("click", async () => {
   try {
     const r = await fetch("/api/generate", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: S.kind, topic: topic(), questions: S.questions, voice: S.voice, categories: [...S.cats], style: S.look,
+      body: JSON.stringify({ kind: S.kind, topic: topic(), questions: customData ? Math.min(10, Math.max(3, qCount())) : S.questions, custom: customData, colors: customData ? S.colors : {}, voice: S.voice, categories: [...S.cats], style: S.look,
         think_seconds: fmt().think_default ? thinkFor(fmt()) : null, watermark_on: S.wmOn, watermark_platform: S.wmPlat, watermark_handle: S.wmHandle }),
     });
     if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || "The request failed. Try again."); }
@@ -1027,7 +1416,7 @@ async function init() {
     if (q || ql) { saveSettings(); history.replaceState(null, "", location.pathname); }
   } catch (e) {}
   CFG = await (await fetch("/api/config")).json();
-  buildContent(); buildLooks(); buildBrand();
+  buildContent(); buildLooks(); buildBrand(); buildColors(); buildCustom();
   renderSummary(); showLookPreview();
   const h = location.hash.slice(1); if (h === "library") show("library");
   const warns = [];

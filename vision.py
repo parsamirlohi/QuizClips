@@ -6,12 +6,14 @@ text only, never the answer. Turn off with VISION_CHECK=0. Any failure just mean
 """
 import base64
 import json
+import threading
 import time
 
 import gemini
 from config import env, flog
 
 _last_call = [0.0]
+_gate = threading.Lock()
 
 
 def enabled() -> bool:
@@ -25,11 +27,19 @@ def _min_score() -> int:
         return 6
 
 
+def _gap() -> float:
+    try:
+        return float(env("VISION_GAP", "4.5"))   # seconds between picture checks; lower it if your Gemini key allows more requests per minute
+    except ValueError:
+        return 4.5
+
+
 def _throttle():
-    wait = 4.5 - (time.time() - _last_call[0])  # keeps us under ~13 requests/minute on the free tier
-    if wait > 0:
-        time.sleep(wait)
-    _last_call[0] = time.time()
+    with _gate:   # several scenes look for footage at once; their picture checks still go out one at a time
+        wait = _gap() - (time.time() - _last_call[0])  # keeps us under ~13 requests/minute on the free tier
+        if wait > 0:
+            time.sleep(wait)
+        _last_call[0] = time.time()
 
 
 def choose(cands: list, question: str, term: str):
