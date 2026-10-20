@@ -4,16 +4,16 @@
   color-scheme: light;
   --ink:#14161f; --muted:#5d647b; --canvas:#f5f2ff; --surface:#ffffff; --sunken:#e9ebf4;
   --line:#dde0ec; --line-strong:#c4c9dd;
-  --primary:#7054f0; --primary-hover:#6046dc; --on-primary:#ffffff; --primary-soft:#eeeaff;
+  --primary:#8d77ff; --primary-hover:#7a62f5; --on-primary:#ffffff; --primary-soft:#eeeaff;
   --pink:#ff3d81; --ok:#17915f; --err:#c62828;
-  --hdr:#7054f0; --hdr-line:#ff4eb2; --outline:#14161f; --yellow:#ffe228;
+  --hdr:#8d77ff; --hdr-line:#ff4eb2; --outline:#14161f; --yellow:#ffe228;
   --font:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --display:"Lilita One","Plus Jakarta Sans",system-ui,sans-serif;
 }
 :root[data-theme="dark"] {
     --ink:#eef0f7; --muted:#a2a9c0; --canvas:#0d0f16; --surface:#161924; --sunken:#11131c;
     --line:#262a39; --line-strong:#383d52;
-    --primary:#8d77ff; --primary-hover:#a290ff; --on-primary:#100c2e; --primary-soft:#241f48;
+    --primary:#8d77ff; --primary-hover:#7a62f5; --on-primary:#ffffff; --primary-soft:#241f48;
     --pink:#ff6a9f; --ok:#4cc790; --err:#ff8a8a;
   }
 :root[data-theme="light"] { color-scheme:light; }
@@ -69,8 +69,9 @@ button, input, select { font:inherit; color:inherit; }
 .vtitle .w.on { color:#ff7fc8; }
 .hero p.sub { font-size:19px; color:var(--muted); max-width:46ch; margin:30px 0 28px; }
 .hero-cta { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
-.hero-cta .btn-primary { transition:background .15s, border-color .15s, color .12s, transform .15s; }
-.hero-cta .btn-primary:hover, .hero-cta .btn-primary:focus-visible { color:#ff7fc8; }   /* lights up pink like the word being read in the headline */
+.hero-cta .btn-primary { transition:background .15s, border-color .15s, color .12s, box-shadow .15s, -webkit-text-stroke-width .12s, transform .15s; }
+.hero-cta .btn-primary:hover, .hero-cta .btn-primary:focus-visible { color:#ff7fc8; border-color:var(--hdr-line); box-shadow:inset 0 0 0 2px var(--hdr-line); -webkit-text-stroke:1.6px var(--outline); paint-order:stroke fill; }
+/* on hover it takes the headline box's look: pink label with a thin black outline and the same pink border */
 .play-cta { display:inline-flex; align-items:center; gap:14px; color:var(--ink); text-decoration:none; font-weight:800; font-size:26px; letter-spacing:-.01em; border-radius:14px; padding:4px 6px; margin-left:-18px; }
 .play-cta svg { width:46px; height:46px; fill:none; stroke:var(--ink); stroke-width:3.2; stroke-linejoin:round; stroke-linecap:round; transition:transform .22s cubic-bezier(.2,.8,.3,1), stroke .2s ease; }
 .play-cta:hover svg, .play-cta:focus-visible svg { transform:translateY(-6px); stroke:var(--primary); }
@@ -173,7 +174,7 @@ a.type:hover h3 { color:var(--primary); }
 .price small { font:600 15px var(--font); color:var(--muted); margin-left:4px; }
 .plan ul { list-style:none; margin:22px 0 28px; padding:0; display:grid; gap:11px; }
 .plan li { display:flex; gap:10px; align-items:flex-start; font-size:15px; }
-.plan li::before { content:""; flex:none; width:18px; height:18px; margin-top:2px; border-radius:50%; background:var(--primary-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%237054f0' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8.5l2.6 2.6L12 5.5'/%3E%3C/svg%3E") center/12px no-repeat; }
+.plan li::before { content:""; flex:none; width:18px; height:18px; margin-top:2px; border-radius:50%; background:var(--primary-soft) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%238d77ff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8.5l2.6 2.6L12 5.5'/%3E%3C/svg%3E") center/12px no-repeat; }
 .plan li.soon { color:var(--muted); }
 .plan .btn { margin-top:auto; }
 /* all three plans look the same until you point at one; then that one lights up (a permanently coloured middle card looked like the selected plan) */
@@ -247,14 +248,14 @@ a.type:hover h3 { color:var(--primary); }
 .theme-opt b { font-size:14px; }
 .sw { height:58px; border-radius:8px; border:1px solid rgba(128,128,150,.35); display:grid; grid-template-rows:12px 1fr; overflow:hidden; }
 .sw i { display:block; } .sw i + i { padding:7px; } .sw em { display:block; height:8px; border-radius:4px; width:60%; }
-.sw-light { background:#f2f3f8; } .sw-light i:first-child { background:#fff; border-bottom:1px solid #e1e4ee; } .sw-light em { background:#7054f0; }
+.sw-light { background:#f2f3f8; } .sw-light i:first-child { background:#fff; border-bottom:1px solid #e1e4ee; } .sw-light em { background:#8d77ff; }
 .sw-dark { background:#0d0f16; } .sw-dark i:first-child { background:#161924; border-bottom:1px solid #262a39; } .sw-dark em { background:#8d77ff; }
-.sw-sys { background:linear-gradient(105deg,#f2f3f8 50%,#0d0f16 50%); } .sw-sys i:first-child { background:linear-gradient(105deg,#fff 50%,#161924 50%); } .sw-sys em { background:#7054f0; }
+.sw-sys { background:linear-gradient(105deg,#f2f3f8 50%,#0d0f16 50%); } .sw-sys i:first-child { background:linear-gradient(105deg,#fff 50%,#161924 50%); } .sw-sys em { background:#8d77ff; }
 .set-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 0; border-top:1px solid var(--line); }
 .set-row:first-of-type { margin-top:12px; }
 .set-row b { display:block; } .set-row span { color:var(--muted); font-size:14px; }
 .who { display:flex; align-items:center; gap:18px; padding:24px 26px; border-bottom:1px solid var(--line); }
-.avatar { width:64px; height:64px; border-radius:50%; background:linear-gradient(135deg,#7054f0,#ff3d81); color:#fff; display:grid; place-items:center; font-size:26px; font-weight:800; flex:none; }
+.avatar { width:64px; height:64px; border-radius:50%; background:linear-gradient(135deg,#8d77ff,#ff3d81); color:#fff; display:grid; place-items:center; font-size:26px; font-weight:800; flex:none; }
 .who b { font-size:18px; display:block; } .who span { color:var(--muted); }
 .fields { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:22px 26px; }
 .fields label { display:grid; gap:6px; font-weight:600; font-size:14px; }

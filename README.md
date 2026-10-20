@@ -43,8 +43,13 @@ Pick a type at the top of the Create page. Everything except Trivia needs a free
 - **Story**: you are the hero. "Choose your path" shows where both options lead; "Would you survive?" hides a few deadly traps among the decisions.
 - **Rankings**: a countdown from the last place to number one, one clip per item.
 - **Fun facts**: short surprising facts, one clip per fact.
+- **Odd one out**: four things, three belong together, viewers spot the one that doesn't.
+- **Guess the clip**: stock footage starts as big blocks and gets sharper while viewers pick what it shows.
+- **What's missing**: a grid of pictures to memorize, then one disappears. The pictures are Twemoji (CC-BY 4.0, see `assets/emoji/LICENSE.txt`) and need no AI.
 
 Leave the topic blank for a surprise. `content.py` writes the scripts and `formats.py` builds the videos.
+
+Colors can be changed for every video type. The phone preview in Studio is redrawn by `previews.py` (through `/api/preview`) as the colors change; `preview_data.py` holds the examples it shows for each look.
 
 ## Looks
 

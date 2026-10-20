@@ -7,6 +7,8 @@ Formats (the `kind` value):
   facts        "Fun facts", each with a short headline and one sentence
   story        you are the hero: decisions with two options each; either both outcomes are shown ("Choose your path")
                or some options are deadly traps ("Would you survive?")
+  odd          odd one out: four things, three belong together, viewers spot the one that doesn't
+  clip         guess the clip: a pixelated video gets sharper while viewers pick what it shows
 
 Gemini (free tier) does the writing. MOCK=1 returns fixed offline content so the whole pipeline can be tested.
 """
@@ -19,6 +21,12 @@ from config import env, flog, is_mock
 KINDS = {
     "personality": {"title": "Personality quiz", "noun": "questions", "min": 3, "max": 8, "default": 5,
                     "hint": "Which Hogwarts house are you?"},
+    "odd": {"title": "Odd one out", "noun": "rounds", "min": 3, "max": 8, "default": 5,
+            "hint": "Fruits, animals, countries"},
+    "clip": {"title": "Guess the clip", "noun": "rounds", "min": 3, "max": 8, "default": 5,
+             "hint": "Zoo animals"},
+    "missing": {"title": "What's missing", "noun": "rounds", "min": 3, "max": 8, "default": 5,
+                "hint": "Animals, food, travel"},
     "story": {"title": "Story", "noun": "decisions", "min": 3, "max": 8, "default": 5,
               "hint": "Lost in a haunted mansion"},
     "wyr": {"title": "Would you rather", "noun": "rounds", "min": 3, "max": 10, "default": 5,
@@ -39,6 +47,11 @@ EXAMPLES = {
     "toplist": ["Fastest animals", "Tallest buildings in the world", "Most visited countries", "Biggest dinosaurs",
                 "Best-selling video games", "Strangest foods", "Longest rivers", "Deadliest animals",
                 "Inventions that changed the world", "Highest mountains", "Largest cities", "Coolest sports cars"],
+    "odd": ["Fruits and snacks", "Animals", "Countries and cities", "Things in a kitchen", "Sports and games",
+            "Space", "Things with wheels", "Musical instruments", "Ocean life", "Things in a school bag"],
+    "clip": ["Zoo animals", "Famous landmarks", "Things in the kitchen", "Sports", "Ocean life", "Vehicles",
+             "Weather", "Farm animals", "Things you find at the beach", "Musical instruments"],
+    "missing": ["Animals", "Food and snacks", "Things and sports", "Travel and nature", "A bit of everything"],
     "story": ["Lost in a haunted mansion", "Stranded on a desert island", "Zombie apocalypse", "Escaping a pirate ship",
               "Trapped in a video game", "A night in the jungle", "Surviving a space station", "Lost in a snowstorm",
               "Exploring an ancient tomb", "A haunted school trip"],
@@ -164,6 +177,60 @@ def _wyr(topic: str, n: int) -> dict:
 
 
 
+
+# ---------------------------------------------------------------- odd one out / guess the clip
+def _odd(topic: str, n: int) -> dict:
+    p = (
+        f"Write {n} 'odd one out' puzzles for a short vertical video. Theme: \"{topic}\".\n"
+        "Return ONLY a JSON object: {\"title\": ..., \"rounds\": [...]}\n"
+        "- title: max 6 words.\n"
+        "- rounds: each {\"items\": [4 strings], \"odd\": 0-3, \"reason\": ..., \"search\": [...]}. Three items clearly belong "
+        "to the same group and one does not. items are 1-3 words each, max 22 characters, easy to picture. odd is the index "
+        "(0-3) of the one that does not belong; vary which position it is. Make it fun and fair: a clear, single answer "
+        "(for example apple, banana, grape and hammer). reason is one short sentence saying why, max 70 characters, "
+        "for example 'The others are fruit, a hammer is a tool.'\n"
+        "  search: 3 short stock-footage search terms (1-3 words each) showing the group the three belong to, or the "
+        "setting, concrete and filmable, no brand or real people's names.\n"
+        "Keep everything family friendly."
+    )
+    d = _ask(p)
+    rounds = []
+    for r in (d.get("rounds") or [])[:n]:
+        items = [_s(x, 24) for x in (r.get("items") or [])][:4]
+        odd = r.get("odd")
+        if len(items) == 4 and all(items) and len({x.lower() for x in items}) == 4 and isinstance(odd, int) and 0 <= odd < 4 \
+                and _s(r.get("reason"), 80):
+            rounds.append({"items": items, "odd": odd, "reason": _s(r.get("reason"), 80), "search": _search(r, topic)})
+    _need(len(rounds) >= 3)
+    return {"title": _s(d.get("title"), 50) or "Odd one out", "rounds": rounds}
+
+
+def _clip(topic: str, n: int) -> dict:
+    p = (
+        f"Write {n} rounds of a 'guess what this video shows' game for a short vertical video. Theme: \"{topic}\".\n"
+        "Return ONLY a JSON object: {\"title\": ..., \"rounds\": [...]}\n"
+        "- title: max 6 words, about the theme only; it must NEVER name or hint at any answer.\n"
+        "- rounds: each {\"answer\": ..., \"wrong\": [3 strings], \"search\": [...]}. The answer is one clearly recognizable "
+        "thing a camera can film (a noun phrase starting with 'a', 'an' or 'the' where natural, for example 'a lion'), max 22 "
+        "characters. wrong has 3 believable but different things from the same theme, max 22 characters each, so the "
+        "choices are hard to tell apart when the picture is blurry. search: 3 short stock-footage search terms (1-3 words "
+        "each) that find that exact thing, most specific first, no brand or real people's names.\n"
+        "Keep everything family friendly."
+    )
+    d = _ask(p)
+    rounds = []
+    for r in (d.get("rounds") or [])[:n]:
+        ans = _s(r.get("answer"), 24)
+        wrong = [_s(x, 24) for x in (r.get("wrong") or [])][:3]
+        if ans and len(wrong) == 3 and all(wrong) and len({x.lower() for x in wrong + [ans]}) == 4:
+            opts = wrong[:]
+            idx = random.randrange(4)
+            opts.insert(idx, ans)
+            rounds.append({"answer": ans, "options": opts, "correct_idx": idx, "search": _search(r, ans)})
+    _need(len(rounds) >= 3)
+    return {"title": "Can you guess the clip?", "rounds": rounds}   # fixed: a model-written title can give an answer away
+
+
 # ---------------------------------------------------------------- story
 MODES = ("path", "survive")
 
@@ -263,6 +330,12 @@ def _mock(kind: str, topic: str, n: int) -> dict:
         return {"title": t, "rounds": [{"a": f"Fly like a bird {i + 1}", "b": "Swim like a fish",
                                         "trait_a": "a free spirit", "trait_b": "a calm thinker",
                                         "search_a": ["sky"], "search_b": ["ocean"]} for i in range(n)]}
+    if kind == "odd":
+        return {"title": t, "rounds": [{"items": ["Apple", "Banana", "Grape", "Hammer"], "odd": 3,
+                                        "reason": "The others are fruit, a hammer is a tool.", "search": ["fruit"]} for i in range(n)]}
+    if kind == "clip":
+        return {"title": t, "rounds": [{"answer": "A lion", "options": ["A tiger", "A lion", "A bear", "A wolf"], "correct_idx": 1,
+                                        "search": ["lion"]} for i in range(n)]}
     if kind == "story":
         traps = trap_plan(n)
         return {"title": f"Would you survive {t}?", "steps": [
@@ -293,6 +366,9 @@ _WHAT = {
     "wyr": "a round of 'Would you rather' dilemmas (the topic is the theme of the dilemmas)",
     "toplist": "a Top 5 countdown list (the topic is what gets ranked, like 'Fastest animals')",
     "facts": "a set of 'Did you know' facts (the topic is the subject of the facts)",
+    "odd": "a set of 'odd one out' puzzles (the topic is the theme of the groups)",
+    "clip": "a 'guess what the video shows' game (the topic is what kinds of things appear)",
+    "missing": "a memory game (the topic picks the pictures: animals, food, things, travel)",
     "story": "an adventure where the viewer makes decisions, like 'Lost in a haunted mansion' or 'Stranded on a desert island'",
 }
 
@@ -321,11 +397,16 @@ def generate(kind: str, topic: str, n: int, mode: str = "path") -> dict:
         raise RuntimeError("Unknown video type.")
     spec = KINDS[kind]
     n = max(spec["min"], min(spec["max"], int(n)))
-    topic = _s(topic, 80) or random_topic(kind)
+    topic = _s(topic, 80) or ("" if kind == "missing" else random_topic(kind))
     mode = mode if mode in MODES else "path"
+    if kind == "missing":   # no AI needed: the pictures come from our own set (emojis.py)
+        import emojis
+        return {"title": "What's missing?", "rounds": [emojis.make_round(topic) for _ in range(n)], "kind": kind,
+                "topic": topic, "mode": "path"}
     data = _mock(kind, topic, n) if is_mock() else (
         _personality(topic, n) if kind == "personality" else _wyr(topic, n) if kind == "wyr"
-        else _story(topic, n, mode) if kind == "story" else _items(kind, topic, n))
+        else _story(topic, n, mode) if kind == "story" else _odd(topic, n) if kind == "odd"
+        else _clip(topic, n) if kind == "clip" else _items(kind, topic, n))
     data["kind"], data["topic"], data["mode"] = kind, topic, mode
     return data
 

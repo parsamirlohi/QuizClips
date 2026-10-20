@@ -1,4 +1,5 @@
 """Local web app: open http://localhost:8000 and click Generate."""
+import json
 import re
 import threading
 import time
@@ -6,7 +7,7 @@ import uuid
 import webbrowser
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -17,7 +18,9 @@ import content
 import formats
 import gemini
 import looks
+import io
 import pipeline
+import previews
 import site_routes
 from questions import CATEGORY_LABELS
 import tts
@@ -29,7 +32,7 @@ lock = threading.Lock()
 
 
 class GenerateRequest(BaseModel):
-    kind: str = Field(default="trivia", pattern="^(trivia|personality|wyr|toplist|facts|story)$")
+    kind: str = Field(default="trivia", pattern="^(trivia|personality|wyr|toplist|facts|story|odd|clip|missing)$")
     topic: str = Field(default="", max_length=80)  # for every type except trivia
     questions: int = Field(default=5, ge=3, le=10)
     voice: str = Field(default="en-US-AriaNeural", max_length=60)
@@ -45,12 +48,15 @@ class GenerateRequest(BaseModel):
 
 
 # the timer each video type uses unless the person picks another (read once, before any job changes them)
-THINK_DEFAULTS = {"trivia": pipeline.THINK, "personality": formats.THINK_PERSONALITY, "wyr": formats.THINK_WYR, "story": formats.THINK_WYR}
+THINK_DEFAULTS = {"trivia": pipeline.THINK, "personality": formats.THINK_PERSONALITY, "wyr": formats.THINK_WYR, "story": formats.THINK_WYR, "odd": formats.THINK_WYR, "clip": formats.THINK_WYR, "missing": formats.THINK_WYR}
 THINK_CHOICES = [5, 8, 12, 15]
 
 FORMAT_DESC = {
     "personality": "Answers add up to a result that tells viewers who they are.",
     "story": "You are the hero: pick a path, or try not to fall for a trap.",
+    "odd": "Four things, one doesn't belong. Can viewers spot it?",
+    "clip": "A blocky video gets sharper every second. Can viewers guess what it is?",
+    "missing": "Memorize the pictures. One disappears. Can viewers say which?",
     "wyr": "Two tempting options, a countdown, then what each pick says.",
     "toplist": "A countdown from the last place to number one.",
     "facts": "Short, surprising facts with a clip for each.",
@@ -68,6 +74,7 @@ FORMATS = [
 for _f in FORMATS:
     _f["think_default"] = THINK_DEFAULTS.get(_f["key"])   # None = this type has no countdown
     _f["think_choices"] = THINK_CHOICES if _f["key"] in THINK_DEFAULTS else []
+    _f["custom"] = _f["key"] not in ("odd", "clip", "missing")   # these two are written by the AI only for now (no "I'll write it" editor yet)
     _f["build_min"] = 1 if _f["key"] == "trivia" else _f["min"]   # fewest / most items when the person writes their own
     _f["build_max"] = 10 if _f["key"] == "trivia" else _f["max"]
 
@@ -124,7 +131,7 @@ def run_job(job_id: str, req: GenerateRequest):
                 formats.THINK_WYR = req.think_seconds
         cats = [c for c in req.categories if c in CATEGORY_LABELS]
         custom = content.clean_custom(req.kind, req.custom, req.story_mode) if req.custom else None
-        colors = req.colors if custom else {}   # colours are only for content the person builds themselves
+        colors = req.colors   # the person's own colours apply to every video
         if req.kind == "trivia":
             result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style, custom, colors)
         else:
@@ -145,6 +152,24 @@ def run_job(job_id: str, req: GenerateRequest):
         formats.THINK_WYR = THINK_DEFAULTS["wyr"]
         with lock:
             current["id"] = None
+
+
+@app.get("/api/preview")
+def preview(kind: str, look: str, colors: str = ""):
+    """The graphics of the Studio phone preview, drawn with the person's own colors (see previews.py)."""
+    if kind not in previews.KINDS or look not in looks.LOOKS:
+        raise HTTPException(404, "Unknown preview.")
+    try:
+        picked = json.loads(colors) if colors else {}
+    except ValueError:
+        picked = {}
+    with lock:
+        if current["id"] is not None:   # a video is being made: drawing now would swap the colors it is using
+            raise HTTPException(409, "A video is being made right now.")
+        img = previews.draw(kind, look, picked if isinstance(picked, dict) else {})
+    buf = io.BytesIO()
+    img.resize((720, 1280)).save(buf, "PNG", compress_level=1)   # the phone is small: half size is plenty, and quicker to send
+    return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/api/config")

@@ -14,7 +14,7 @@
     color-scheme: light;
     --ink:#14161f; --muted:#646b82; --canvas:#f2f3f8; --surface:#ffffff; --sunken:#f6f7fb;
     --line:#e1e4ee; --line-strong:#c9cee0;
-    --primary:#7054f0; --primary-hover:#6046dc; --on-primary:#ffffff; --primary-soft:#eeeaff;
+    --primary:#8d77ff; --primary-hover:#7a62f5; --on-primary:#ffffff; --primary-soft:#eeeaff;
     --pink:#ff3d81; --ok:#17915f; --err:#c62828;
     --warn-bg:#fff4e0; --warn-line:#f1d29a; --warn-ink:#7a4a00;
     --shadow-float:0 24px 60px -20px rgba(20,22,31,.45);
@@ -24,7 +24,7 @@
   :root[data-theme="dark"] {
       --ink:#eef0f7; --muted:#9aa1b8; --canvas:#0d0f16; --surface:#161924; --sunken:#11131c;
       --line:#262a39; --line-strong:#383d52;
-      --primary:#8d77ff; --primary-hover:#a290ff; --on-primary:#100c2e; --primary-soft:#241f48;
+      --primary:#8d77ff; --primary-hover:#7a62f5; --on-primary:#ffffff; --primary-soft:#241f48;
       --pink:#ff6a9f; --ok:#4cc790; --err:#ff8a8a;
       --warn-bg:#2a1f10; --warn-line:#5a3f17; --warn-ink:#ffd9a0;
       --shadow-float:0 24px 60px -20px rgba(0,0,0,.8);
@@ -153,7 +153,7 @@
   .part .inside { opacity:0; transition:opacity .45s; }
   .part.done .shape { stroke-dasharray:none; stroke:#fff; }
   .part.done .inside { opacity:1; }
-  .part-header.done .shape { fill:#7054f0; }
+  .part-header.done .shape { fill:#8d77ff; }
   .part-bar.done .shape { fill:#fff; stroke:#ff4eb2; }
   .part-circle.done .shape { fill:#0b0b10; }
   .part-clip.done .shape { fill:url(#skyg); }
@@ -227,6 +227,13 @@
   .drawer { position:fixed; top:0; right:0; bottom:0; width:min(520px,100vw); background:var(--surface); z-index:50; display:flex; flex-direction:column;
             transform:translateX(100%); transition:transform .24s ease; box-shadow:var(--shadow-float); visibility:hidden; }
   .drawer.open { transform:none; visibility:visible; }
+  /* on a wide screen the panel opens on the left, so the phone preview stays visible and undimmed while colors or looks change */
+  @media (min-width:1100px) {
+    .drawer { right:auto; left:0; transform:translateX(-100%); }
+    .drawer.open { transform:none; }
+    .scrim { background:rgba(10,11,17,.3); }
+    body.drawer-open .stage { z-index:45; }
+  }
   .d-head { display:flex; align-items:center; justify-content:space-between; padding:18px 24px 0; }
   .d-head h2 { margin:0; font-size:20px; font-weight:800; letter-spacing:-.02em; }
   .x { border:0; background:none; width:36px; height:36px; border-radius:10px; display:grid; place-items:center; color:var(--muted); }
@@ -241,7 +248,7 @@
   [hidden] { display:none !important; }
   .drawer.scoped .d-tabs { display:none; }
   .drawer.scoped .d-head { padding-bottom:16px; border-bottom:1px solid var(--line); }
-  .drawer.scoped #p-content .field > label, .drawer.scoped #p-content .field > .lab { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .drawer.scoped #p-content .field > label, .drawer.scoped #p-content .field > .lab, .drawer.scoped #f-voice > .lab { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 
   .field { margin-bottom:28px; }
   .field > label, .field > .lab { display:block; font-weight:700; margin-bottom:4px; }
@@ -301,7 +308,7 @@
   .crow small { display:block; color:var(--muted); font-size:12px; }
   .crow input[type=color] { width:54px; height:34px; padding:0; border:1px solid var(--line-strong); border-radius:8px; background:none; cursor:pointer; }
   .cprev { width:176px; margin:6px auto 14px; }
-  .cp-frame { --qb:#7054f0; --ql:#ff4eb2; --ab:#fff; --al:#ff4eb2; --fr:#ff4eb2; --at:#f6248c; --ac:#fff; border:9px solid var(--fr); border-radius:6px; padding:12px 9px 14px; aspect-ratio:9/13; display:flex; flex-direction:column; gap:9px; background:linear-gradient(160deg,#c9bfff,#ffd0ec); justify-content:flex-start; }
+  .cp-frame { --qb:#8d77ff; --ql:#ff4eb2; --ab:#fff; --al:#ff4eb2; --fr:#ff4eb2; --at:#f6248c; --ac:#fff; border:9px solid var(--fr); border-radius:6px; padding:12px 9px 14px; aspect-ratio:9/13; display:flex; flex-direction:column; gap:9px; background:linear-gradient(160deg,#c9bfff,#ffd0ec); justify-content:flex-start; }
   .cp-q { background:var(--qb); border:3px solid var(--ql); color:#fff; font-weight:800; font-size:13px; line-height:1.15; text-align:center; padding:10px 6px; text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000; margin-bottom:8px; }
   .cp-a { position:relative; background:var(--ab); border:2px solid var(--al); color:var(--at); font-weight:800; font-size:13px; padding:6px 6px 6px 26px; margin-left:12px; text-align:center; }
   .cp-a i { position:absolute; left:-12px; top:50%; transform:translateY(-50%); width:24px; height:24px; border-radius:50%; background:var(--al); color:var(--ac); font-style:normal; font-size:12px; display:grid; place-items:center; border:2px solid #fff; }
@@ -465,10 +472,10 @@
         <dl class="rows" style="margin:0">
           <div class="row" id="row-questions"><dt id="k-count">Questions</dt><dd class="v" id="s-questions" style="margin:0"></dd><button class="link" data-edit="questions" aria-label="Change number of questions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row row-timer" id="row-timer"><dt id="tm-lab">Timer</dt><dd class="v" id="s-timer" style="margin:0"></dd></div>
-          <div class="row"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row" id="row-topics"><dt>Topics</dt><dd class="v" id="s-topics" style="margin:0"></dd><button class="link" data-edit="topics" aria-label="Change topics"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
-          <div class="row" id="row-colors"><dt>Colors</dt><dd class="v" id="s-colors" style="margin:0"></dd><button class="link" data-edit="colors" aria-label="Change colors"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row"><dt>Look</dt><dd class="v" id="s-look" style="margin:0"></dd><button class="link" data-edit="look" aria-label="Change look"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row" id="row-colors"><dt>Colors</dt><dd class="v" id="s-colors" style="margin:0"></dd><button class="link" data-edit="colors" aria-label="Change colors"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row"><dt>Link on video</dt><dd class="v" id="s-link" style="margin:0"></dd><button class="link" data-edit="link" aria-label="Change link on video"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
         </dl>
       </div>
@@ -542,7 +549,7 @@
   <div class="d-tabs" role="tablist">
     <button class="d-tab" role="tab" id="dt-content" data-tab="content" aria-selected="true">Content</button>
     <button class="d-tab" role="tab" id="dt-look" data-tab="look" aria-selected="false">Look</button>
-    <button class="d-tab" role="tab" id="dt-brand" data-tab="brand" aria-selected="false">Branding</button>
+    <button class="d-tab" role="tab" id="dt-brand" data-tab="brand" aria-selected="false">Voice &amp; link</button>
   </div>
   <div class="d-body">
     <div class="panel" id="p-content" role="tabpanel">
@@ -550,12 +557,6 @@
         <span class="lab" id="q-lab">Number of questions</span>
         <p class="help">More questions make a longer video.</p>
         <div class="seg" id="seg" role="group" aria-labelledby="q-lab"></div>
-      </div>
-      <div class="field" id="f-voice">
-        <span class="lab" id="v-lab">Narrator voice</span>
-        <p class="help">Reads each question and answer aloud. Press play to hear a sample.</p>
-        <div class="voices" id="voices" role="radiogroup" aria-labelledby="v-lab"></div>
-        <p class="vmsg" id="vmsg" role="status"></p>
       </div>
       <div class="field" id="f-topics">
         <span class="lab" id="t-lab">Topics</span>
@@ -566,20 +567,23 @@
 
     <div class="panel" id="p-look" role="tabpanel" hidden>
       <p class="help" id="look-help" style="margin-top:0;color:var(--muted)">Sets the background, colors and motion for the whole video. The preview updates as you choose.</p>
+      <div id="f-looks"><div class="lab" id="l-lab" style="margin:22px 0 8px;font-weight:700">Look</div><div id="looks"></div></div>
       <div id="f-colors">
         <span class="lab" id="c-lab" style="display:block;font-weight:700;margin-top:18px">Colors</span>
-        <p class="help">Change the question box, answer boxes and borders. Anything you leave alone keeps the look's own color.</p>
-        <div class="cprev" id="cprev" aria-hidden="true">
-          <div class="cp-frame"><div class="cp-q">Which planet is red?</div>
-            <div class="cp-a"><i>A</i><span>Mars</span></div><div class="cp-a"><i>B</i><span>Venus</span></div></div>
-        </div>
+        <p class="help">Change the question box, answer boxes and borders. The phone preview shows each change straight away, and anything you leave alone keeps the look's own color.</p>
         <div id="c-rows" role="group" aria-labelledby="c-lab"></div>
         <button type="button" class="btn btn-sm" id="c-reset" style="margin-top:12px">Use the look's colors</button>
       </div>
-      <div id="f-looks"><div class="lab" id="l-lab" style="margin:22px 0 8px;font-weight:700">Look</div><div id="looks"></div></div>
     </div>
 
     <div class="panel" id="p-brand" role="tabpanel" hidden>
+      <div class="field" id="f-voice">
+        <span class="lab" id="v-lab">Narrator voice</span>
+        <p class="help">Reads each question and answer aloud. Press play to hear a sample.</p>
+        <div class="voices" id="voices" role="radiogroup" aria-labelledby="v-lab"></div>
+        <p class="vmsg" id="vmsg" role="status"></p>
+      </div>
+      <div id="f-link">
       <label class="switch" for="wmOn">
         <span><b>Show my link on the video</b><small>Appears at the bottom of every scene.</small></span>
         <input type="checkbox" id="wmOn" checked><span class="track"></span>
@@ -603,6 +607,7 @@
           </div>
         </div>
         <div class="wm-prev" id="wmPrev"></div>
+      </div>
       </div>
     </div>
   </div>
@@ -672,7 +677,7 @@ function setTab(name) {
 }
 const SECTIONS = {
   questions: { panel: "content", field: "f-questions", title: "Number of questions" },
-  voice: { panel: "content", field: "f-voice", title: "Narrator voice" },
+  voice: { panel: "brand", field: "f-voice", title: "Narrator voice" },
   topics: { panel: "content", field: "f-topics", title: "Topics" },
   look: { panel: "look", title: "Look" },
   colors: { panel: "look", title: "Colors" },
@@ -686,13 +691,14 @@ function openDrawer(sect, from) {
   ["f-questions", "f-voice", "f-topics"].forEach((id) => {
     $(id).hidden = one ? one.field !== id : ((id === "f-topics" && S.kind !== "trivia") || (id === "f-questions" && building()));
   });
-  $("f-looks").hidden = !!one && sect !== "look"; $("f-colors").hidden = !building() || (!!one && sect !== "colors");
+  $("f-link").hidden = !!one && sect !== "link";
+  $("f-looks").hidden = !!one && sect !== "look"; $("f-colors").hidden = !!one && sect !== "colors";
   $("look-help").hidden = sect === "colors"; $("c-lab").hidden = sect === "colors"; $("l-lab").hidden = sect === "look";
   $("d-title").textContent = !one ? "Customize" : sect === "questions" ? "Number of " + fmt().noun : one.title;
   $("d-close").setAttribute("aria-label", one ? "Close" : "Close customize panel");
   stopSample(); $("vmsg").textContent = "";
   setTab(one ? one.panel : "content");
-  $("drawer").classList.add("open"); $("scrim").classList.add("open");
+  $("drawer").classList.add("open"); $("scrim").classList.add("open"); document.body.classList.add("drawer-open");
   document.body.style.overflow = "hidden";
   setTimeout(() => $("d-close").focus(), 30);
 }
@@ -706,7 +712,7 @@ function quick(el, fn) {
 }
 function closeDrawer() {
   stopSample();
-  $("drawer").classList.remove("open"); $("scrim").classList.remove("open");
+  $("drawer").classList.remove("open"); $("scrim").classList.remove("open"); document.body.classList.remove("drawer-open");
   document.body.style.overflow = "";
   if (opener && opener.focus) opener.focus();
 }
@@ -740,30 +746,44 @@ function swapScreen(node) {
   requestAnimationFrame(() => requestAnimationFrame(() => node.classList.add("on")));
   setTimeout(() => old.forEach((o) => o.remove()), 300);
 }
+/* the files of a preview: [picture shown while the video loads, looping video, graphics laid over it]. Keep in step with tools/make_type_previews.py */
+function previewFiles(kind, key) {
+  const L = "/static/looks/";
+  if (kind === "story") return [L + "story/clip.jpg?v=2", L + "story/clip.mp4?v=2", L + "story/" + key + ".webp?v=2"];
+  if (kind === "clip") return [L + "story/pixel.jpg?v=1", L + "story/pixel.mp4?v=1", L + "overlay/clip/" + key + ".webp?v=1"];
+  if (kind === "missing") return [L + "bgstill/" + key + ".jpg?v=1", L + "loops/bg/" + key + ".mp4?v=1", L + "overlay/missing/" + key + ".webp?v=1"];
+  return [L + "hdbg/" + key + ".jpg?v=1", L + "loops/hd/" + key + ".mp4?v=3", L + "overlay/" + kind + "/" + key + ".webp?v=3"];
+}
+/* The graphics laid over the phone's video. With the person's own colors they are drawn by the app (/api/preview) so changes show
+   straight away; without any, the ready-made pictures are used. */
+let ovEl = null, ovBusy = false, ovAgain = false;
+function refreshOverlay() {
+  if (ovBusy) { ovAgain = true; return; }   // one picture at a time; when it arrives the newest colors are asked for right away
+  const el = ovEl; if (!el || !el.dataset.base) return;
+  const mine = S.look !== "random" && Object.keys(S.colors).length;
+  const url = mine ? "/api/preview?kind=" + S.kind + "&look=" + encodeURIComponent(S.look) + "&colors=" + encodeURIComponent(JSON.stringify(S.colors)) : el.dataset.base;
+  if (el.getAttribute("src") === url) return;
+  ovBusy = true;
+  const im = new Image(); im.src = url;   // if the app is busy making a video it answers with an error and the picture just stays as it was
+  (im.decode ? im.decode() : new Promise((ok, no) => { im.onload = ok; im.onerror = no; }))
+    .then(() => { if (ovEl === el) el.src = url; }).catch(() => {})
+    .finally(() => { ovBusy = false; if (ovAgain) { ovAgain = false; refreshOverlay(); } });
+}
 function showLookPreview() {
   const look = S.look === "random" ? null : CFG.looks.find((l) => l.key === S.look);
-  let node;
-  if (look && S.kind === "story") {   // Story: the footage fills the screen, the look only sets the colors of the graphics on top
+  let node; ovEl = null;
+  if (look && S.kind !== "trivia") {   // the look's colors and background with this video type's own graphics laid over it
+    const [still, video, ovl] = previewFiles(S.kind, look.key);
     node = document.createElement("div"); node.className = "lookprev";
-    const bg = new Image(); bg.alt = ""; bg.src = "/static/looks/story/clip.jpg?v=2"; node.appendChild(bg);
+    const bg = new Image(); bg.alt = ""; bg.src = still; node.appendChild(bg);
     if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
       const v = document.createElement("video");
       v.className = "pclip"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.setAttribute("aria-hidden", "true");
       v.addEventListener("playing", () => v.classList.add("show"));
-      v.src = "/static/looks/story/clip.mp4?v=2"; node.appendChild(v); v.play().catch(() => {});
+      v.src = video; node.appendChild(v); v.play().catch(() => {});
     }
-    const ov = new Image(); ov.className = "povl show"; ov.alt = "Preview of the " + look.title + " colors on a Story video"; ov.src = "/static/looks/story/" + look.key + ".webp?v=2";
-    node.appendChild(ov);
-  } else if (look && S.kind !== "trivia") {   // the look's moving background and clip, with this video type's own graphics laid over it
-    node = document.createElement("div"); node.className = "lookprev";
-    const bg = new Image(); bg.alt = ""; bg.src = "/static/looks/hdbg/" + look.key + ".jpg?v=1"; node.appendChild(bg);
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const v = document.createElement("video");
-      v.className = "pclip"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.setAttribute("aria-hidden", "true");
-      v.addEventListener("playing", () => v.classList.add("show"));
-      v.src = "/static/looks/loops/hd/" + look.key + ".mp4?v=3"; node.appendChild(v); v.play().catch(() => {});
-    }
-    const ov = new Image(); ov.className = "povl show"; ov.alt = "Preview of the " + look.title + " look on a " + fmt().title + " video"; ov.src = "/static/looks/overlay/" + S.kind + "/" + look.key + ".webp?v=3";
+    const ov = new Image(); ov.className = "povl show"; ov.alt = "Preview of the " + look.title + " look on a " + fmt().title + " video"; ov.src = ovl;
+    ov.dataset.base = ovl; ovEl = ov;
     node.appendChild(ov);
   } else if (look) {
     node = document.createElement("div"); node.className = "lookprev";
@@ -773,6 +793,7 @@ function showLookPreview() {
       const v = document.createElement("video");
       v.className = "pclip"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.setAttribute("aria-hidden", "true");
       const ov = new Image(); ov.className = "povl"; ov.alt = ""; ov.decoding = "async"; ov.src = "/static/looks/overlay/" + look.key + ".webp?v=3";
+      ov.dataset.base = ov.getAttribute("src"); ovEl = ov;
       v.addEventListener("playing", () => { v.classList.add("show"); ov.classList.add("show"); });
       v.addEventListener("error", () => { v.classList.remove("show"); ov.classList.remove("show"); });
       v.src = "/static/looks/loops/hd/" + look.key + ".mp4?v=3";
@@ -781,8 +802,10 @@ function showLookPreview() {
     }
   }
   else { node = document.createElement("div"); node.className = "rand"; node.textContent = "?"; }
-  swapScreen(node);
+  swapScreen(node); refreshOverlay();
   $("caption").innerHTML = look && S.kind === "story" ? "Story videos use the footage as the background. The <b>" + esc(look.title) + "</b> look sets the colors."
+                                : look && S.kind === "missing" ? "The <b>" + esc(look.title) + "</b> look sets the colors and the moving background."
+                                : look && S.kind === "clip" ? "The footage starts blocky and gets sharper. The <b>" + esc(look.title) + "</b> look sets the colors."
                                 : look ? "Preview of the <b>" + esc(look.title) + "</b> look. Footage is matched to each scene."
                                 : "<b>Surprise me</b> picks a different look for every video.";
 }
@@ -826,7 +849,8 @@ function renderSummary() {
   const bld = building();
   $("row-topics").hidden = f.needs_topic || bld; $("topic-card").hidden = !f.needs_topic || bld;
   $("story-card").hidden = S.kind !== "story"; paintStory();
-  $("row-questions").hidden = bld; $("custom-card").hidden = !bld; $("row-colors").hidden = !bld;
+  $("mode-card").hidden = fmt().custom === false;
+  $("row-questions").hidden = bld; $("custom-card").hidden = !bld; $("row-colors").hidden = false;
   $("cq-count").textContent = bld ? "(" + bFilled().length + ")" : "";
   paintMode();
   paintColors();
@@ -878,6 +902,9 @@ const TOPIC_HELP = {
   wyr: "Any theme works, like \"School life\" or \"Superpowers\".",
   toplist: "Type what should be ranked, like \"Fastest animals\".",
   facts: "Type any subject you want facts about.",
+  odd: "Any theme works, like \"Fruits\" or \"Things in the ocean\".",
+  clip: "Say what should appear, like \"Zoo animals\" or \"Famous landmarks\".",
+  missing: "Pick the pictures: animals, food, things and sports, or travel and nature. Anything else mixes them all.",
   story: "Describe the adventure, like \"Lost in a haunted mansion\" or \"Stranded on a desert island\".",
 };
 function buildTopicChips() {
@@ -1083,7 +1110,7 @@ function updateBuild(frac, msg) {
 /* ---------------- colors ---------------- */
 const COLOR_FIELDS = [["question_box", "Question box"], ["question_outline", "Question box outline"], ["answer_box", "Answer boxes"],
                       ["answer_outline", "Answer outline"], ["frame", "Frame and timer"], ["highlight", "Highlight text"]];
-const FALLBACK_COLORS = { question_box: "#7054f0", question_outline: "#ff4eb2", answer_box: "#ffffff", answer_outline: "#ff4eb2", frame: "#ff4eb2", highlight: "#f6248c" };
+const FALLBACK_COLORS = { question_box: "#8d77ff", question_outline: "#ff4eb2", answer_box: "#ffffff", answer_outline: "#ff4eb2", frame: "#ff4eb2", highlight: "#f6248c" };
 const lookColors = () => { const l = CFG && CFG.looks.find((x) => x.key === S.look); return (l && l.colors) || FALLBACK_COLORS; };
 const colorOf = (k) => S.colors[k] || lookColors()[k];
 const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; };
@@ -1093,31 +1120,25 @@ function buildColors() {
     const row = document.createElement("div"); row.className = "crow"; row.dataset.k = k;
     row.innerHTML = '<div><b>' + esc(label) + '</b><small></small></div><input type="color" aria-label="' + esc(label) + '">';
     const inp = row.querySelector("input");
-    inp.oninput = () => { S.colors[k] = inp.value; saveSettings(); renderSummary(); };
+    inp.oninput = () => { S.colors[k] = inp.value; saveSettings(); renderSummary(); refreshOverlay(); };
     box.appendChild(row);
   });
-  $("c-reset").onclick = () => { S.colors = {}; saveSettings(); renderSummary(); };
+  $("c-reset").onclick = () => { S.colors = {}; saveSettings(); renderSummary(); refreshOverlay(); };
 }
 function paintColors() {
-  const pv = $("cprev"); if (!pv || !CFG) return;
+  if (!CFG) return;
   document.querySelectorAll("#c-rows .crow").forEach((row) => {
     const k = row.dataset.k, inp = row.querySelector("input");
     if (document.activeElement !== inp) inp.value = colorOf(k);
     row.querySelector("small").textContent = S.colors[k] ? "Changed" : "From the look";
   });
-  const c = Object.fromEntries(COLOR_FIELDS.map(([k]) => [k, colorOf(k)]));
-  const text = Math.abs(lum(c.answer_box) - lum(c.highlight)) > 0.35 ? c.highlight : (lum(c.answer_box) > 0.5 ? "#191923" : "#ffffff");
-  const f = pv.querySelector(".cp-frame").style;
-  f.setProperty("--qb", c.question_box); f.setProperty("--ql", c.question_outline); f.setProperty("--ab", c.answer_box);
-  f.setProperty("--al", c.answer_outline); f.setProperty("--fr", c.frame); f.setProperty("--at", text);
-  f.setProperty("--ac", lum(c.answer_outline) < 0.6 ? "#ffffff" : "#191923");
   const changed = Object.keys(S.colors).length;
   $("s-colors").innerHTML = changed ? COLOR_FIELDS.map(([k]) => '<span class="sw" style="background:' + colorOf(k) + '"></span>').join("") + "<span>Custom</span>" : "<span>Look's colors</span>";
   $("c-reset").disabled = !changed;
 }
 
 /* ---------------- "I'll write it": the person's own content, for every video type ---------------- */
-const building = () => !!S.build[S.kind];
+const building = () => !!S.build[S.kind] && fmt().custom !== false;
 const BK = {
   trivia: { title: "Your questions", noun: "question" }, wyr: { title: "Your rounds", noun: "round" },
   toplist: { title: "Your list", noun: "item" }, facts: { title: "Your facts", noun: "fact" }, story: { title: "Your story", noun: "decision" }, personality: { title: "Your quiz", noun: "question" },
@@ -1215,6 +1236,7 @@ function persQCard(c, i, bad, del) {
 }
 const CARD = { trivia: triviaCard, wyr: wyrCard, story: storyCard, toplist: listCard, facts: listCard, personality: persQCard };
 function renderBuild(badIdx) {
+  if (fmt().custom === false) return;   // types without an "I'll write it" editor have nothing to draw here
   const f = fmt(), k = S.kind, list = $("cq-list"); list.innerHTML = "";
   $("cq-title").textContent = BK[k].title;
   $("cq-tools").hidden = k !== "trivia";
@@ -1422,7 +1444,7 @@ $("go").addEventListener("click", async () => {
   try {
     const r = await fetch("/api/generate", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: S.kind, story_mode: S.storyMode, topic: topic(), questions: customData ? Math.min(10, Math.max(3, qCount())) : S.questions, custom: customData, colors: customData ? S.colors : {}, voice: S.voice, categories: [...S.cats], style: S.look,
+      body: JSON.stringify({ kind: S.kind, story_mode: S.storyMode, topic: topic(), questions: customData ? Math.min(10, Math.max(3, qCount())) : S.questions, custom: customData, colors: S.colors, voice: S.voice, categories: [...S.cats], style: S.look,
         think_seconds: fmt().think_default ? thinkFor(fmt()) : null, watermark_on: S.wmOn, watermark_platform: S.wmPlat, watermark_handle: S.wmHandle }),
     });
     if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || "The request failed. Try again."); }

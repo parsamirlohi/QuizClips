@@ -1,0 +1,3 @@
+The pictures in this folder are Twemoji graphics (c) Twitter, Inc. and other contributors, licensed under CC-BY 4.0:
+https://creativecommons.org/licenses/by/4.0/   Source: https://github.com/jdecked/twemoji
+They were converted from SVG to PNG (220 px) and otherwise left as they were.

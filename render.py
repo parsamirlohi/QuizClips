@@ -426,7 +426,7 @@ def _story_scrim():
 
 
 def draw_story(theme="purple", header="", hscale=1.0, label="", choices=(), letters="ABCD", visible=0, anim=1.0,
-               timer=None, think=5, num_label=None, border=True, bar_dy=0, smooth=False, **_):
+               timer=None, think=5, num_label=None, border=True, bar_dy=0, smooth=False, head_y=470, head_size=150, **_):
     """The Story video: the footage fills the whole screen, the situation is big outlined text on top of it and the
     options sit in bars lower down. Same countdown border and bars as the other scenes."""
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
@@ -437,9 +437,9 @@ def draw_story(theme="purple", header="", hscale=1.0, label="", choices=(), lett
     if label:
         _outline_label(img, 540, 150, label, 52)
     layer = Image.new("RGBA", (W, 560), (0, 0, 0, 0))
-    _words(layer, W // 2, 280, header, 960, 500, 150, 60, (255, 255, 255), None, stroke=14)
-    _place(img, layer, 540, 470, hscale)
-    bar_style = "red" if theme == "red" else "purple"
+    _words(layer, W // 2, 280, header, 960, 500, head_size, 60, (255, 255, 255), None, stroke=14)
+    _place(img, layer, 540, head_y, hscale)
+    bar_style = theme if theme in ("red", "green") else "purple"
     for i in range(min(visible, len(choices))):
         bar = _bar(choices[i], letters[i], bar_style)
         cy = BAR_Y0 + i * BAR_STEP + BAR_H / 2 + bar_dy
@@ -450,6 +450,62 @@ def draw_story(theme="purple", header="", hscale=1.0, label="", choices=(), lett
     if num_label is not False:
         _number_circle(img, str(num_label if num_label is not None else 1), False, timer, think,
                        timer is not None and timer <= 2.0)
+    name = WATERMARK if WATERMARK is not None else env("CHANNEL_NAME")
+    if name and name.lower() != "none":
+        _ctext(img, 540, 1850, name, font(36), (255, 255, 255, 255), stroke=5)
+    return img
+
+
+@lru_cache(maxsize=256)
+def _emoji(code, size):
+    return Image.open(ASSETS_DIR / "emoji" / f"{code}.png").convert("RGBA").resize((size, size), Image.LANCZOS)
+
+
+GRID_PITCH, GRID_TILE, GRID_Y0 = 195, 172, 700   # the 3 x 3 picture grid of the "What's missing" video
+
+
+@lru_cache(maxsize=64)
+def _grid_layer(grid, hole, hi, theme):
+    """The 3 x 3 tiles: white rounded squares with a picture each. `hole` is drawn as an empty tile with a question mark,
+    `hi` (the answer, once revealed) gets a green frame."""
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    s = BAR_STYLES[theme if theme in BAR_STYLES else "purple"]
+    for i, code in enumerate(grid):
+        r, c = divmod(i, 3)
+        cx, cy = 540 + (c - 1) * GRID_PITCH, GRID_Y0 + r * GRID_PITCH
+        hot = i == hi
+        tile = _box(GRID_TILE, GRID_TILE, 28, (230, 255, 230) if hot else s["fill"], (70, 190, 90) if hot else s["line"], 10 if hot else 7)
+        layer.alpha_composite(tile, (cx - GRID_TILE // 2, cy - GRID_TILE // 2))
+        if i == hole:
+            _ctext(layer, cx, cy, "?", font(120), s["text"] + (255,))
+        else:
+            layer.alpha_composite(_emoji(code, 124), (cx - 62, cy - 62))
+    return layer
+
+
+def draw_missing(theme="purple", header="", label="", grid=(), hole=None, hi=None, choices=(), letters="ABC", visible=0,
+                 anim=1.0, timer=None, think=5, num_label=None, hscale=1.0, smooth=False, border=True, bar_dy=185, **_):
+    """The 'What's missing' video: a 3 x 3 grid of pictures (one of them empty in the second half), then the options."""
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    if border:
+        bfrac = 1.0 if timer is None else timer / think
+        _frame_border(img, THEMES[theme]["border"], bfrac, track_only=bool(smooth) and timer is not None)
+    hx0, hy0, hx1, hy1 = HEADER
+    _place(img, _header(theme, header), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale)
+    if label:
+        _outline_label(img, 540, 566, label, 50)
+    if grid:
+        img.alpha_composite(_grid_layer(tuple(grid), -1 if hole is None else hole, -1 if hi is None else hi, theme))
+    bar_style = theme if theme in ("red", "green") else "purple"
+    for i in range(min(visible, len(choices))):
+        bar = _bar(choices[i], letters[i], bar_style)
+        cy = BAR_Y0 + i * BAR_STEP + BAR_H / 2 + bar_dy
+        if i == visible - 1 and anim != 1.0:
+            _place(img, bar, 50 + bar.width / 2, cy, anim, min(1.0, max(0.2, (anim - 0.4) * 2.5)))
+        else:
+            _place(img, bar, 50 + bar.width / 2, cy)
+    if num_label is not False:
+        _number_circle(img, str(num_label if num_label is not None else 1), False, timer, think, timer is not None and timer <= 2.0)
     name = WATERMARK if WATERMARK is not None else env("CHANNEL_NAME")
     if name and name.lower() != "none":
         _ctext(img, 540, 1850, name, font(36), (255, 255, 255, 255), stroke=5)
@@ -732,6 +788,8 @@ def make_overlay(kind, args):
         img = draw_card(**args)
     elif kind == "story":
         img = draw_story(**args)
+    elif kind == "missing":
+        img = draw_missing(**args)
     else:
         img = draw_challenge(**args) if kind == "challenge" else draw_scene(**args)
     if env("BRAND_MARK", "1") != "0":   # set BRAND_MARK=0 to leave it off (for a paid plan, later)
@@ -754,7 +812,7 @@ def _q(path) -> str:
     return path.as_posix().replace("'", "'\\''")
 
 
-def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=None):
+def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=None, pixel=None):
     """frame_specs: list of (start_time, kind, args). Each overlay holds until the next one starts.
     clip: path of a stock video shown inside the frame, or None."""
     items = []
@@ -814,13 +872,21 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
         base = "b2"
     else:
         ov = 1
-        if full:
+        if full and pixel:   # "guess the clip": the picture is blocky and gets sharper in steps; pixel = [(start second, block size)]
+            div = "1"
+            for k in range(len(pixel) - 1, -1, -1):   # block size as a function of time: the size of the last step that has started
+                div = f"if(gte(t,{pixel[k][0]:.3f}),{pixel[k][1]},{div})"
+            vf = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase:flags=bicubic,crop=1080:1920,setsar=1,"
+                  "fps=30,eq=brightness=-0.10:saturation=0.9,"
+                  f"scale=w='trunc(1080/({div})/2)*2':h='trunc(1920/({div})/2)*2':eval=frame:flags=area,"
+                  "scale=1080:1920:flags=neighbor,setsar=1[bg];")
+        elif full:
             vf = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase:flags=bicubic,crop=1080:1920,setsar=1,"
                   "fps=30,eq=brightness=-0.10:saturation=0.9[bg];")
         else:
             vf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];"
         base = "bg"
-    smooth = [(st, a) for st, k, a in frame_specs if k in ("scene", "story") and a.get("smooth") and a.get("timer") is not None]
+    smooth = [(st, a) for st, k, a in frame_specs if k in ("scene", "story", "missing") and a.get("smooth") and a.get("timer") is not None]
     if smooth:   # the countdown bar is drawn by ffmpeg on every video frame, not once per overlay picture
         a0 = smooth[0][1]
         color, _track = _bar_colors(THEMES[a0.get("theme", "purple")]["border"])

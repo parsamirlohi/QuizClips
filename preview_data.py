@@ -106,3 +106,20 @@ TYPE_PREVIEWS = {
                           wyr=("Dance at Carnival", "Hike the Amazon"), toplist=("Rio de Janeiro", 1, "Home of Christ the Redeemer."),
                           facts=("Christ the Redeemer", "The statue is 30 meters tall.")),
 }
+
+
+# "Odd one out" example for every look: four things about that look's stock clip, the last one is the odd one.
+ODD_PREVIEWS = {
+    "bubblegum": ["Lion", "Tiger", "Leopard", "Bicycle"], "soft_cream": ["Camel", "Cactus", "Dune", "Snowman"],
+    "slate": ["Sushi", "Ramen", "Tempura", "Pizza"], "midnight_gold": ["Guitar", "Violin", "Harp", "Drum"],
+    "obsidian_pink": ["Wave", "Shell", "Dolphin", "Tractor"], "flat_hills": ["Penguin", "Seal", "Polar bear", "Camel"],
+    "night_skyline": ["Paris", "London", "Tokyo", "Mars"], "blurred_dark": ["Diamond", "Ruby", "Emerald", "Brick"],
+    "blurred_tint": ["Avocado", "Mango", "Banana", "Carrot"], "ocean": ["Bee", "Wasp", "Butterfly", "Shark"],
+    "sunset": ["Badminton", "Tennis", "Squash", "Chess"], "neon_night": ["Painting", "Statue", "Gallery", "Sandwich"],
+    "mint": ["Earth", "Mars", "Venus", "Moon"], "gold_black": ["Saturn", "Jupiter", "Neptune", "The Sun"],
+    "sunburst": ["Mountain", "Hill", "Volcano", "Pillow"], "aurora": ["Aurora", "Rainbow", "Lightning", "Spoon"],
+    "candy_stripes": ["Pizza", "Pasta", "Lasagna", "Sushi"], "halftone": ["Kangaroo", "Koala", "Wombat", "Wolf"],
+    "confetti": ["Piano", "Flute", "Violin", "Scissors"], "synthwave": ["Sun", "Moon", "Star", "Fork"],
+    "starfield": ["Star", "Planet", "Comet", "Sock"], "bokeh": ["Coffee", "Tea", "Cocoa", "Pencil"],
+    "paper_waves": ["Elephant", "Rhino", "Hippo", "Goldfish"], "hex_grid": ["Samba", "Beach", "Carnival", "Blizzard"],
+}
