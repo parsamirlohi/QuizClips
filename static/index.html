@@ -394,6 +394,16 @@
         <div class="kinds" id="kinds" role="group" aria-label="Video type"></div>
       </div>
 
+      <div class="card" id="story-card" style="margin-bottom:20px" hidden>
+        <div class="card-head"><h2>Story style</h2></div>
+        <div class="topic-body">
+          <div class="tmode" id="smode" role="group" aria-label="Story style">
+            <button type="button" class="kind" data-smode="path"><b>Choose your path</b><span>Every decision shows where both options lead.</span></button>
+            <button type="button" class="kind" data-smode="survive"><b>Would you survive?</b><span>A few options are deadly traps. Can viewers dodge them?</span></button>
+          </div>
+        </div>
+      </div>
+
       <div class="card" id="mode-card" style="margin-bottom:20px">
         <div class="card-head"><h2>Content</h2></div>
         <div class="topic-body">
@@ -604,7 +614,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
 
 /* ---------------- settings (remembered in this browser) ---------------- */
-const S = { build: {}, cdata: newCData(), colors: {}, think: {}, kind: "trivia", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "" };
+const S = { build: {}, cdata: newCData(), colors: {}, think: {}, kind: "trivia", storyMode: "path", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "" };
 function newCData() {
   const rows = (n, f) => Array.from({ length: n }, f);
   return {
@@ -612,8 +622,9 @@ function newCData() {
     wyr: rows(3, () => ({ a: "", ta: "", b: "", tb: "" })),
     toplist: rows(3, () => ({ name: "", line: "" })),
     facts: rows(3, () => ({ name: "", line: "" })),
+    story: rows(3, () => ({ s: "", a: "", oa: "", b: "", ob: "", t: "" })),
     personality: { title: "", results: rows(4, () => ({ name: "", line: "" })), questions: rows(3, () => ({ q: "", a: ["", "", "", ""] })) },
-    titles: { wyr: "", toplist: "", facts: "" },
+    titles: { wyr: "", toplist: "", facts: "", story: "" },
   };
 }
 let CFG = null;
@@ -621,7 +632,7 @@ function loadSettings() {
   try {
     const j = JSON.parse(localStorage.getItem("qvm_settings") || "null");
     if (j) {
-      S.kind = j.kind || "trivia"; S.think = j.think || {};
+      S.kind = j.kind || "trivia"; S.think = j.think || {}; S.storyMode = j.storyMode === "survive" ? "survive" : "path";
       S.build = j.build && typeof j.build === "object" ? j.build : {};
       if (j.cdata && typeof j.cdata === "object") S.cdata = Object.assign(newCData(), j.cdata);
       S.colors = j.colors && typeof j.colors === "object" ? j.colors : {}; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.cats = new Set(j.cats || []);
@@ -732,7 +743,29 @@ function swapScreen(node) {
 function showLookPreview() {
   const look = S.look === "random" ? null : CFG.looks.find((l) => l.key === S.look);
   let node;
-  if (look) {
+  if (look && S.kind === "story") {   // Story: the footage fills the screen, the look only sets the colors of the graphics on top
+    node = document.createElement("div"); node.className = "lookprev";
+    const bg = new Image(); bg.alt = ""; bg.src = "/static/looks/story/clip.jpg?v=2"; node.appendChild(bg);
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const v = document.createElement("video");
+      v.className = "pclip"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.setAttribute("aria-hidden", "true");
+      v.addEventListener("playing", () => v.classList.add("show"));
+      v.src = "/static/looks/story/clip.mp4?v=2"; node.appendChild(v); v.play().catch(() => {});
+    }
+    const ov = new Image(); ov.className = "povl show"; ov.alt = "Preview of the " + look.title + " colors on a Story video"; ov.src = "/static/looks/story/" + look.key + ".webp?v=2";
+    node.appendChild(ov);
+  } else if (look && S.kind !== "trivia") {   // the look's moving background and clip, with this video type's own graphics laid over it
+    node = document.createElement("div"); node.className = "lookprev";
+    const bg = new Image(); bg.alt = ""; bg.src = "/static/looks/hdbg/" + look.key + ".jpg?v=1"; node.appendChild(bg);
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const v = document.createElement("video");
+      v.className = "pclip"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.setAttribute("aria-hidden", "true");
+      v.addEventListener("playing", () => v.classList.add("show"));
+      v.src = "/static/looks/loops/hd/" + look.key + ".mp4?v=3"; node.appendChild(v); v.play().catch(() => {});
+    }
+    const ov = new Image(); ov.className = "povl show"; ov.alt = "Preview of the " + look.title + " look on a " + fmt().title + " video"; ov.src = "/static/looks/overlay/" + S.kind + "/" + look.key + ".webp?v=3";
+    node.appendChild(ov);
+  } else if (look) {
     node = document.createElement("div"); node.className = "lookprev";
     const img = new Image(); img.alt = "Preview of the " + look.title + " look"; img.src = "/static/looks/hd/" + look.key + ".webp";
     node.appendChild(img);
@@ -749,7 +782,8 @@ function showLookPreview() {
   }
   else { node = document.createElement("div"); node.className = "rand"; node.textContent = "?"; }
   swapScreen(node);
-  $("caption").innerHTML = look ? "Preview of the <b>" + esc(look.title) + "</b> look. Footage is matched to each scene."
+  $("caption").innerHTML = look && S.kind === "story" ? "Story videos use the footage as the background. The <b>" + esc(look.title) + "</b> look sets the colors."
+                                : look ? "Preview of the <b>" + esc(look.title) + "</b> look. Footage is matched to each scene."
                                 : "<b>Surprise me</b> picks a different look for every video.";
 }
 
@@ -791,6 +825,7 @@ function renderSummary() {
   $("s-questions").textContent = S.questions + " " + f.noun;
   const bld = building();
   $("row-topics").hidden = f.needs_topic || bld; $("topic-card").hidden = !f.needs_topic || bld;
+  $("story-card").hidden = S.kind !== "story"; paintStory();
   $("row-questions").hidden = bld; $("custom-card").hidden = !bld; $("row-colors").hidden = !bld;
   $("cq-count").textContent = bld ? "(" + bFilled().length + ")" : "";
   paintMode();
@@ -816,7 +851,7 @@ function buildKinds() {
     b.innerHTML = "<b>" + esc(f.title) + "</b><span>" + esc(f.desc) + "</span>";
     b.onclick = () => {
       S.kind = f.key; $("topic-in").value = S.topics[S.kind] || ""; S.questions = Math.max(f.min, Math.min(f.max, S.questions));
-      saveSettings(); paintKinds(); buildSeg(); buildTopicChips(); renderSummary(); renderBuild();
+      saveSettings(); paintKinds(); buildSeg(); buildTopicChips(); renderSummary(); renderBuild(); showLookPreview();
     };
     box.appendChild(b);
   });
@@ -843,6 +878,7 @@ const TOPIC_HELP = {
   wyr: "Any theme works, like \"School life\" or \"Superpowers\".",
   toplist: "Type what should be ranked, like \"Fastest animals\".",
   facts: "Type any subject you want facts about.",
+  story: "Describe the adventure, like \"Lost in a haunted mansion\" or \"Stranded on a desert island\".",
 };
 function buildTopicChips() {
   const f = fmt(), box = $("topic-ex"); box.innerHTML = "";
@@ -1084,11 +1120,11 @@ function paintColors() {
 const building = () => !!S.build[S.kind];
 const BK = {
   trivia: { title: "Your questions", noun: "question" }, wyr: { title: "Your rounds", noun: "round" },
-  toplist: { title: "Your list", noun: "item" }, facts: { title: "Your facts", noun: "fact" }, personality: { title: "Your quiz", noun: "question" },
+  toplist: { title: "Your list", noun: "item" }, facts: { title: "Your facts", noun: "fact" }, story: { title: "Your story", noun: "decision" }, personality: { title: "Your quiz", noun: "question" },
 };
 const BLANK = {
   trivia: () => ({ q: "", a: ["", "", "", ""], c: 0 }), wyr: () => ({ a: "", ta: "", b: "", tb: "" }),
-  toplist: () => ({ name: "", line: "" }), facts: () => ({ name: "", line: "" }), personality: () => ({ q: "", a: ["", "", "", ""] }),
+  toplist: () => ({ name: "", line: "" }), facts: () => ({ name: "", line: "" }), story: () => ({ s: "", a: "", oa: "", b: "", ob: "", t: "" }), personality: () => ({ q: "", a: ["", "", "", ""] }),
 };
 const bItems = () => (S.kind === "personality" ? S.cdata.personality.questions : S.cdata[S.kind]);
 const isBlank = (c) => JSON.stringify(c) === JSON.stringify(BLANK[S.kind]());
@@ -1137,6 +1173,24 @@ function wyrCard(c, i, bad, del) {
   field(r, "Choosing B says you're", c.tb, { max: 30, ph: "a calm thinker" }, (v) => { c.tb = v; cqSave(); });
   g.appendChild(l); g.appendChild(r); card.appendChild(g); return card;
 }
+function storyCard(c, i, bad, del) {
+  const card = cardShell(i, "Decision " + (i + 1), del, bad), survive = S.storyMode === "survive";
+  field(card, "What happens", c.s, { max: 70, ph: "You hear scratching behind the wall" }, (v) => { c.s = v; cqSave(); });
+  const g = document.createElement("div"); g.className = "cq-two";
+  const l = document.createElement("div"), r = document.createElement("div"); l.className = r.className = "cq-sec";
+  field(l, "Option A", c.a, { max: 38, ph: "Open the door" }, (v) => { c.a = v; cqSave(); });
+  field(l, "If you pick A", c.oa, { max: 80, area: true, ph: "You find a hidden staircase." }, (v) => { c.oa = v; cqSave(); });
+  field(r, "Option B", c.b, { max: 38, ph: "Run outside" }, (v) => { c.b = v; cqSave(); });
+  field(r, "If you pick B", c.ob, { max: 80, area: true, ph: "The gate slams shut behind you." }, (v) => { c.ob = v; cqSave(); });
+  g.appendChild(l); g.appendChild(r); card.appendChild(g);
+  if (survive) {
+    const w = document.createElement("div"); w.className = "cq-f";
+    w.innerHTML = '<label>Is one of these a deadly trap?</label><select aria-label="Trap for decision ' + (i + 1) + '"><option value="">No, both are safe</option><option value="a">Option A is the trap</option><option value="b">Option B is the trap</option></select>';
+    const sel = w.querySelector("select"); sel.value = c.t || ""; sel.onchange = () => { c.t = sel.value; cqSave(); };
+    card.appendChild(w);
+  }
+  return card;
+}
 function listCard(c, i, bad, del) {
   const top = S.kind === "toplist", n = bItems().length;
   const card = cardShell(i, top ? "Number " + (n - i) : "Fact " + (i + 1), del, bad);
@@ -1159,7 +1213,7 @@ function persQCard(c, i, bad, del) {
   }
   card.appendChild(box); return card;
 }
-const CARD = { trivia: triviaCard, wyr: wyrCard, toplist: listCard, facts: listCard, personality: persQCard };
+const CARD = { trivia: triviaCard, wyr: wyrCard, story: storyCard, toplist: listCard, facts: listCard, personality: persQCard };
 function renderBuild(badIdx) {
   const f = fmt(), k = S.kind, list = $("cq-list"); list.innerHTML = "";
   $("cq-title").textContent = BK[k].title;
@@ -1171,7 +1225,7 @@ function renderBuild(badIdx) {
     const tin = $("cq-title-in");
     tin.value = k === "personality" ? S.cdata.personality.title : S.cdata.titles[k];
     $("cq-title-lab").textContent = k === "personality" ? "Quiz title" : "Video title (optional)";
-    tin.placeholder = { personality: "Which season are you?", wyr: "Would you rather", toplist: "Top 5 fastest animals", facts: "Wild facts about the ocean" }[k];
+    tin.placeholder = { personality: "Which season are you?", wyr: "Would you rather", toplist: "Top 5 fastest animals", facts: "Wild facts about the ocean", story: "Would you survive the haunted mansion?" }[k];
     $("cq-title-help").textContent = k === "personality" ? "Shown and read out at the start, like a question to the viewer." : "Shown and read out at the start. Leave it empty to use a simple default.";
     tin.oninput = () => { if (k === "personality") S.cdata.personality.title = tin.value; else S.cdata.titles[k] = tin.value; cqSave(); };
   }
@@ -1190,7 +1244,7 @@ function renderBuild(badIdx) {
   const items = bItems();
   items.forEach((c, i) => list.appendChild(CARD[k](c, i, badIdx === i, () => { items.splice(i, 1); if (!items.length) items.push(BLANK[k]()); cqSave(); renderBuild(); })));
   const max = f.build_max || 10;
-  $("cq-add").textContent = "Add " + (k === "wyr" ? "a round" : k === "toplist" ? "an item" : k === "facts" ? "a fact" : "a question");
+  $("cq-add").textContent = "Add " + (k === "wyr" ? "a round" : k === "story" ? "a decision" : k === "toplist" ? "an item" : k === "facts" ? "a fact" : "a question");
   $("cq-add").disabled = items.length >= max;
   $("cq-msg").textContent = items.length >= max ? "That's the most one video can hold (" + max + ")." : (k === "toplist" ? "First card is shown first (the biggest number); the last card is number 1." : "");
   renderSummary();
@@ -1217,6 +1271,14 @@ function customPayload() {
   if (k === "wyr") {
     for (const [c, i] of filled) { if (!T(c.a) || !T(c.b)) return bad("Round " + (i + 1) + " needs both options.", i); }
     return { data: { title: T(S.cdata.titles.wyr), rounds: filled.map(([c]) => ({ a: T(c.a), b: T(c.b), trait_a: T(c.ta), trait_b: T(c.tb) })) } };
+  }
+  if (k === "story") {
+    for (const [c, i] of filled) { if (!T(c.s) || !T(c.a) || !T(c.b) || !T(c.oa) || !T(c.ob)) return bad("Decision " + (i + 1) + " needs what happens, both options and both outcomes.", i); }
+    if (S.storyMode === "survive") {
+      if (!filled.some(([c]) => c.t)) return { error: "Mark at least one option as a trap, or switch to Choose your path.", bad: -1 };
+      if (filled[0][0].t) return bad("The first decision can't be a trap, everyone needs a chance to play.", filled[0][1]);
+    }
+    return { data: { title: T(S.cdata.titles.story), steps: filled.map(([c]) => ({ situation: T(c.s), a: T(c.a), b: T(c.b), out_a: T(c.oa), out_b: T(c.ob), trap: S.storyMode === "survive" ? c.t : "" })) } };
   }
   if (k === "toplist" || k === "facts") {
     for (const [c, i] of filled) { if (!T(c.name) || !T(c.line)) return bad((k === "toplist" ? "Number " + (items.length - i) : "Fact " + (i + 1)) + " needs both a " + (k === "toplist" ? "name" : "headline") + " and a sentence.", i); }
@@ -1290,6 +1352,12 @@ function addImported(items, what) {
   const noKey = take.filter((x) => x.c < 0).length;
   $("cq-msg").textContent = "Added " + take.length + " from " + what + "." + (items.length > take.length ? " The rest did not fit (10 is the most)." : "") + (noKey ? " " + noKey + " still need the right answer marked." : "");
 }
+function paintStory() {
+  document.querySelectorAll("#smode .kind").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.smode === S.storyMode));
+    b.onclick = () => { S.storyMode = b.dataset.smode; saveSettings(); renderSummary(); renderBuild(); };
+  });
+}
 function paintMode() {
   document.querySelectorAll("#bmode .kind").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.build === "1") === building())));
   const f = fmt();
@@ -1354,7 +1422,7 @@ $("go").addEventListener("click", async () => {
   try {
     const r = await fetch("/api/generate", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: S.kind, topic: topic(), questions: customData ? Math.min(10, Math.max(3, qCount())) : S.questions, custom: customData, colors: customData ? S.colors : {}, voice: S.voice, categories: [...S.cats], style: S.look,
+      body: JSON.stringify({ kind: S.kind, story_mode: S.storyMode, topic: topic(), questions: customData ? Math.min(10, Math.max(3, qCount())) : S.questions, custom: customData, colors: customData ? S.colors : {}, voice: S.voice, categories: [...S.cats], style: S.look,
         think_seconds: fmt().think_default ? thinkFor(fmt()) : null, watermark_on: S.wmOn, watermark_platform: S.wmPlat, watermark_handle: S.wmHandle }),
     });
     if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || "The request failed. Try again."); }
@@ -1396,7 +1464,7 @@ $("again").onclick = () => { $("result").style.display = "none"; $("dl-icon").hi
 /* ---------------- library ---------------- */
 async function loadLibrary() {
   let vids = [];
-  try { vids = await (await fetch("/api/videos")).json(); } catch (e) {}
+  try { vids = await (await fetch("/api/videos", { cache: "no-store" })).json(); } catch (e) {}
   const grid = $("grid"); grid.innerHTML = "";
   $("empty").hidden = vids.length > 0; grid.hidden = vids.length === 0;
   vids.forEach((v) => {
@@ -1405,6 +1473,9 @@ async function loadLibrary() {
     const when = m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : v.file;
     card.innerHTML = '<video src="' + v.url + '" controls preload="metadata" playsinline></video>' +
       '<div class="vid-foot"><span>' + esc(when) + '</span><a href="' + v.url + '" download>Download</a></div>';
+    card.querySelector("video").addEventListener("error", () => {   // the file is gone (older videos are cleaned up): drop the card
+      card.remove(); if (!grid.children.length) { $("empty").hidden = false; grid.hidden = true; }
+    });
     grid.appendChild(card);
   });
 }

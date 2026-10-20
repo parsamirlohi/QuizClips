@@ -6,7 +6,7 @@ import uuid
 import webbrowser
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -29,7 +29,7 @@ lock = threading.Lock()
 
 
 class GenerateRequest(BaseModel):
-    kind: str = Field(default="trivia", pattern="^(trivia|personality|wyr|toplist|facts)$")
+    kind: str = Field(default="trivia", pattern="^(trivia|personality|wyr|toplist|facts|story)$")
     topic: str = Field(default="", max_length=80)  # for every type except trivia
     questions: int = Field(default=5, ge=3, le=10)
     voice: str = Field(default="en-US-AriaNeural", max_length=60)
@@ -38,14 +38,23 @@ class GenerateRequest(BaseModel):
     watermark_on: bool = True
     watermark_platform: str = Field(default="tiktok", max_length=20)
     watermark_handle: str = Field(default="", max_length=60)
+    story_mode: str = Field(default="path", pattern="^(path|survive)$")   # Story type: choose your path / would you survive
     custom: dict | None = None   # "I'll write it": the person's own content (see content.clean_custom for the shape)
     colors: dict[str, str] = Field(default_factory=dict)   # question_box, question_outline, answer_box, answer_outline, frame, highlight
     think_seconds: int | None = Field(default=None, ge=5, le=15)  # seconds viewers get to answer; None = the type's default
 
 
 # the timer each video type uses unless the person picks another (read once, before any job changes them)
-THINK_DEFAULTS = {"trivia": pipeline.THINK, "personality": formats.THINK_PERSONALITY, "wyr": formats.THINK_WYR}
+THINK_DEFAULTS = {"trivia": pipeline.THINK, "personality": formats.THINK_PERSONALITY, "wyr": formats.THINK_WYR, "story": formats.THINK_WYR}
 THINK_CHOICES = [5, 8, 12, 15]
+
+FORMAT_DESC = {
+    "personality": "Answers add up to a result that tells viewers who they are.",
+    "story": "You are the hero: pick a path, or try not to fall for a trap.",
+    "wyr": "Two tempting options, a countdown, then what each pick says.",
+    "toplist": "A countdown from the last place to number one.",
+    "facts": "Short, surprising facts with a clip for each.",
+}
 
 FORMATS = [
     {"key": "trivia", "title": "Trivia quiz", "desc": "Multiple-choice questions with a reveal.", "noun": "questions",
@@ -53,12 +62,7 @@ FORMATS = [
 ] + [
     {"key": k, "title": v["title"], "desc": d, "noun": v["noun"], "min": v["min"], "max": v["max"],
      "default": v["default"], "needs_topic": True, "hint": v["hint"], "examples": content.EXAMPLES[k]}
-    for (k, v), d in zip(content.KINDS.items(), [
-        "Answers add up to a result, like Which house are you?",
-        "Two tempting options, a countdown, then what each pick says.",
-        "A countdown from the last place to number one.",
-        "Short, surprising facts with a clip for each.",
-    ])
+    for k, v in content.KINDS.items() for d in [FORMAT_DESC[k]]
 ]
 
 for _f in FORMATS:
@@ -119,16 +123,20 @@ def run_job(job_id: str, req: GenerateRequest):
             else:
                 formats.THINK_WYR = req.think_seconds
         cats = [c for c in req.categories if c in CATEGORY_LABELS]
-        custom = content.clean_custom(req.kind, req.custom) if req.custom else None
+        custom = content.clean_custom(req.kind, req.custom, req.story_mode) if req.custom else None
         colors = req.colors if custom else {}   # colours are only for content the person builds themselves
         if req.kind == "trivia":
             result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style, custom, colors)
         else:
             result = formats.build_video(req.kind, req.topic, req.questions, req.voice, progress, watermark_text(req),
-                                         req.style, colors, custom)
+                                         req.style, colors, custom, req.story_mode)
         timing_report()
         job.update(status="done", progress=1.0, message="Done!", video_url=f"/output/{result['file']}",
                    questions=result["questions"], duration=result["duration"])
+        try:
+            prune_videos()
+        except Exception as e:   # tidying up must never turn a finished video into an error
+            print(f"[cleanup] skipped: {e}", flush=True)
     except Exception as e:
         job.update(status="error", error=str(e), message="Failed")
     finally:
@@ -170,11 +178,27 @@ def voice_preview(voice: str):
     return FileResponse(path, media_type=media, headers={"Cache-Control": "no-cache"})
 
 
+KEEP_VIDEOS = int(env("MAX_KEEP_VIDEOS", "10") or 0)   # how many of the newest videos stay in the output folder; 0 keeps them all (all video types)
+
+
+def prune_videos():
+    """Delete all but the newest KEEP_VIDEOS finished videos, so the output folder doesn't fill the disk."""
+    if KEEP_VIDEOS <= 0:
+        return
+    files = sorted(OUTPUT_DIR.glob("quiz_*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for old in files[KEEP_VIDEOS:]:
+        try:
+            old.unlink()
+            print(f"[cleanup] removed old video {old.name} (keeping the newest {KEEP_VIDEOS})", flush=True)
+        except OSError as e:
+            print(f"[cleanup] could not remove {old.name}: {e}", flush=True)
+
+
 @app.post("/api/generate")
 def generate(req: GenerateRequest):
     if req.custom:
         try:
-            content.clean_custom(req.kind, req.custom)
+            content.clean_custom(req.kind, req.custom, req.story_mode)
         except ValueError as e:
             raise HTTPException(400, str(e))
     if not has_video_key():
@@ -199,8 +223,10 @@ def get_job(job_id: str):
 
 @app.get("/api/videos")
 def videos():
-    files = sorted(OUTPUT_DIR.glob("quiz_*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)[:24]
-    return [{"file": p.name, "url": f"/output/{p.name}"} for p in files]
+    files = [p for p in OUTPUT_DIR.glob("quiz_*.mp4") if p.exists() and p.stat().st_size > 0]
+    files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return JSONResponse([{"file": p.name, "url": f"/output/{p.name}"} for p in files[:24]],
+                        headers={"Cache-Control": "no-store"})   # always the videos that are on disk right now
 
 
 app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")

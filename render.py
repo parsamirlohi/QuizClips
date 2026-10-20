@@ -407,6 +407,55 @@ def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choice
     return img
 
 
+@lru_cache(maxsize=1)
+def _story_scrim():
+    """Soft dark fades at the top and the bottom so the words stay readable over any footage."""
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    px = img.load()
+    for y in range(H):
+        a = 0.0
+        if y < 820:
+            a = 0.62 * (1 - y / 820) ** 1.3
+        elif y > 980:
+            a = 0.72 * min(1.0, (y - 980) / 520)
+        if a > 0:
+            v = int(255 * a)
+            for x in range(W):
+                px[x, y] = (0, 0, 0, v)
+    return img
+
+
+def draw_story(theme="purple", header="", hscale=1.0, label="", choices=(), letters="ABCD", visible=0, anim=1.0,
+               timer=None, think=5, num_label=None, border=True, bar_dy=0, smooth=False, **_):
+    """The Story video: the footage fills the whole screen, the situation is big outlined text on top of it and the
+    options sit in bars lower down. Same countdown border and bars as the other scenes."""
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    img.alpha_composite(_story_scrim())
+    if border:
+        bfrac = 1.0 if timer is None else timer / think
+        _frame_border(img, THEMES[theme]["border"], bfrac, track_only=bool(smooth) and timer is not None)
+    if label:
+        _outline_label(img, 540, 150, label, 52)
+    layer = Image.new("RGBA", (W, 560), (0, 0, 0, 0))
+    _words(layer, W // 2, 280, header, 960, 500, 150, 60, (255, 255, 255), None, stroke=14)
+    _place(img, layer, 540, 470, hscale)
+    bar_style = "red" if theme == "red" else "purple"
+    for i in range(min(visible, len(choices))):
+        bar = _bar(choices[i], letters[i], bar_style)
+        cy = BAR_Y0 + i * BAR_STEP + BAR_H / 2 + bar_dy
+        if i == visible - 1 and anim != 1.0:
+            _place(img, bar, 50 + bar.width / 2, cy, anim, min(1.0, max(0.2, (anim - 0.4) * 2.5)))
+        else:
+            _place(img, bar, 50 + bar.width / 2, cy)
+    if num_label is not False:
+        _number_circle(img, str(num_label if num_label is not None else 1), False, timer, think,
+                       timer is not None and timer <= 2.0)
+    name = WATERMARK if WATERMARK is not None else env("CHANNEL_NAME")
+    if name and name.lower() != "none":
+        _ctext(img, 540, 1850, name, font(36), (255, 255, 255, 255), stroke=5)
+    return img
+
+
 def _caption_box(text):
     """White rounded box with the text in the look's accent colour (same style as an answer bar)."""
     s = BAR_STYLES["purple"]
@@ -681,6 +730,8 @@ def make_overlay(kind, args):
         img = draw_hook(**args)
     elif kind == "card":
         img = draw_card(**args)
+    elif kind == "story":
+        img = draw_story(**args)
     else:
         img = draw_challenge(**args) if kind == "challenge" else draw_scene(**args)
     if env("BRAND_MARK", "1") != "0":   # set BRAND_MARK=0 to leave it off (for a paid plan, later)
@@ -769,7 +820,7 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
         else:
             vf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];"
         base = "bg"
-    smooth = [(st, a) for st, k, a in frame_specs if k == "scene" and a.get("smooth") and a.get("timer") is not None]
+    smooth = [(st, a) for st, k, a in frame_specs if k in ("scene", "story") and a.get("smooth") and a.get("timer") is not None]
     if smooth:   # the countdown bar is drawn by ffmpeg on every video frame, not once per overlay picture
         a0 = smooth[0][1]
         color, _track = _bar_colors(THEMES[a0.get("theme", "purple")]["border"])

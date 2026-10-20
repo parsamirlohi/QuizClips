@@ -4,7 +4,9 @@ Formats (the `kind` value):
   personality  "Which Disney character are you?"  questions whose choices each point to one result
   wyr          Would you rather: two options per round, a countdown, then a reveal of what each pick says
   toplist      Top N list counted down from N to 1, each item with a short line
-  facts        "Did you know" facts, each with a short headline and one sentence
+  facts        "Fun facts", each with a short headline and one sentence
+  story        you are the hero: decisions with two options each; either both outcomes are shown ("Choose your path")
+               or some options are deadly traps ("Would you survive?")
 
 Gemini (free tier) does the writing. MOCK=1 returns fixed offline content so the whole pipeline can be tested.
 """
@@ -17,11 +19,13 @@ from config import env, flog, is_mock
 KINDS = {
     "personality": {"title": "Personality quiz", "noun": "questions", "min": 3, "max": 8, "default": 5,
                     "hint": "Which Hogwarts house are you?"},
+    "story": {"title": "Story", "noun": "decisions", "min": 3, "max": 8, "default": 5,
+              "hint": "Lost in a haunted mansion"},
     "wyr": {"title": "Would you rather", "noun": "rounds", "min": 3, "max": 10, "default": 5,
             "hint": "Superpowers and food"},
-    "toplist": {"title": "Top list", "noun": "items", "min": 3, "max": 10, "default": 5,
+    "toplist": {"title": "Rankings", "noun": "items", "min": 3, "max": 10, "default": 5,
                 "hint": "Fastest animals"},
-    "facts": {"title": "Did you know", "noun": "facts", "min": 3, "max": 10, "default": 5,
+    "facts": {"title": "Fun facts", "noun": "facts", "min": 3, "max": 10, "default": 5,
               "hint": "The ocean"},
 }
 EXAMPLES = {
@@ -35,6 +39,9 @@ EXAMPLES = {
     "toplist": ["Fastest animals", "Tallest buildings in the world", "Most visited countries", "Biggest dinosaurs",
                 "Best-selling video games", "Strangest foods", "Longest rivers", "Deadliest animals",
                 "Inventions that changed the world", "Highest mountains", "Largest cities", "Coolest sports cars"],
+    "story": ["Lost in a haunted mansion", "Stranded on a desert island", "Zombie apocalypse", "Escaping a pirate ship",
+              "Trapped in a video game", "A night in the jungle", "Surviving a space station", "Lost in a snowstorm",
+              "Exploring an ancient tomb", "A haunted school trip"],
     "facts": ["The ocean", "Space", "The human body", "Ancient Egypt", "Dinosaurs", "Cats and dogs", "Food", "Volcanoes",
               "The weather", "Sleep and dreams", "The Olympics", "Robots"],
 }
@@ -156,7 +163,60 @@ def _wyr(topic: str, n: int) -> dict:
     return {"title": _s(d.get("title"), 50) or "Would you rather", "rounds": rounds}
 
 
-# ---------------------------------------------------------------- top list / facts
+
+# ---------------------------------------------------------------- story
+MODES = ("path", "survive")
+
+
+def trap_plan(n: int) -> dict:
+    """Which decisions are deadly in 'Would you survive?': {step index: 'a' or 'b'}. Never the first decision."""
+    k = 1 if n < 5 else 2 if n < 8 else 3
+    return {i: random.choice("ab") for i in random.sample(range(1, n), min(k, n - 1))}
+
+
+def _story(topic: str, n: int, mode: str) -> dict:
+    traps = trap_plan(n) if mode == "survive" else {}
+    if mode == "survive":
+        rule = ("This is a survival game: the viewer is eliminated if they pick a deadly option. These decisions have a "
+                "deadly option (the others have none, so both options there are survivable, either one works):\n" +
+                "\n".join(f"  decision {i + 1}: option {side.upper()} is a deadly trap" for i, side in sorted(traps.items())) +
+                "\nA deadly option must look tempting, and its outcome says clearly how the hero's run ends (family friendly, "
+                "for example 'The floor gives way. Game over.'). Every other outcome says how the hero gets through, with a small twist.")
+    else:
+        rule = ("Both options of every decision are fine and lead to different, surprising outcomes. Nothing is a wrong "
+                "answer; each outcome is a fun consequence that makes people want to try the other path.")
+    p = (
+        f"Write an interactive story for a short vertical video. Theme: \"{topic}\". The viewer is the hero and makes {n} "
+        "decisions in a row.\n"
+        "Return ONLY a JSON object: {\"title\": ..., \"steps\": [...]}\n"
+        "- title: max 7 words" + (", a question like 'Would you survive the haunted mansion?'.\n" if mode == "survive" else ".\n") +
+        f"- steps: exactly {n} items {{\"situation\": ..., \"a\": ..., \"b\": ..., \"out_a\": ..., \"out_b\": ..., "
+        "\"search\": [...], \"search_out\": [...]}. The steps follow one story, in order, getting more tense.\n"
+        "  situation: what the hero faces, present tense, max 60 characters (for example 'You hear scratching behind the wall').\n"
+        "  a and b: the two choices, max 32 characters, each starting with a verb, both tempting.\n"
+        "  out_a and out_b: what happens if the hero picks that choice, one short sentence, max 70 characters, starting with 'You'.\n"
+        f"  {rule}\n"
+        "  search: 3 short stock-footage search terms (1-3 words each) for the situation; search_out: 3 terms for what "
+        "happens in the outcome (for a deadly option, the danger; otherwise the first option's outcome). Concrete filmable "
+        "things, most specific first, no brand, franchise or real people's names.\n"
+        "Keep everything family friendly."
+    )
+    d = _ask(p)
+    steps = []
+    for i, r in enumerate((d.get("steps") or [])[:n]):
+        sit, a, b = _s(r.get("situation"), 70), _s(r.get("a"), 38), _s(r.get("b"), 38)
+        oa, ob = _s(r.get("out_a"), 80), _s(r.get("out_b"), 80)
+        if sit and a and b and oa and ob:
+            steps.append({"situation": sit, "a": a, "b": b, "out_a": oa, "out_b": ob, "trap": traps.get(i, ""),
+                          "search": _search(r, sit), "search_out": _search({"search": r.get("search_out")}, sit)})
+    _need(len(steps) >= 3)
+    if mode == "survive":   # the script may have come back shorter than asked: keep at least one trap, never first
+        if not any(s["trap"] for s in steps):
+            steps[random.randrange(1, len(steps))]["trap"] = random.choice("ab")
+    return {"title": _s(d.get("title"), 60) or topic, "steps": steps}
+
+
+# ---------------------------------------------------------------- rankings / facts
 def _items(kind: str, topic: str, n: int) -> dict:
     if kind == "toplist":
         p = (
@@ -184,7 +244,7 @@ def _items(kind: str, topic: str, n: int) -> dict:
         if name and line:
             items.append({"name": name, "line": line, "search": _search(it, name)})
     _need(len(items) >= 3)
-    default = f"Top {len(items)} {topic}" if kind == "toplist" else f"Did you know? {topic}"
+    default = f"Top {len(items)} {topic}" if kind == "toplist" else f"Fun facts: {topic}"
     return {"title": _s(d.get("title"), 60) or default, "items": items}
 
 
@@ -203,9 +263,16 @@ def _mock(kind: str, topic: str, n: int) -> dict:
         return {"title": t, "rounds": [{"a": f"Fly like a bird {i + 1}", "b": "Swim like a fish",
                                         "trait_a": "a free spirit", "trait_b": "a calm thinker",
                                         "search_a": ["sky"], "search_b": ["ocean"]} for i in range(n)]}
+    if kind == "story":
+        traps = trap_plan(n)
+        return {"title": f"Would you survive {t}?", "steps": [
+            {"situation": f"Mock situation {i + 1}: something happens", "a": "Run away", "b": "Hide and wait",
+             "out_a": "The floor gives way. Game over." if traps.get(i) == "a" else "You sprint off and find a safe path.",
+             "out_b": "The floor gives way. Game over." if traps.get(i) == "b" else "You wait it out and stay unseen.",
+             "trap": traps.get(i, ""), "search": ["forest"], "search_out": ["night"]} for i in range(n)]}
     items = [{"name": f"Item {i + 1}", "line": f"A short mock line about item {i + 1} of the list.", "search": ["abstract"]}
              for i in range(n)]
-    return {"title": f"Top {n} {t}" if kind == "toplist" else f"Did you know? {t}", "items": items}
+    return {"title": f"Top {n} {t}" if kind == "toplist" else f"Fun facts: {t}", "items": items}
 
 
 AREAS = [
@@ -226,6 +293,7 @@ _WHAT = {
     "wyr": "a round of 'Would you rather' dilemmas (the topic is the theme of the dilemmas)",
     "toplist": "a Top 5 countdown list (the topic is what gets ranked, like 'Fastest animals')",
     "facts": "a set of 'Did you know' facts (the topic is the subject of the facts)",
+    "story": "an adventure where the viewer makes decisions, like 'Lost in a haunted mansion' or 'Stranded on a desert island'",
 }
 
 
@@ -248,15 +316,17 @@ def random_topic(kind: str) -> str:
     return area
 
 
-def generate(kind: str, topic: str, n: int) -> dict:
+def generate(kind: str, topic: str, n: int, mode: str = "path") -> dict:
     if kind not in KINDS:
         raise RuntimeError("Unknown video type.")
     spec = KINDS[kind]
     n = max(spec["min"], min(spec["max"], int(n)))
     topic = _s(topic, 80) or random_topic(kind)
+    mode = mode if mode in MODES else "path"
     data = _mock(kind, topic, n) if is_mock() else (
-        _personality(topic, n) if kind == "personality" else _wyr(topic, n) if kind == "wyr" else _items(kind, topic, n))
-    data["kind"], data["topic"] = kind, topic
+        _personality(topic, n) if kind == "personality" else _wyr(topic, n) if kind == "wyr"
+        else _story(topic, n, mode) if kind == "story" else _items(kind, topic, n))
+    data["kind"], data["topic"], data["mode"] = kind, topic, mode
     return data
 
 
@@ -280,7 +350,7 @@ def _rows(v, lo: int, hi: int, what: str) -> list:
     return v
 
 
-def clean_custom(kind: str, c) -> object:
+def clean_custom(kind: str, c, mode: str = "path") -> object:
     """Check what the person typed. Trivia returns a list of questions, every other type returns the same kind of
     dict the script writer makes (minus the footage searches). Raises ValueError with a message for the person."""
     if not isinstance(c, dict):
@@ -309,6 +379,20 @@ def clean_custom(kind: str, c) -> object:
                            "trait_a": _text(r.get("trait_a"), 30, f"Round {i}, what A says", False) or "a bold pick",
                            "trait_b": _text(r.get("trait_b"), 30, f"Round {i}, what B says", False) or "a smart pick"})
         return {"title": _text(c.get("title"), 50, "The title", False) or "Would you rather", "rounds": rounds}
+    if kind == "story":
+        steps = []
+        for i, r in enumerate(_rows(c.get("steps"), 3, 8, "decisions"), 1):
+            r = r if isinstance(r, dict) else {}
+            trap = r.get("trap") if r.get("trap") in ("a", "b") else ""
+            steps.append({"situation": _text(r.get("situation"), 70, f"Decision {i}, what happens"),
+                          "a": _text(r.get("a"), 38, f"Decision {i}, option A"), "b": _text(r.get("b"), 38, f"Decision {i}, option B"),
+                          "out_a": _text(r.get("out_a"), 80, f"Decision {i}, what A leads to"),
+                          "out_b": _text(r.get("out_b"), 80, f"Decision {i}, what B leads to"), "trap": trap})
+        if mode == "survive" and not any(s["trap"] for s in steps):
+            raise ValueError("Mark at least one option as a trap, or switch to Choose your path.")
+        if mode == "survive" and steps[0]["trap"]:
+            raise ValueError("The first decision can't be a trap, everyone needs a chance to play.")
+        return {"title": _text(c.get("title"), 60, "The title", False) or "Your story", "steps": steps}
     if kind in ("toplist", "facts"):
         items = []
         word = "Item" if kind == "toplist" else "Fact"
@@ -316,7 +400,7 @@ def clean_custom(kind: str, c) -> object:
             it = it if isinstance(it, dict) else {}
             items.append({"name": _text(it.get("name"), 40, f"{word} {i}, the name" if kind == "toplist" else f"{word} {i}, the headline"),
                           "line": _text(it.get("line"), 150, f"{word} {i}, the sentence")})
-        default = f"Top {len(items)} list" if kind == "toplist" else "Did you know?"
+        default = f"Top {len(items)} list" if kind == "toplist" else "Fun facts"
         return {"title": _text(c.get("title"), 60, "The title", False) or default, "items": items}
     if kind == "personality":
         results = []
@@ -368,6 +452,11 @@ def add_terms(kind: str, data: dict) -> dict:
         t = _terms_for(texts, data["title"])
         for i, r in enumerate(data["rounds"]):
             r["search_a"], r["search_b"] = t[2 * i], t[2 * i + 1]
+    elif kind == "story":
+        texts = [x for st in data["steps"] for x in (st["situation"], st["out_a"] if st["trap"] != "b" else st["out_b"])]
+        t = _terms_for(texts, data["title"])
+        for i, st in enumerate(data["steps"]):
+            st["search"], st["search_out"] = t[2 * i], t[2 * i + 1]
     elif kind in ("toplist", "facts"):
         t = _terms_for([f'{it["name"]}. {it["line"]}' for it in data["items"]], data["title"])
         for it, s in zip(data["items"], t):

@@ -1,4 +1,4 @@
-"""Builds the non-trivia videos: personality quiz, would you rather, top list, did-you-know facts.
+"""Builds the non-trivia videos: personality quiz, would you rather, story, rankings, fun facts.
 
 Same pipeline as the trivia video (script -> narration -> footage -> scenes -> mp4), but the script comes from
 content.py and each format has its own scene layouts.
@@ -132,6 +132,55 @@ def _plan_wyr_b(spec, clips, sfx):
     return frames, t, events, True
 
 
+def _story_base(spec):
+    survive = spec["mode"] == "survive"
+    return dict(theme="purple", header=spec["situation"], label=f"{'STAGE' if survive else 'CHAPTER'} {spec['i'] + 1}/{spec['total']}",
+                choices=[spec["a"], spec["b"]], letters="AB", num_label=str(spec["i"] + 1), bar_dy=150, think=THINK_WYR)
+
+
+def _plan_story_a(spec, clips, sfx):
+    """The situation is read, then 'Do you A...'; both options are on screen from the first frame."""
+    base = _story_base(spec)
+    frames, events = [], [(0.35, clips[0], 1.0), (0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0)]
+    frames += [(0.0, "story", dict(base, visible=2, hscale=0.8)), (0.05, "story", dict(base, visible=2, hscale=1.06)),
+               (0.1, "story", dict(base, visible=2))]
+    return frames, 0.35 + len(clips[0]) / SR + 0.1, events, False
+
+
+def _plan_story_b(spec, clips, sfx):
+    """'...or B?', the countdown to decide, then both outcomes. In 'Would you survive?' a trap is then shown in red."""
+    base = _story_base(spec)
+    frames, events = [(0.0, "story", dict(base, visible=2))], [(0.05, clips[0], 1.0)]
+    t = 0.05 + len(clips[0]) / SR + 0.25
+    for s_left in range(THINK_WYR, 0, -1):
+        events.append((t, sfx["tick"], 1.0))
+        frames.append((t, "story", dict(base, visible=2, timer=s_left, smooth=True)))
+        t += 1.0
+    survive, trap = spec["mode"] == "survive", spec["trap"]
+    head = "WHERE EACH PATH LEADS" if not survive else ("TWO WAYS OUT" if trap else "BOTH PATHS ARE SAFE")
+    reveal = dict(base, header=head, choices=[spec["out_a"], spec["out_b"]])
+    reveal.pop("think")
+    frames += [(t, "story", dict(reveal, visible=2, hscale=0.85)), (t + 0.05, "story", dict(reveal, visible=2, hscale=1.05)),
+               (t + 0.1, "story", dict(reveal, visible=2))]
+    events += [(t, sfx["bing"], 1.0), (t, sfx["whoosh"], 1.0)]
+    t += 0.45
+    # narration order: the safe path first, the deadly one last (or A then B when nothing is deadly)
+    order = [0, 1] if trap != "a" else [1, 0]
+    events.append((t, clips[1 + 0], 1.0))
+    t += len(clips[1]) / SR + 0.2
+    if survive and trap:
+        out = spec["out_a"] if trap == "a" else spec["out_b"]
+        dead = dict(base, theme="red", header="GAME OVER", choices=[out], letters=trap.upper(), visible=1)
+        dead.pop("think")
+        frames += [(t, "story", dict(dead, hscale=0.85)), (t + 0.05, "story", dict(dead, hscale=1.08)), (t + 0.1, "story", dict(dead))]
+        events += [(t, sfx["siren"], 1.0), (t, sfx["whoosh"], 1.0)]
+        t += 0.3
+    events.append((t, clips[2], 1.0))
+    t += len(clips[2]) / SR + 1.2
+    frames.sort(key=lambda f: f[0])
+    return frames, t, events, False
+
+
 def _plan_end(spec, clips, sfx):
     base = dict(theme="purple", header=spec["header"], num_label=False, label=spec["label"], letters=spec["letters"],
                 choices=spec["choices"])
@@ -146,7 +195,7 @@ def _plan_end(spec, clips, sfx):
 
 
 PLANNERS = {"title": _plan_title, "pq": _plan_personality_q, "card": _plan_card, "wyr_a": _plan_wyr_a,
-            "wyr_b": _plan_wyr_b, "end": _plan_end}
+            "wyr_b": _plan_wyr_b, "story_a": _plan_story_a, "story_b": _plan_story_b, "end": _plan_end}
 
 
 # ------------------------------------------------------------------ script -> scene specs
@@ -180,6 +229,33 @@ def _specs(data: dict) -> list:
         specs.append(dict(t="end", header="A or B?", label="COMMENT YOUR PICKS", letters="ABC",
                           choices=["Mostly A", "Mostly B", "Half and half"], search=None,
                           texts=["Which did you pick most? Comment A or B, and follow for more!"]))
+    elif kind == "story":
+        steps, mode = data["steps"], data.get("mode", "path")
+        for i, st in enumerate(steps):
+            trap = st["trap"] if mode == "survive" else ""
+            common = dict(i=i, total=len(steps), mode=mode, situation=st["situation"], a=st["a"], b=st["b"],
+                          out_a=st["out_a"], out_b=st["out_b"], trap=trap)
+            if trap:   # safe path first, then the trap
+                first, second = (("B", st["out_b"]), ("A", st["out_a"])) if trap == "a" else (("A", st["out_a"]), ("B", st["out_b"]))
+                lines = [f"Pick {first[0]}. {first[1]}", f"But pick {second[0]}. {second[1]} Game over!"]
+            elif mode == "survive":
+                lines = [f"Pick A. {st['out_a']}", f"Pick B. {st['out_b']} Either way, you're safe."]
+            else:
+                lines = [f"Pick A. {st['out_a']}", f"Pick B. {st['out_b']}"]
+            specs.append(dict(common, t="story_a", texts=[f"{st['situation']} Do you {_lc(st['a'])}..."], search=st["search"],
+                              check=st["situation"],
+                              row=(st["situation"], f"A: {st['a']} -> {st['out_a']} | B: {st['b']} -> {st['out_b']}"
+                                   + (f"  [TRAP: {trap.upper()}]" if trap else ""))))
+            specs.append(dict(common, t="story_b", texts=[f"or {_lc(st['b'])}?"] + lines, search=st["search_out"],
+                              check=st["out_b"] if trap == "b" else st["out_a"], row=None))
+        if mode == "survive":
+            specs.append(dict(t="end", header="Did you survive?", label="COMMENT YOUR SCORE", letters="123",
+                              choices=["Survived every trap", "Barely made it", "Fell for one"], search=None,
+                              texts=["How many traps did you survive? Comment your score, and follow for more!"]))
+        else:
+            specs.append(dict(t="end", header="Which path?", label="COMMENT YOUR PICKS", letters="ABC",
+                              choices=["Mostly A", "Mostly B", "Mixed"], search=None,
+                              texts=["Which path would you take? Comment your picks, and follow for more!"]))
     else:
         items = data["items"]
         n = len(items)
@@ -200,7 +276,7 @@ def _specs(data: dict) -> list:
                               choices=[t["name"] for t in top], search=None,
                               texts=["Do you agree with this list? Comment your number one, and follow for more!"]))
         else:
-            specs.append(dict(t="end", header="Did you know?", label="COMMENT BELOW", letters="123",
+            specs.append(dict(t="end", header="Learn something?", label="COMMENT BELOW", letters="123",
                               choices=["I knew that", "Learned something", "Mind blown"], search=None,
                               texts=["Did you learn something new? Follow for more facts!"]))
     return specs
@@ -217,7 +293,7 @@ def _footage(spec, used):
 
 # ------------------------------------------------------------------ build
 def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None,
-                watermark: str = "", style: str = looks.DEFAULT, colors=None, custom=None) -> dict:
+                watermark: str = "", style: str = looks.DEFAULT, colors=None, custom=None, mode: str = "path") -> dict:
     render.WATERMARK = watermark or ""
     look = looks.with_colors(looks.resolve(style), colors)
     render.apply_skin(look["skin"])
@@ -228,10 +304,10 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
         look_info = {"bg": looks.ensure_background(look["key"]), "blur": look["blur"]}
         if custom:
             progress("Reading your content...", 0.03)
-            data = dict(content.add_terms(kind, custom), kind=kind, topic="")
+            data = dict(content.add_terms(kind, custom), kind=kind, topic="", mode=mode)
         else:
             progress("Writing the script...", 0.03)
-            data = content.generate(kind, topic, n)
+            data = content.generate(kind, topic, n, mode)
         specs = _specs(data)
 
         # Narration, footage and rendering overlap: narration is recorded while the first footage searches run, and
@@ -270,7 +346,7 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
             frames, dur, events, has_clip = get_plans()[si]
             bg = s.get("bg")
             render_segment(bg if has_clip else None, frames, dur, job_dir / f"seg_{si:02d}.mp4", job_dir,
-                           full=bg if frames[0][1] == "hook" else None, look=look_info)
+                           full=bg if frames[0][1] in ("hook", "story") else None, look=look_info)
 
         progress("Finding footage and rendering...", 0.14)
         with ThreadPoolExecutor(max_workers=1) as tts_pool:
@@ -298,8 +374,8 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
         for si, s in enumerate(specs):
             if s.get("row"):
                 foot = s.get("matched", "")
-                if s["t"] == "wyr_a":
-                    foot = f"A: {foot} | B: {specs[si + 1].get('matched', '')}"
+                if s["t"] in ("wyr_a", "story_a"):
+                    foot = f"{foot} | then: {specs[si + 1].get('matched', '')}"
                 rows.append({"question": s["row"][0], "answer": s["row"][1], "footage": foot})
         return {"look": look["title"], "file": name, "duration": round(total, 1), "title": data["title"], "questions": rows}
     finally:

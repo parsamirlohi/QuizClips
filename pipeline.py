@@ -119,19 +119,11 @@ def _plan_outro(clip, sfx):
 
 
 def cleanup_disk() -> None:
-    """Keep disk use small: clear downloaded stock clips and (optionally) trim old finished videos."""
+    """Keep disk use small: clear downloaded stock clips (old finished videos are trimmed by app.py, see MAX_KEEP_VIDEOS)."""
     if env("KEEP_CACHE") != "1":
         for f in CACHE_DIR.glob("*"):
             try:
                 f.unlink()
-            except OSError:
-                pass
-    keep = int(env("MAX_KEEP_VIDEOS", "0") or 0)  # 0 = keep every finished video
-    if keep > 0:
-        vids = sorted(OUTPUT_DIR.glob("quiz_*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
-        for old in vids[keep:]:
-            try:
-                old.unlink()
             except OSError:
                 pass
 

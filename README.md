@@ -40,8 +40,9 @@ Pick a type at the top of the Create page. Everything except Trivia needs a free
 - **Trivia quiz**: multiple-choice questions with a reveal (Open Trivia DB).
 - **Personality quiz**: "Which season are you?" Questions whose choices each lead to one of four results, shown as "Mostly A, B, C, D" at the end.
 - **Would you rather**: two options, a countdown, then what each pick says about you.
-- **Top list**: a countdown from the last place to number one, one clip per item.
-- **Did you know**: short surprising facts, one clip per fact.
+- **Story**: you are the hero. "Choose your path" shows where both options lead; "Would you survive?" hides a few deadly traps among the decisions.
+- **Rankings**: a countdown from the last place to number one, one clip per item.
+- **Fun facts**: short surprising facts, one clip per fact.
 
 Leave the topic blank for a surprise. `content.py` writes the scripts and `formats.py` builds the videos.
 
@@ -53,7 +54,8 @@ The page has a **Look** section with 24 styles (background + matching header/ans
   `python3 tools/make_backgrounds.py` to make them all now. Delete that folder to regenerate.
 - The two "Blurred Clip" looks use each question's own footage, blurred, as the background.
 - `looks.py` lists every look; `styles.py` / `backgrounds.py` draw them. After adding or changing one, run
-  `python3 tools/make_look_thumbs.py` to refresh the pictures in the selector.
+  `python3 tools/make_look_thumbs.py` to refresh the pictures in the selector, then
+  `python3 tools/make_look_loops.py --all` to refresh the animated previews (the phone and the hover loops).
 
 ## Options (all go in `.env`)
 
@@ -77,6 +79,7 @@ The page has a **Look** section with 24 styles (background + matching header/ans
 - Pixabay has no portrait filter, so its widescreen clips are center-cropped to vertical.
 - Pixabay asks that you credit them when showing search results; the page footer does this.
 - Downloaded clips are cached in `cache` so repeats don't re-download.
+- Only your newest 10 finished videos are kept in `output`; older ones are deleted after each new video. Change it with `MAX_KEEP_VIDEOS=` in `.env` (0 keeps everything). Download the ones you want to keep.
 - Keep your `.env` private. Don't share it or zip it.
 
 ## Files
@@ -97,7 +100,7 @@ The page has a **Look** section with 24 styles (background + matching header/ans
 
 | Folder | What's in it |
 | --- | --- |
-| `static/` | The website and Studio pages, styles, fonts and look pictures |
+| `static/` | The website and Studio pages, styles, fonts and the look previews: pictures in `looks/`, animated loops in `looks/loops/`, the sharp question graphics in `looks/overlay/` |
 | `assets/` | Fonts, backgrounds, logo and sounds the videos use |
 | `tools/` | Optional one-off scripts (set your key, make previews, check footage, export the waitlist). Run them from the project folder, e.g. `python3 tools/export_waitlist.py` |
 | `design/` | Unused logo and favicon options, kept for reference |
