@@ -41,6 +41,7 @@ def make_tile(key, look, tmp, W, H, out, crf, still=False, graphics=True):
     clip = CLIPS / (f"{key}.jpg" if still else f"{key}.mp4")   # still: the stock picture is held as one frame
     has_clip = clip.exists()
     loop_in = ["-loop", "1", "-framerate", "24"] if still else ["-stream_loop", "-1"]
+    render.BORDER_RADIUS = render.PREVIEW_RADIUS   # rounded border: these pictures sit in the phone preview
     render.apply_skin(look["skin"])
     overlay = render.draw_scene(theme="purple", header=p["q"], label="QUESTION 1/5", choices=list(p["a"]),
                                 visible=4, anim=1.0, q_num=1, num_label="1")

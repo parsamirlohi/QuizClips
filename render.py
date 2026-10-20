@@ -247,9 +247,27 @@ def _number_circle(img, label, reveal, timer, think, urgent):
     _place(img, _circle(label, bool(reveal), bool(urgent), tuple(HOT)), cx, cy)
 
 
+BORDER_RADIUS = 0       # 0 = square corners, always used for real videos
+PREVIEW_RADIUS = 130    # corner radius of the phone screens on the site (12% of the width), for the preview pictures only
+
+
+def _rounded_ring(img, color, t):
+    """A full border whose corners follow the rounded screen of the phone preview."""
+    r, S = BORDER_RADIUS, 3   # drawn 3x bigger and shrunk back, so the curve is smooth
+    ring = Image.new("L", (W * S, H * S), 0)
+    d = ImageDraw.Draw(ring)
+    d.rounded_rectangle((0, 0, W * S - 1, H * S - 1), radius=r * S, fill=255)
+    d.rounded_rectangle((t * S, t * S, W * S - 1 - t * S, H * S - 1 - t * S), radius=max(0, r - t) * S, fill=0)
+    ring = ring.resize((W, H), Image.LANCZOS)
+    img.paste(Image.new("RGBA", (W, H), tuple(color) + (255,)), (0, 0), ring)
+
+
 def _border_path(img, color, frac=1.0, t=24, track=(255, 255, 255)):
     """Border around the screen that doubles as the timer: it shrinks clockwise from the top centre."""
     if frac <= 0:
+        return
+    if BORDER_RADIUS and frac >= 1.0:   # phone previews only: a full border with rounded corners
+        _rounded_ring(img, color, t)
         return
     if frac < 1.0 and track:  # a track of the same size behind the bar, so you can see the timer deplete
         _border_path(img, track, 1.0, t, None)
@@ -305,7 +323,7 @@ def _frame_border(img, color, frac=1.0, t=24, track_only=False):
     _border_path(img, color, frac, t, track)
 
 
-def _bar_filters(start, think, color, src, dst, t=24):
+def _bar_filters(start, think, color, src, dst, t=24, tag="", only_during=False):
     """ffmpeg filters that draw the countdown bar shrinking smoothly, clockwise from the top centre, on every frame.
     It starts full at `start` seconds and is gone `think` seconds later. Each of the five edges is a short coloured strip
     next to a transparent one; a crop window slides along it (crop's x / y are worked out per frame), so only the part
@@ -319,18 +337,19 @@ def _bar_filters(start, think, color, src, dst, t=24):
     left = f"{total}*clip(1-(t-{start:.4f})/{think},0,1)"
     hexc = "0x%02X%02X%02X" % tuple(color)
     parts, cum, cur = [], 0, src
+    gate = f":enable='between(t,{start:.4f},{start + think:.4f})'" if only_during else ""   # for a video with several countdowns
     for i, (orient, L, (x, y), anchor) in enumerate(segs):
         used = f"clip({left}-{cum},0,{L})"
         size = f"{L}x{t}" if orient == "h" else f"{t}x{L}"
-        a, b = (f"[s{i}c][s{i}t]", None) if anchor == "start" else (f"[s{i}t][s{i}c]", None)
+        a, b = (f"[{tag}s{i}c][{tag}s{i}t]", None) if anchor == "start" else (f"[{tag}s{i}t][{tag}s{i}c]", None)
         stack = "hstack" if orient == "h" else "vstack"
-        parts.append(f"color=c={hexc}:s={size}:r=30,format=rgba[s{i}c];color=c=black@0:s={size}:r=30,format=rgba[s{i}t];"
-                     f"{a}{stack}=inputs=2[s{i}];")
+        parts.append(f"color=c={hexc}:s={size}:r=30,format=rgba[{tag}s{i}c];color=c=black@0:s={size}:r=30,format=rgba[{tag}s{i}t];"
+                     f"{a}{stack}=inputs=2[{tag}s{i}];")
         off = f"{L}-{used}" if anchor == "start" else used
         crop = f"crop=w={L}:h={t}:x='{off}':y=0" if orient == "h" else f"crop=w={t}:h={L}:x=0:y='{off}'"
-        parts.append(f"[s{i}]{crop}[w{i}];")
-        nxt = dst if i == len(segs) - 1 else f"o{i}"
-        parts.append(f"[{cur}][w{i}]overlay={x}:{y}:format=auto[{nxt}];")
+        parts.append(f"[{tag}s{i}]{crop}[{tag}w{i}];")
+        nxt = dst if i == len(segs) - 1 else f"{tag}o{i}"
+        parts.append(f"[{cur}][{tag}w{i}]overlay={x}:{y}:format=auto{gate}[{nxt}];")
         cur = nxt
         cum += L
     return "".join(parts)
@@ -873,13 +892,19 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
     else:
         ov = 1
         if full and pixel:   # "guess the clip": the picture is blocky and gets sharper in steps; pixel = [(start second, block size)]
-            div = "1"
-            for k in range(len(pixel) - 1, -1, -1):   # block size as a function of time: the size of the last step that has started
-                div = f"if(gte(t,{pixel[k][0]:.3f}),{pixel[k][1]},{div})"
+            # one chain per step, each only on its own time window (the scale filter cannot change its output size
+            # mid-stream, so a single time-varying scale stays blocky); the pieces are joined back together
+            steps = sorted(pixel)
+            n = len(steps)
             vf = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase:flags=bicubic,crop=1080:1920,setsar=1,"
-                  "fps=30,eq=brightness=-0.10:saturation=0.9,"
-                  f"scale=w='trunc(1080/({div})/2)*2':h='trunc(1920/({div})/2)*2':eval=frame:flags=area,"
-                  "scale=1080:1920:flags=neighbor,setsar=1[bg];")
+                  f"fps=30,eq=brightness=-0.10:saturation=0.9,split={n}" + "".join(f"[px{k}]" for k in range(n)) + ";")
+            for k, (st, size) in enumerate(steps):
+                en = steps[k + 1][0] if k + 1 < n else duration + 5
+                w, h = max(2, int(1080 / size) // 2 * 2), max(2, int(1920 / size) // 2 * 2)
+                tr = f"trim=start={st:.3f}" + (f":end={en:.3f}" if k + 1 < n else "") + ",setpts=PTS-STARTPTS"
+                scl = f",scale={w}:{h}:flags=area,scale=1080:1920:flags=neighbor" if size > 1 else ""
+                vf += f"[px{k}]{tr}{scl},setsar=1[pz{k}];"
+            vf += "".join(f"[pz{k}]" for k in range(n)) + f"concat=n={n}:v=1:a=0[bg];"
         elif full:
             vf = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase:flags=bicubic,crop=1080:1920,setsar=1,"
                   "fps=30,eq=brightness=-0.10:saturation=0.9[bg];")
@@ -888,10 +913,20 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
         base = "bg"
     smooth = [(st, a) for st, k, a in frame_specs if k in ("scene", "story", "missing") and a.get("smooth") and a.get("timer") is not None]
     if smooth:   # the countdown bar is drawn by ffmpeg on every video frame, not once per overlay picture
-        a0 = smooth[0][1]
-        color, _track = _bar_colors(THEMES[a0.get("theme", "purple")]["border"])
+        groups = []   # a scene can hold several countdowns in a row (What's missing: look, then pick); the timer jumps back up between them
+        for st, a in smooth:
+            if not groups or a["timer"] >= groups[-1][-1][1]["timer"]:
+                groups.append([])
+            groups[-1].append((st, a))
+        color, _track = _bar_colors(THEMES[smooth[0][1].get("theme", "purple")]["border"])
         vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto[vo];"
-        vf += _bar_filters(smooth[0][0], a0.get("think", 5), color, "vo", "vb") + "[vb]format=yuv420p[v]"
+        cur = "vo"
+        for gi, g in enumerate(groups):
+            last = gi == len(groups) - 1
+            vf += _bar_filters(g[0][0], g[0][1].get("think", 5), color, cur, "vb" if last else f"vg{gi}", tag=f"g{gi}",
+                               only_during=len(groups) > 1)
+            cur = "vb" if last else f"vg{gi}"
+        vf += "[vb]format=yuv420p[v]"
     else:
         vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto,format=yuv420p[v]"
     run_ffmpeg(inputs + ["-f", "concat", "-safe", "0", "-i", lst, "-filter_complex", vf, "-map", "[v]",

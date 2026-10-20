@@ -228,8 +228,9 @@ def _plan_clip(spec, clips, sfx):
     rev.pop("think")
     frames += [(t, "story", dict(rev, hscale=0.85)), (t + 0.05, "story", dict(rev, hscale=1.06)), (t + 0.1, "story", dict(rev))]
     events += [(t, sfx["bing"], 1.0), (t + 0.05, sfx["sparkle"], 1.0), (t + 0.5, cr, 1.0)]
-    spec["pixel"] = [(0.0, 60), (t0 + 0.1 * THINK_WYR, 34), (t0 + 0.3 * THINK_WYR, 18), (t0 + 0.5 * THINK_WYR, 10),
-                     (t0 + 0.75 * THINK_WYR, 5), (t, 1)]
+    # still blocky right up to the reveal so it stays hard to guess; it only becomes clear when the answer shows
+    spec["pixel"] = [(0.0, 64), (t0 + 0.1 * THINK_WYR, 48), (t0 + 0.22 * THINK_WYR, 36), (t0 + 0.34 * THINK_WYR, 28),
+                     (t0 + 0.46 * THINK_WYR, 22), (t, 1)]   # 22 stays for the last half of the thinking time
     t += 0.5 + len(cr) / SR + 1.2
     return frames, t, events, False
 

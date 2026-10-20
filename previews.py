@@ -50,9 +50,11 @@ def draw(kind: str, key: str, colors=None):
     old = render.WATERMARK
     render.WATERMARK = ""
     render.apply_skin(look["skin"])
+    render.BORDER_RADIUS = render.PREVIEW_RADIUS   # the preview's border follows the phone's rounded screen
     try:
         fn = {"scene": render.draw_scene, "card": render.draw_card, "story": render.draw_story, "missing": render.draw_missing}[how]
         return fn(theme="purple", **args)
     finally:
+        render.BORDER_RADIUS = 0
         render.reset_skin()
         render.WATERMARK = old

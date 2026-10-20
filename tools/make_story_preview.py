@@ -30,6 +30,7 @@ if __name__ == "__main__":
                 "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(OUT / "clip.mp4")])
     run_ffmpeg(["-i", str(OUT / "clip.mp4"), "-frames:v", "1", "-q:v", "3", str(OUT / "clip.jpg")])
     render.WATERMARK = ""
+    render.BORDER_RADIUS = render.PREVIEW_RADIUS   # rounded border: these pictures sit in the phone preview
     for key, look in looks.LOOKS.items():
         render.apply_skin(look["skin"])
         img = render.draw_story(theme="purple", visible=2, num_label="1", bar_dy=150, **SAMPLE)

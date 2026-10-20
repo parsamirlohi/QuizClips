@@ -81,6 +81,7 @@ if "--clips" in sys.argv:
     fetch_clips()
 
 fallback = placeholder_clip(cw, ch)
+render.BORDER_RADIUS = render.PREVIEW_RADIUS   # rounded border: these pictures sit in the phone preview
 for key, look in looks.LOOKS.items():
     p = preview_data.PREVIEWS[key]
     still = CLIPS / f"{key}.jpg"
