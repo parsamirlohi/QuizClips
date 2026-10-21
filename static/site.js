@@ -6,7 +6,7 @@
   var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   var path = location.pathname.replace(/\/$/, "") || "/";
 
-  var MARK = '<span class="mark" aria-hidden="true"><img src="/static/logo.svg?v=16" alt="" width="64" height="64"></span>';
+  var MARK = '<span class="mark" aria-hidden="true"><img src="/static/logo.svg?v=19" alt="" width="64" height="64"></span>';
   function cur(p) { return path === p ? ' aria-current="page"' : ""; }
 
   var SV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
@@ -19,13 +19,13 @@
     '<a class="brand" href="/">' + MARK + '<span class="name">' + BRAND + '</span></a>' +
     '<nav class="links" aria-label="Main">' +
     '<a href="/app">Studio</a><a href="/pricing"' + cur("/pricing") + '>Plans</a><a href="/#types">Video types</a><a href="/#looks">Looks</a><a href="/#faq">FAQ</a></nav>' +
-    '<div class="top-end"><a class="btn btn-primary btn-sm studio-m" href="/app">Studio</a>' + ICO_SET + ICO_USER + '</div></div></header>';
+    '<div class="top-end"><a class="btn btn-primary btn-sm studio-m" href="/app">Studio</a>' + ICO_USER + ICO_SET + '</div></div></header>';
 
   var f = $("#site-footer");
   if (f) f.outerHTML =
     '<footer class="foot"><div class="wrap"><div class="foot-in">' +
     '<div><a class="brand" href="/">' + MARK + '<span class="name">' + BRAND + '</span></a>' +
-    '<p>Turn any topic into a vertical quiz video with narration, matching footage and your link on it.</p></div>' +
+    '<p>Turn any topic into a vertical video with narration, matching footage and your link on it.</p></div>' +
     '<div><h4>Product</h4><ul><li><a href="/app">Make a video</a></li><li><a href="/pricing">Plans</a></li><li><a href="/#faq">FAQ</a></li><li><a href="/settings">Settings</a></li><li><a href="/profile">Profile</a></li></ul></div>' +
     '<div><h4>Legal</h4><ul><li><a href="/terms">Terms</a></li><li><a href="/privacy">Privacy</a></li></ul></div>' +
     '</div><div class="credits">Stock footage from <a href="https://pixabay.com" rel="noopener">Pixabay</a>. Trivia questions from ' +
