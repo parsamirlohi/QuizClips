@@ -877,7 +877,6 @@ function buildTimer() {
   };
   r.value = thinkFor(f); paint();
   r.oninput = () => { if (!raf) raf = requestAnimationFrame(paint); };
-  r.onchange = () => { r.value = Math.round(+r.value); paint(); };
 }
 function renderSummary() {
   const f = fmt();
