@@ -10,7 +10,7 @@ from audio import Mixer, SR, bing, challenge_sting, effects, pop, siren, sparkle
 from chalkboard import ensure_chalkboard
 from config import ASSETS_DIR, CACHE_DIR, OUTPUT_DIR, WORK_DIR, env, flog
 from videos import UsedSet, find_background, find_many
-from questions import LETTERS, get_questions, keywords_from, mark_used, pick_letters
+from questions import LETTERS, get_hard_question, get_questions, keywords_from, mark_used, pick_letters
 import looks
 import render
 from footage_plan import refine_queries
@@ -175,6 +175,13 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
                 quiz.append({**q, "choices": others[:ci] + [q["correct"]] + others[ci:], "correct_idx": ci})
             n = n_questions
             challenge = n >= 5
+            if challenge:   # the last question is the challenge round: swap it for a hard one
+                hard = get_hard_question(categories, [q["question"] for q in quiz])
+                if hard:
+                    others = list(hard["wrong"][:3])
+                    random.shuffle(others)
+                    ci = quiz[-1]["correct_idx"]
+                    quiz[-1] = {**hard, "choices": others[:ci] + [hard["correct"]] + others[ci:], "correct_idx": ci}
         word = NUMWORD.get(n, str(n))
         prompts = random.sample(PROMPTS, min(len(PROMPTS), n))
         texts = [f"Only a genius can get {word} out of {word}!"]

@@ -695,14 +695,6 @@ def draw_challenge(t=0.0, dur=3.4, **_):
             shake += amp * math.exp(-(t - ti) * 9) * math.sin((t - ti) * 70)
     sx, sy = shake, shake * 0.6
 
-    # hazard bars slide in from opposite sides and keep scrolling
-    strip = _hazard_strip()
-    off = int(t * 260) % 80
-    bar = strip.crop((off, 0, off + W, strip.height))
-    e = _ease_out(t / 0.35)
-    img.alpha_composite(bar, (int(-W * (1 - e) + sx), int(250 + sy)))
-    img.alpha_composite(bar.transpose(Image.FLIP_LEFT_RIGHT), (int(W * (1 - e) + sx), int(1596 + sy)))
-
     # build-up line across the middle before the first hit
     if t < T1:
         wline = int(W * _ease_out(t / T1))

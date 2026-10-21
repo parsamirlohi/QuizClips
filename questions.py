@@ -301,16 +301,20 @@ def _from_opentdb(categories=None, avoid=()) -> list:
     return out
 
 
-def _from_claude(n: int, avoid: list, categories=None) -> list:
+def _from_claude(n: int, avoid: list, categories=None, hard: bool = False) -> list:
     avoid_text = "\n".join(f"- {a}" for a in avoid) or "(none)"
     chosen = [CATEGORY_LABELS[c] for c in (categories or []) if c in CATEGORY_LABELS]
     topics = ("Use ONLY these topics: " + ", ".join(chosen) + ".") if chosen else \
         "Mix topics: science, history, geography, pop culture, animals, food, sports, space, etc."
+    level = ("- HARD questions: the kind only a well-read, curious person gets right, with three tempting wrong answers. Still fair "
+             "and checkable: one clearly correct answer, no trick wording, nothing that depends on opinion or a recent date."
+             if hard else
+             "- EASY, widely known questions that most people could answer (school-level or everyday general knowledge). No obscure trivia, niche fandoms, or specific dates/statistics.")
     prompt = f"""Create {n + 4} diverse, fun trivia questions for a short TikTok quiz video.
 
 Rules:
 - {topics}
-- EASY, widely known questions that most people could answer (school-level or everyday general knowledge). No obscure trivia, niche fandoms, or specific dates/statistics.
+{level}
 - Exactly one clearly correct answer.
 - Question under 110 characters. Each answer under 28 characters.
 - No "all of the above" / "none of the above" and nothing that needs an image.
@@ -382,6 +386,54 @@ def _interleave(items: list) -> list:
             if g:
                 out.append(g.pop())
     return out
+
+
+def _hard_from_opentdb(categories=None) -> list:
+    """A few hard questions from one of the chosen categories (any category when none are chosen)."""
+    u = urllib.parse.unquote
+    ids = [c for c in (categories or []) if c in CATEGORY_LABELS] or list(CATEGORY_LABELS)
+    out = []
+    for cid in random.sample(ids, min(2, len(ids))):
+        try:
+            r = requests.get(f"https://opentdb.com/api.php?category={cid}&type=multiple&difficulty=hard&amount=10&encode=url3986", timeout=30)
+            data = r.json() if r.status_code == 200 else {}
+        except (requests.RequestException, ValueError):
+            data = {}
+        for item in data.get("results", []) if data.get("response_code") == 0 else []:
+            q, correct = u(item["question"]), u(item["correct_answer"])
+            wrong = [u(x) for x in item["incorrect_answers"]]
+            cat = u(item["category"])
+            if _usable(q, correct, wrong):
+                out.append({"question": q, "correct": correct, "wrong": wrong, "category": cat, "_cid": cid,
+                            "video_queries": keywords_from(q, correct, cat)})
+        if out:
+            break
+        time.sleep(5.5)
+    return out
+
+
+def get_hard_question(categories=None, avoid=()):
+    """One hard question for the challenge round, or None (the caller then keeps the normal question)."""
+    if is_mock():
+        return None
+    try:
+        source = (env("QUESTION_SOURCE") or ("claude" if env("ANTHROPIC_API_KEY") else "opentdb")).lower()
+        pool = []
+        if source == "claude":
+            try:
+                pool = _from_claude(1, list(avoid), categories, hard=True)
+            except Exception as e:
+                print(f"[questions] hard question from Claude failed ({e})")
+        if not pool:
+            pool = _hard_from_opentdb(categories)
+        history = _load_history()
+        seen = {a.strip().lower() for a in avoid}
+        pool = [q for q in pool if q["question"].strip().lower() not in seen]
+        fresh = [q for q in pool if _qid(q["question"]) not in history] or pool
+        return random.choice(fresh) if fresh else None
+    except Exception as e:
+        print(f"[questions] no hard question ({e}); keeping the normal one", flush=True)
+        return None
 
 
 def get_questions(n: int, categories=None) -> list:

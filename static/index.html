@@ -114,10 +114,11 @@
   .err { color:var(--err); margin-top:14px; white-space:pre-wrap; }
 
   /* progress */
-  #progress { display:none; margin-top:20px; padding:18px 22px; }
-  .bar { height:8px; background:var(--sunken); border-radius:99px; overflow:hidden; border:1px solid var(--line); }
+  #progress { display:none; margin-top:20px; }
+  .prog-body { padding:20px 22px 24px; }
+  .bar { height:12px; background:var(--sunken); border-radius:99px; overflow:hidden; border:1px solid var(--line); }
   .bar i { display:block; height:100%; width:0; background:var(--primary); border-radius:99px; transition:width .4s; }
-  .prog-top { display:flex; justify-content:space-between; font-weight:600; margin-bottom:10px; }
+  .prog-top { display:flex; justify-content:space-between; font-weight:600; font-size:17px; margin-bottom:12px; }
   #pmsg { color:var(--muted); }
   #pct { font-variant-numeric:tabular-nums; }
   .prog-right { display:flex; align-items:baseline; gap:10px; }
@@ -516,12 +517,15 @@
       <div class="err" id="err" role="alert"></div>
 
       <div class="card" id="progress" aria-live="polite">
+        <div class="card-head"><h2>Making your video</h2></div>
+        <div class="prog-body">
         <div class="prog-top"><span id="pmsg">Starting</span><span class="prog-right"><span id="elapsed" title="Time since you pressed Generate">0:00</span><span id="pct">0%</span></span></div>
         <div class="bar"><i id="fill"></i></div>
         <p class="pnote" id="pnote" hidden>Going through lots of videos to find the best one. Hang tight!</p>
         <ol class="steps" id="steps">
           <li>Script</li><li>Narration</li><li>Footage</li><li>Scenes</li><li>Finishing</li>
         </ol>
+        </div>
       </div>
 
       <div class="card" id="result">
