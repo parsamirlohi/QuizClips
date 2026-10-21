@@ -19,6 +19,7 @@ import formats
 import gemini
 import looks
 import io
+from PIL import Image
 import pipeline
 import previews
 import site_routes
@@ -168,7 +169,7 @@ def preview(kind: str, look: str, colors: str = ""):
             raise HTTPException(409, "A video is being made right now.")
         img = previews.draw(kind, look, picked if isinstance(picked, dict) else {})
     buf = io.BytesIO()
-    img.resize((720, 1280)).save(buf, "PNG", compress_level=1)   # the phone is small: half size is plenty, and quicker to send
+    img.resize((900, 1600), Image.LANCZOS).save(buf, "PNG", compress_level=1)   # the phone is small: half size is plenty, and quicker to send
     return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
 

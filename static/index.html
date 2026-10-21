@@ -751,10 +751,10 @@ function swapScreen(node) {
 /* the files of a preview: [picture shown while the video loads, looping video, graphics laid over it]. Keep in step with tools/make_type_previews.py */
 function previewFiles(kind, key) {
   const L = "/static/looks/";
-  if (kind === "story") return [L + "story/clip.jpg?v=2", L + "story/clip.mp4?v=2", L + "story/" + key + ".webp?v=2"];
-  if (kind === "clip") return [L + "story/pixel.jpg?v=1", L + "story/pixel.mp4?v=1", L + "overlay/clip/" + key + ".webp?v=1"];
+  if (kind === "story") return [L + "story/clip.jpg?v=2", L + "story/clip.mp4?v=2", L + "story/" + key + ".webp?v=3"];
+  if (kind === "clip") return [L + "story/pixel.jpg?v=1", L + "story/pixel.mp4?v=1", L + "overlay/clip/" + key + ".webp?v=2"];
   if (kind === "missing") return [L + "bgstill/" + key + ".jpg?v=1", L + "loops/bg/" + key + ".mp4?v=1", L + "overlay/missing/" + key + ".webp?v=1"];
-  return [L + "hdbg/" + key + ".jpg?v=1", L + "loops/hd/" + key + ".mp4?v=3", L + "overlay/" + kind + "/" + key + ".webp?v=3"];
+  return [L + "hdbg/" + key + ".jpg?v=1", L + "loops/hd/" + key + ".mp4?v=4", L + "overlay/" + kind + "/" + key + ".webp?v=5"];
 }
 /* The graphics laid over the phone's video. With the person's own colors they are drawn by the app (/api/preview) so changes show
    straight away; without any, the ready-made pictures are used. */
@@ -794,11 +794,11 @@ function showLookPreview() {
     if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {   // the look's moving background and clip as a video, with the question graphics laid over it as a separate sharp picture; the home page phone does the same (static/site.js): change both together
       const v = document.createElement("video");
       v.className = "pclip"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.setAttribute("aria-hidden", "true");
-      const ov = new Image(); ov.className = "povl"; ov.alt = ""; ov.decoding = "async"; ov.src = "/static/looks/overlay/" + look.key + ".webp?v=3";
+      const ov = new Image(); ov.className = "povl"; ov.alt = ""; ov.decoding = "async"; ov.src = "/static/looks/overlay/" + look.key + ".webp?v=5";
       ov.dataset.base = ov.getAttribute("src"); ovEl = ov;
       v.addEventListener("playing", () => { v.classList.add("show"); ov.classList.add("show"); });
       v.addEventListener("error", () => { v.classList.remove("show"); ov.classList.remove("show"); });
-      v.src = "/static/looks/loops/hd/" + look.key + ".mp4?v=3";
+      v.src = "/static/looks/loops/hd/" + look.key + ".mp4?v=4";
       node.appendChild(v); node.appendChild(ov);
       v.play().catch(() => {});
     }

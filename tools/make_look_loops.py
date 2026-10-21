@@ -31,8 +31,8 @@ from config import BASE, run_ffmpeg
 LOOPS = BASE / "static" / "looks" / "loops"
 CLIPS = BASE / "static" / "looks" / "clips"
 SECONDS = 12            # the background loops every 6 s and the clip every 4 s, so 12 s joins up cleanly
-TILE_W, TILE_H = 300, 534   # a strip tile is 150 px wide on the page, so this is sharp on a 2x screen
-HD_W, HD_H = 720, 1280
+TILE_W, TILE_H = 360, 640   # a strip tile is 150 px wide on the page, so this is sharp on a 2x screen
+HD_W, HD_H = 900, 1600
 
 
 def make_tile(key, look, tmp, W, H, out, crf, still=False, graphics=True):
@@ -104,7 +104,7 @@ if __name__ == "__main__":
                     print("already there: hd", key, flush=True)
                     continue
                 try:
-                    make_tile(key, looks.LOOKS[key], tmp, HD_W, HD_H, out, 25, graphics=False)
+                    make_tile(key, looks.LOOKS[key], tmp, HD_W, HD_H, out, 22, graphics=False)
                 except Exception as e:
                     print(f"could not make {key}: {str(e)[:300]}", flush=True)
         if only in (None, "strip"):
@@ -115,7 +115,7 @@ if __name__ == "__main__":
                     print("already there: strip", key, flush=True)
                     continue
                 try:
-                    make_tile(key, looks.LOOKS[key], tmp, TILE_W, TILE_H, out, 24)
+                    make_tile(key, looks.LOOKS[key], tmp, TILE_W, TILE_H, out, 22)
                 except Exception as e:
                     print(f"could not make {key}: {str(e)[:300]}", flush=True)
     render.reset_skin()
