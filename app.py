@@ -82,7 +82,8 @@ FORMAT_DESC = {
 
 FORMATS = [
     {"key": "trivia", "title": "Trivia quiz", "desc": "Multiple-choice questions with a reveal.", "noun": "questions",
-     "min": 3, "max": 10, "default": 5, "needs_topic": False},
+     "min": 3, "max": 10, "default": 5, "needs_topic": False, "hint": "Space and planets",
+     "examples": ["Space and planets", "Ocean animals", "90s cartoons", "World capitals", "Famous inventions", "Pizza", "Ancient Egypt", "The human body"]},
 ] + [
     {"key": k, "title": v["title"], "desc": d, "noun": v["noun"], "min": v["min"], "max": v["max"],
      "default": v["default"], "needs_topic": True, "hint": v["hint"], "examples": content.EXAMPLES[k]}
@@ -152,6 +153,9 @@ def run_job(job_id: str, req: GenerateRequest):
                 formats.THINK_WYR = req.think_seconds
         cats = [c for c in req.categories if c in CATEGORY_LABELS]
         custom = content.clean_custom(req.kind, req.custom, req.story_mode) if req.custom else None
+        if req.kind == "trivia" and not custom and req.topic.strip():   # trivia about a topic the person typed
+            progress("Writing the questions...", 0.02)
+            custom = content.trivia_questions(req.topic, req.questions)
         colors = req.colors   # the person's own colours apply to every video
         if req.kind == "trivia":
             result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style, custom, colors)

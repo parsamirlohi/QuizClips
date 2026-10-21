@@ -72,19 +72,19 @@
 
   /* ---------- layout ---------- */
   main { max-width:1360px; margin:0 auto; padding:40px 24px 72px; }
-  .create { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:56px; align-items:start; }
-  h1 { font-size:30px; line-height:1.2; letter-spacing:-.025em; font-weight:800; margin:0 0 6px; }
+  .create { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:54px; align-items:start; }
+  h1 { font-family:"Lilita One","Plus Jakarta Sans",system-ui,sans-serif; font-size:84px; line-height:1.05; letter-spacing:.005em; font-weight:400; margin:0 0 6px; }
   .lede { color:var(--muted); margin:0 0 28px; max-width:52ch; }
   .banner { background:var(--warn-bg); border:1px solid var(--warn-line); color:var(--warn-ink); border-radius:12px; padding:12px 16px; margin-bottom:20px; display:none; }
 
   .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; }
-  .card-head { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 22px; border-bottom:1px solid var(--line); }
-  .card-head h2 { margin:0; font-size:25px; font-weight:800; letter-spacing:-.02em; }
+  .card-head { background:#8d77ff; border-radius:inherit; border-bottom-left-radius:0; border-bottom-right-radius:0; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 22px; border-bottom:1px solid var(--line); }
+  .card-head h2 { color:#fff; margin:0; font-family:"Lilita One","Plus Jakarta Sans",system-ui,sans-serif; font-size:25px; font-weight:400; letter-spacing:.01em; line-height:1.1; }
   .rows { margin:0; padding:0; list-style:none; }
-  .row { display:grid; grid-template-columns:150px minmax(0,1fr) auto; align-items:center; gap:16px; padding:16px 22px; border-bottom:1px solid var(--line); }
+  .row { display:grid; grid-template-columns:170px minmax(0,1fr) auto; align-items:center; gap:16px; padding:20px 22px; border-bottom:1px solid var(--line); }
   .row:last-child { border-bottom:0; }
-  .row dt, .row .k { color:var(--ink); font-size:15px; font-weight:700; }
-  .row .v { color:var(--muted); font-weight:500; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:10px; }
+  .row dt, .row .k { color:var(--ink); font-size:18px; font-weight:700; }
+  .row .v { color:var(--muted); font-size:17px; font-weight:500; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:10px; }
   .row .v img { width:22px; height:39px; border-radius:5px; object-fit:cover; border:1px solid var(--line); flex:none; }
 
   .btn { border:1px solid var(--line-strong); background:var(--surface); border-radius:10px; padding:9px 16px; font-weight:600; }
@@ -95,14 +95,18 @@
   .btn:disabled { opacity:.5; cursor:not-allowed; }
   .link { border:0; background:none; color:var(--primary); font-weight:600; padding:4px 2px; }
   .link:hover { text-decoration:underline; }
-  .row .link[data-edit] { width:28px; height:28px; display:grid; place-items:center; padding:0; color:var(--muted); opacity:.55; transition:opacity .15s, color .15s, transform .15s; }
+  .row .link[data-edit] { width:32px; height:32px; display:grid; place-items:center; padding:0; color:var(--muted); opacity:.55; transition:opacity .15s, color .15s, transform .15s; }
   .row.editable { cursor:pointer; }
   .row.editable:hover { background:var(--primary-soft); }
   .row.editable:hover .link[data-edit], .row .link[data-edit]:focus-visible { opacity:1; color:var(--primary); transform:translateX(2px); }
   .row .link[data-edit]:hover { text-decoration:none; }
 
-  .actions { display:flex; align-items:center; gap:14px; margin-top:20px; }
-  #go { flex:1; padding:16px 22px; font-size:17px; font-weight:700; border-radius:12px; }
+  .actions { display:flex; align-items:center; justify-content:center; gap:14px; margin-top:20px; }
+  #open-custom { background:#fff; color:#14161f; border-color:#fff; font-weight:700; }
+  #open-custom:hover { background:#fff; border-color:#14161f; }
+  #go { background:#f6248c; border-color:#f6248c; color:#fff; }
+  #go:hover { background:#ff3d9e; border-color:#ff3d9e; }
+  #go { flex:none; width:138px; height:138px; padding:0 16px; display:grid; place-items:center; text-align:center; line-height:1.15; font-size:18px; font-weight:800; border-radius:50%; }
   .actions .btn:not(#go) { padding:15px 20px; border-radius:12px; }
   .err { color:var(--err); margin-top:14px; white-space:pre-wrap; }
 
@@ -131,7 +135,7 @@
 
   /* phone preview */
   .stage { position:sticky; top:137px; }
-  .phone { width:300px; margin:0 auto; padding:9px; background:#0a0b11; border-radius:42px; box-shadow:var(--shadow-float); }
+  .phone { width:320px; max-width:100%; margin:0 auto; padding:9px; background:#0a0b11; border-radius:42px; box-shadow:var(--shadow-float); }
   .screen { position:relative; aspect-ratio:9/16; border-radius:12% / 6.75%; overflow:hidden; background:#000; }
   .screen > * { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
   .screen .in-fade { opacity:0; transition:opacity .24s ease; }
@@ -185,13 +189,13 @@
   @keyframes spark { from { opacity:0; } to { opacity:1; } }
   @keyframes wave { 0%,100% { opacity:0; } 40% { opacity:1; } }
 
-  .kinds { display:grid; grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:10px; padding:16px 20px 20px; }
-  .kind { text-align:left; display:flex; flex-direction:column; gap:3px; border:1px solid var(--line-strong); background:var(--surface); border-radius:12px; padding:12px 14px; }
-  .kind b { font-weight:700; font-size:15px; }
-  .kind span { color:var(--muted); font-size:13px; line-height:1.4; }
+  .kinds { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:11px; padding:17px 21px 21px; }
+  .kind { text-align:left; display:flex; flex-direction:column; gap:3px; border:1px solid var(--line-strong); background:var(--surface); border-radius:12px; padding:14px 16px; }
+  .kind b { font-weight:800; font-size:17px; }
+  .kind span { color:var(--muted); font-size:14px; line-height:1.45; }
   .kind:hover { border-color:var(--muted); }
-  .kind[aria-pressed="true"] { border-color:var(--primary); background:var(--primary-soft); box-shadow:0 0 0 1px var(--primary) inset; }
-  .kind[aria-pressed="true"] b { color:var(--primary); }
+  .kind[aria-pressed="true"] { border-color:#ff7fc8; background:color-mix(in srgb,#ff7fc8 14%,var(--surface)); box-shadow:0 0 0 1px #ff7fc8 inset; }
+  .kind[aria-pressed="true"] b { color:var(--ink); }
 
   .topic-body { padding:16px 20px 20px; }
   .tmode { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
@@ -200,8 +204,8 @@
   .topic-body input[type=text] { font-size:16px; padding:13px 14px; }
   .topic-body .help { color:var(--muted); font-size:13px; margin:8px 0 16px; }
   .dl-wrap { margin-top:16px; }
-  .dl-btn { display:flex; align-items:center; justify-content:center; gap:10px; width:300px; max-width:100%; margin:0 auto; padding:13px 18px; border-radius:12px; background:var(--primary); color:var(--on-primary); font-weight:700; font-size:16px; text-decoration:none; transition:background .15s, transform .15s; }
-  .dl-btn:hover { background:var(--primary-hover); transform:translateY(-1px); }
+  .dl-btn { display:flex; align-items:center; justify-content:center; gap:10px; width:300px; max-width:100%; margin:0 auto; padding:13px 18px; border-radius:12px; background:#f6248c; color:#fff; font-weight:700; font-size:16px; text-decoration:none; transition:background .15s, transform .15s; }
+  .dl-btn:hover { background:#ff3d9e; transform:translateY(-1px); }
   .dl-btn svg { width:20px; height:20px; }
   .dl-btn[hidden] { display:none; }
   .try { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
@@ -239,7 +243,7 @@
     body.drawer-open .stage { z-index:45; }
   }
   .d-head { display:flex; align-items:center; justify-content:space-between; padding:18px 24px 0; }
-  .d-head h2 { margin:0; font-size:20px; font-weight:800; letter-spacing:-.02em; }
+  .d-head h2 { margin:0; font-family:"Lilita One","Plus Jakarta Sans",system-ui,sans-serif; font-size:24px; font-weight:400; letter-spacing:.01em; }
   .x { border:0; background:none; width:36px; height:36px; border-radius:10px; display:grid; place-items:center; color:var(--muted); }
   .x:hover { background:var(--sunken); color:var(--ink); }
   .d-tabs { display:flex; gap:4px; padding:14px 24px 0; border-bottom:1px solid var(--line); }
@@ -276,8 +280,8 @@
   .vpick:hover { border-color:var(--muted); }
   .vpick b { display:block; line-height:1.3; }
   .vpick small { color:var(--muted); font-size:13px; }
-  .vpick[aria-checked="true"] { border-color:var(--primary); box-shadow:0 0 0 1px var(--primary); background:var(--primary-soft); }
-  .vpick .tick { flex:none; width:20px; height:20px; border-radius:50%; background:var(--primary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 10.5l3 3 6-6.5' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/20px no-repeat; visibility:hidden; }
+  .vpick[aria-checked="true"] { border-color:#ff7fc8; box-shadow:0 0 0 1px #ff7fc8; background:color-mix(in srgb,#ff7fc8 14%,var(--surface)); }
+  .vpick .tick { flex:none; width:20px; height:20px; border-radius:50%; background:#ff7fc8 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 10.5l3 3 6-6.5' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/20px no-repeat; visibility:hidden; }
   .vpick[aria-checked="true"] .tick { visibility:visible; }
   .vmsg { color:var(--err); font-size:13px; margin:10px 0 0; min-height:0; }
   .cq-count { color:var(--muted); font-weight:600; font-size:18px; }
@@ -300,7 +304,7 @@
   .cq-two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .em-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; max-width:340px; }
   .em-cell { display:grid; gap:4px; justify-items:center; padding:6px 4px 4px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
-  .em-cell.on { border-color:var(--primary); box-shadow:0 0 0 2px var(--primary-soft); }
+  .em-cell.on { border-color:#ff7fc8; box-shadow:0 0 0 2px color-mix(in srgb,#ff7fc8 14%,var(--surface)); }
   .em-cell.gone { border-color:var(--primary); background:var(--primary-soft); }
   .em-pic { border:0; background:none; padding:2px; border-radius:10px; cursor:pointer; line-height:0; }
   .em-pic:hover, .em-pic:focus-visible { background:var(--primary-soft); }
@@ -337,12 +341,12 @@
   .tm-val { color:var(--ink); }
   .tm-val small { color:var(--ink); font-weight:500; font-size:13px; white-space:nowrap; }
   #tm-range { -webkit-appearance:none; appearance:none; width:100%; height:8px; border-radius:99px; outline-offset:4px;
-    background:linear-gradient(to right,var(--primary) var(--p,50%),var(--line-strong) var(--p,50%)); }
-  #tm-range::-webkit-slider-thumb { -webkit-appearance:none; width:24px; height:24px; border-radius:50%; background:#fff; border:3px solid var(--primary); cursor:pointer; }
-  #tm-range::-moz-range-thumb { width:18px; height:18px; border-radius:50%; background:#fff; border:3px solid var(--primary); cursor:pointer; }
+    background:linear-gradient(to right,#ff7fc8 var(--p,50%),var(--line-strong) var(--p,50%)); }
+  #tm-range::-webkit-slider-thumb { -webkit-appearance:none; width:24px; height:24px; border-radius:50%; background:#fff; border:3px solid #ff7fc8; cursor:pointer; }
+  #tm-range::-moz-range-thumb { width:18px; height:18px; border-radius:50%; background:#fff; border:3px solid #ff7fc8; cursor:pointer; }
   .seg button { border:1px solid var(--line-strong); background:var(--surface); border-radius:10px; padding:10px 0; font-weight:600; font-variant-numeric:tabular-nums; }
   .seg button:hover { border-color:var(--muted); }
-  .seg button[aria-pressed="true"], .chip[aria-pressed="true"] { background:var(--primary-soft); border-color:var(--primary); color:var(--primary); }
+  .seg button[aria-pressed="true"], .chip[aria-pressed="true"] { background:color-mix(in srgb,#ff7fc8 14%,var(--surface)); border-color:#ff7fc8; color:var(--ink); }
   .chips { display:flex; flex-wrap:wrap; gap:8px; }
   .chip { border:1px solid var(--line-strong); background:var(--surface); border-radius:99px; padding:7px 14px; font-size:14px; }
   .chip:hover { border-color:var(--muted); }
@@ -356,8 +360,8 @@
   .look .rbox { display:grid; place-items:center; font-size:30px; font-weight:800; color:#fff; background:linear-gradient(160deg,#2b2160,#6b2352); }
   .look em { display:block; font-style:normal; font-size:12px; font-weight:600; padding:7px 4px; line-height:1.25; }
   .look:hover { border-color:var(--muted); }
-  .look[aria-pressed="true"] { border-color:var(--primary); box-shadow:0 0 0 2px var(--primary); }
-  .look[aria-pressed="true"]::after { content:""; position:absolute; top:7px; right:7px; width:20px; height:20px; border-radius:50%; background:var(--primary)
+  .look[aria-pressed="true"] { border-color:#ff7fc8; box-shadow:0 0 0 2px #ff7fc8; }
+  .look[aria-pressed="true"]::after { content:""; position:absolute; top:7px; right:7px; width:20px; height:20px; border-radius:50%; background:#ff7fc8
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M5.5 10.5l3 3 6-6.5' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/20px no-repeat; }
 
   .switch { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 16px; border:1px solid var(--line-strong); border-radius:12px; margin-bottom:20px; cursor:pointer; }
@@ -470,7 +474,7 @@
         <div class="card-head"><h2>Topic</h2></div>
         <div class="topic-body">
           <div class="tmode" id="tmode" role="group" aria-label="Choose a topic">
-            <button type="button" class="kind" data-mode="random"><b>Surprise me</b><span>A fresh, random topic every time.</span></button>
+            <button type="button" class="kind" data-mode="random"><b>Surprise me</b><span id="tm-rand-desc">A fresh, random topic every time.</span></button>
             <button type="button" class="kind" data-mode="custom"><b>My own topic</b><span>Type anything you like.</span></button>
           </div>
           <div id="topic-custom" hidden>
@@ -479,6 +483,11 @@
             <p class="help" id="topic-help"></p>
             <div class="try"><span>Need an idea?</span><div class="chips" id="topic-ex"></div></div>
           </div>
+        </div>
+        <div id="topics-card" hidden style="border-top:1px solid var(--line)">
+          <dl class="rows" style="margin:0">
+          <div class="row editable" id="row-topics" style="grid-template-columns:minmax(0,1fr) auto"><dt hidden>Categories</dt><dd class="v" id="s-topics" style="margin:0"></dd><button class="link" data-edit="topics" aria-label="Change topics"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          </dl>
         </div>
       </div>
 
@@ -490,7 +499,6 @@
         <dl class="rows" style="margin:0">
           <div class="row editable" id="row-questions"><dt id="k-count">Questions</dt><dd class="v" id="s-questions" style="margin:0"></dd><button class="link" data-edit="questions" aria-label="Change number of questions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row row-timer" id="row-timer"><dt id="tm-lab">Timer</dt><dd class="v" id="s-timer" style="margin:0"></dd></div>
-          <div class="row editable" id="row-topics"><dt>Topics</dt><dd class="v" id="s-topics" style="margin:0"></dd><button class="link" data-edit="topics" aria-label="Change topics"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row editable"><dt>Look</dt><dd class="v" id="s-look" style="margin:0"></dd><button class="link" data-edit="look" aria-label="Change look"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row editable" id="row-colors"><dt>Colors</dt><dd class="v" id="s-colors" style="margin:0"></dd><button class="link" data-edit="colors" aria-label="Change colors"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row editable"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
@@ -498,10 +506,10 @@
         </dl>
       </div>
 
-      <div class="actions">
+      <p class="help" style="margin:20px 0 0;text-align:center;font-size:12px">By generating a video you agree to the <a href="/terms#acceptable-use">acceptable use rules</a>: family friendly, no personal details.</p>
+      <div class="actions" style="margin-top:36px;margin-bottom:28px">
         <button class="btn btn-primary" id="go">Generate video</button>
       </div>
-      <p class="help" style="margin:10px 0 0;text-align:center">By generating a video you agree to the <a href="/terms#acceptable-use">acceptable use rules</a>: family friendly, no personal details.</p>
       <div class="err" id="err" role="alert"></div>
 
       <div class="card" id="progress" aria-live="polite">
@@ -874,7 +882,7 @@ function renderSummary() {
   $("k-count").textContent = f.noun[0].toUpperCase() + f.noun.slice(1);
   $("s-questions").textContent = S.questions + " " + f.noun;
   const bld = building();
-  $("row-topics").hidden = f.needs_topic || bld; $("topic-card").hidden = !f.needs_topic || bld;
+  $("topics-card").hidden = f.needs_topic || bld || mode() === "custom"; $("topic-card").hidden = bld;
   $("story-card").hidden = S.kind !== "story"; paintStory();
   $("mode-card").hidden = fmt().custom === false;
   $("row-questions").hidden = bld; $("custom-card").hidden = !bld; $("row-colors").hidden = false;
@@ -925,6 +933,7 @@ function buildSeg() {
   $("q-lab").textContent = "Number of " + f.noun;
 }
 const TOPIC_HELP = {
+  trivia: "Any subject works, like \"Ocean animals\" or \"90s cartoons\". Gemini writes the questions.",
   personality: "Any quiz idea works, like \"Which season are you?\".",
   wyr: "Any theme works, like \"School life\" or \"Superpowers\".",
   toplist: "Type what should be ranked, like \"Fastest animals\".",
@@ -957,9 +966,11 @@ function buildTopicChips() {
 function paintTopic() {
   document.querySelectorAll("#tmode .kind").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode())));
   $("topic-custom").hidden = mode() !== "custom";
+  $("tm-rand-desc").textContent = S.kind === "trivia" ? "Mixed questions from the categories you pick below." : "A fresh, random topic every time.";
+  if (S.kind === "trivia") { const t = $("topics-card"); if (t) t.hidden = building() || mode() === "custom"; }
 }
 document.querySelectorAll("#tmode .kind").forEach((b) => b.addEventListener("click", () => {
-  S.modes[S.kind] = b.dataset.mode; saveSettings(); paintTopic();
+  S.modes[S.kind] = b.dataset.mode; saveSettings(); paintTopic(); renderSummary();
   if (b.dataset.mode === "custom") $("topic-in").focus();
 }));
 $("topic-in").addEventListener("input", (e) => { S.topics[S.kind] = e.target.value; saveSettings(); });
@@ -1566,11 +1577,11 @@ $("go").addEventListener("click", async () => {
     }
     customData = r.data;
   }
-  if (!customData && fmt().needs_topic && mode() === "custom" && !topic()) {
+  if (!customData && (fmt().needs_topic || S.kind === "trivia") && mode() === "custom" && !topic()) {
     $("err").textContent = "Type a topic, or choose Surprise me.";
     return;
   }
-  if (!customData && fmt().needs_topic && !CFG.gemini && !CFG.mock) {
+  if (!customData && (fmt().needs_topic || (S.kind === "trivia" && topic())) && !CFG.gemini && !CFG.mock) {
     $("err").textContent = "This video type needs a free Gemini key to write the script. Add GEMINI_API_KEY to your .env file and restart the app.";
     return;
   }

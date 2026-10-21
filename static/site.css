@@ -62,16 +62,15 @@ button, input, select { font:inherit; color:inherit; }
     radial-gradient(60% 80% at 92% 12%, rgba(255,78,178,.22), transparent 62%),
     radial-gradient(55% 75% at 6% 105%, rgba(112,84,240,.38), transparent 60%),
     #120f24; }
-.hero-in { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr); gap:56px; align-items:center; }
-.vtitle { margin:0; display:inline-block; background:var(--hdr); border:7px solid var(--hdr-line); border-radius:10px; padding:26px 34px 30px; font:400 clamp(40px,5.6vw,76px)/1.06 var(--display); color:#fff; letter-spacing:.005em;
+.hero-in { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr); gap:56px; align-items:start; }
+.vtitle { margin:0; display:block; width:fit-content; max-width:100%; background:var(--hdr); border:7px solid var(--hdr-line); border-radius:10px; padding:26px 34px 30px; font:400 clamp(40px,5.6vw,76px)/1.06 var(--display); color:#fff; letter-spacing:.005em;
   text-shadow:4.00px 0.00px 0 var(--outline),3.92px 0.78px 0 var(--outline),3.70px 1.53px 0 var(--outline),3.33px 2.22px 0 var(--outline),2.83px 2.83px 0 var(--outline),2.22px 3.33px 0 var(--outline),1.53px 3.70px 0 var(--outline),0.78px 3.92px 0 var(--outline),0.00px 4.00px 0 var(--outline),-0.78px 3.92px 0 var(--outline),-1.53px 3.70px 0 var(--outline),-2.22px 3.33px 0 var(--outline),-2.83px 2.83px 0 var(--outline),-3.33px 2.22px 0 var(--outline),-3.70px 1.53px 0 var(--outline),-3.92px 0.78px 0 var(--outline),-4.00px 0.00px 0 var(--outline),-3.92px -0.78px 0 var(--outline),-3.70px -1.53px 0 var(--outline),-3.33px -2.22px 0 var(--outline),-2.83px -2.83px 0 var(--outline),-2.22px -3.33px 0 var(--outline),-1.53px -3.70px 0 var(--outline),-0.78px -3.92px 0 var(--outline),-0.00px -4.00px 0 var(--outline),0.78px -3.92px 0 var(--outline),1.53px -3.70px 0 var(--outline),2.22px -3.33px 0 var(--outline),2.83px -2.83px 0 var(--outline),3.33px -2.22px 0 var(--outline),3.70px -1.53px 0 var(--outline),3.92px -0.78px 0 var(--outline),2.00px 0.00px 0 var(--outline),1.96px 0.39px 0 var(--outline),1.85px 0.77px 0 var(--outline),1.66px 1.11px 0 var(--outline),1.41px 1.41px 0 var(--outline),1.11px 1.66px 0 var(--outline),0.77px 1.85px 0 var(--outline),0.39px 1.96px 0 var(--outline),0.00px 2.00px 0 var(--outline),-0.39px 1.96px 0 var(--outline),-0.77px 1.85px 0 var(--outline),-1.11px 1.66px 0 var(--outline),-1.41px 1.41px 0 var(--outline),-1.66px 1.11px 0 var(--outline),-1.85px 0.77px 0 var(--outline),-1.96px 0.39px 0 var(--outline),-2.00px 0.00px 0 var(--outline),-1.96px -0.39px 0 var(--outline),-1.85px -0.77px 0 var(--outline),-1.66px -1.11px 0 var(--outline),-1.41px -1.41px 0 var(--outline),-1.11px -1.66px 0 var(--outline),-0.77px -1.85px 0 var(--outline),-0.39px -1.96px 0 var(--outline),-0.00px -2.00px 0 var(--outline),0.39px -1.96px 0 var(--outline),0.77px -1.85px 0 var(--outline),1.11px -1.66px 0 var(--outline),1.41px -1.41px 0 var(--outline),1.66px -1.11px 0 var(--outline),1.85px -0.77px 0 var(--outline),1.96px -0.39px 0 var(--outline); }
 .vtitle .w { transition:color .12s; }
 .vtitle .w.on { color:#ff7fc8; }
 .hero p.sub { font-size:19px; color:var(--muted); max-width:46ch; margin:30px 0 28px; }
 .hero-cta { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
-.hero-cta .btn-primary { transition:background .15s, border-color .15s, color .12s, box-shadow .15s, -webkit-text-stroke-width .12s, transform .15s; }
-.hero-cta .btn-primary:hover, .hero-cta .btn-primary:focus-visible { color:#ff7fc8; border-color:var(--hdr-line); box-shadow:inset 0 0 0 2px var(--hdr-line); -webkit-text-stroke:1.6px var(--outline); paint-order:stroke fill; }
-/* on hover it takes the headline box's look: pink label with a thin black outline and the same pink border */
+.hero-cta .btn-primary { background:#f6248c; border-color:#f6248c; color:#fff; transition:background .15s, border-color .15s, transform .15s, -webkit-text-stroke-width .12s; }
+.hero-cta .btn-primary:hover, .hero-cta .btn-primary:focus-visible { background:#f6248c; border-color:#f6248c; color:#fff; box-shadow:none; transform:none; -webkit-text-stroke:1.6px var(--outline); paint-order:stroke fill; }
 .play-cta { display:inline-flex; align-items:center; gap:14px; color:var(--ink); text-decoration:none; font-weight:800; font-size:26px; letter-spacing:-.01em; border-radius:14px; padding:4px 6px; margin-left:-18px; }
 .play-cta svg { width:46px; height:46px; fill:none; stroke:var(--ink); stroke-width:3.2; stroke-linejoin:round; stroke-linecap:round; transition:transform .22s cubic-bezier(.2,.8,.3,1), stroke .2s ease; }
 .play-cta:hover svg, .play-cta:focus-visible svg { transform:translateY(-6px); stroke:var(--primary); }
@@ -81,11 +80,11 @@ button, input, select { font:inherit; color:inherit; }
 .hero-note { margin:14px 0 0; font-size:14px; color:var(--muted); }
 
 .stagewrap { display:flex; flex-direction:column; align-items:center; align-self:start; margin-top:0; }
-.phone-link { display:block; width:min(100%,248px); color:inherit; text-decoration:none; border-radius:46px; }
+.phone-link { display:block; width:min(100%,260px); color:inherit; text-decoration:none; border-radius:46px; }
 .phone-link .phone { width:100%; transition:transform .25s cubic-bezier(.2,.8,.3,1), box-shadow .25s ease; }
-.phone-link:hover .phone, .phone-link:focus-visible .phone { transform:translateY(-20px) scale(1.07); box-shadow:0 70px 110px -28px rgba(70,40,200,.7), 0 0 0 1px rgba(255,255,255,.06) inset; }
+.phone-link:hover .phone, .phone-link:focus-visible .phone { transform:translateY(-10px) scale(1.035); box-shadow:0 70px 110px -28px rgba(70,40,200,.7), 0 0 0 1px rgba(255,255,255,.06) inset; }
 @media (prefers-reduced-motion: reduce) { .phone-link .phone { transition:none; } .phone-link:hover .phone, .phone-link:focus-visible .phone { transform:none; } }
-.phone { width:min(100%,300px); border-radius:46px; background:#0b0b10; padding:11px; box-shadow:0 40px 80px -30px rgba(20,22,31,.55), 0 0 0 1px rgba(255,255,255,.06) inset; }
+.phone { width:min(100%,300px); border-radius:46px; background:#0b0b10; padding:11px; box-shadow:0 0 0 2px rgba(255,255,255,.16), 0 40px 80px -30px rgba(20,22,31,.55), 0 0 0 1px rgba(255,255,255,.06) inset; }
 .screen { position:relative; aspect-ratio:9/16; border-radius:12% / 6.75%; overflow:hidden; background:#000; }
 .screen img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; z-index:0; }
 .screen img.prev { opacity:1; z-index:1; }

@@ -17,6 +17,7 @@ VOICE_GAIN = 1.7    # the narrator, relative to the sound effects
 # maximum average level, otherwise being as tall as a click would make it drown the narrator.
 EFFECT_PEAK = 0.68
 EFFECT_MAX_RMS = 0.16
+TICK_TRIM = 0.9   # the timer tick a little lower than the other effects
 
 
 def decode_audio(path) -> np.ndarray:
@@ -136,10 +137,14 @@ def tick() -> np.ndarray:
 
 
 def pop() -> np.ndarray:
-    dur = 0.09
+    """A short bubble pop. Longer and brighter than a plain sine so it reads as loud as the timer tick, not as a faint blip."""
+    dur = 0.16
     t = np.arange(int(SR * dur)) / SR
-    phase = 2 * np.pi * (400 * t + (500 / (2 * dur)) * t**2)  # sweep 400 -> 900 Hz
-    return (np.sin(phase) * np.exp(-30 * t)).astype(np.float32) * 0.6
+    phase = 2 * np.pi * (450 * t + (700 / (2 * dur)) * t**2)   # sweep 450 -> 1150 Hz
+    body = np.sin(phase) + 0.5 * np.sin(2 * phase) + 0.25 * np.sin(3 * phase)
+    click = np.random.default_rng(3).standard_normal(len(t)) * np.exp(-400 * t) * 0.6
+    out = (body * np.exp(-14 * t) + click) * np.minimum(1.0, t * 800)
+    return np.tanh(out * 1.6).astype(np.float32)
 
 
 def whoosh() -> np.ndarray:
@@ -241,8 +246,18 @@ def _level(a: np.ndarray) -> np.ndarray:
     return a.astype(np.float32)
 
 
+def _match_rms(a: np.ndarray, rms: float) -> np.ndarray:
+    loud = a[np.abs(a) > 0.01]
+    cur = float(np.sqrt(np.mean(loud ** 2))) or 1.0
+    a = a * (rms / cur)
+    return np.clip(a, -0.85, 0.85).astype(np.float32)
+
+
 def effects() -> dict:
     """Every sound effect already set to its level (see EFFECT_PEAK). All video types use this, so they all sound the same."""
     raw = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle(), "siren": siren(),
            "sting": challenge_sting()}
-    return {k: _level(v) for k, v in raw.items()}
+    out = {k: _level(v) for k, v in raw.items()}
+    out["tick"] = (out["tick"] * TICK_TRIM).astype(np.float32)   # the countdown plays the whole time, so it sits a little under the rest
+    out["pop"] = _match_rms(out["pop"], 0.3)   # a short sound needs a higher peak to feel as loud as the others
+    return out

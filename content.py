@@ -409,6 +409,42 @@ def random_topic(kind: str) -> str:
     return area
 
 
+def trivia_questions(topic: str, n: int) -> list:
+    """Multiple-choice trivia about one topic the person typed, in the same shape as questions they write themselves."""
+    topic = _s(topic, 80)
+    import safety
+    safety.check(topic, "topic")
+    n = max(3, min(10, int(n)))
+    if is_mock():
+        return [{"question": f"Question {i + 1} about {topic}?", "choices": ["First", "Second", "Third", "Fourth"], "correct_idx": i % 4}
+                for i in range(n)]
+    p = (
+        f"Write {n} multiple-choice trivia questions for a short vertical video. Topic: \"{topic}\".\n"
+        "Return ONLY a JSON object: {\"questions\": [...]}\n"
+        "- each question: {\"question\": max 110 characters, \"choices\": [4 short strings, max 28 characters each], "
+        "\"correct_idx\": 0-3}. Exactly one choice is right, the other three are plausible but clearly wrong. Vary which "
+        "position is right. Questions are fun, accurate, easy to picture and get gradually harder. Every fact must be true.\n"
+        "Keep everything family friendly."
+    )
+    for attempt in range(2):
+        d = _ask(p)
+        out = []
+        for q in (d.get("questions") or [])[:n]:
+            if not isinstance(q, dict):
+                continue
+            ch = [_s(x, 30) for x in (q.get("choices") or [])][:4]
+            idx = q.get("correct_idx")
+            if len(ch) == 4 and all(ch) and len({x.lower() for x in ch}) == 4 and isinstance(idx, int) and 0 <= idx < 4 and _s(q.get("question"), 120):
+                out.append({"question": _s(q.get("question"), 120), "choices": ch, "correct_idx": idx})
+        if len(out) >= min(n, 3):
+            try:
+                safety.check_output(out)
+                return out
+            except safety.Blocked:
+                flog("[content] trivia rejected, writing again")
+    raise RuntimeError("We couldn't write questions for that topic that fit our family friendly rules. Please try a different topic.")
+
+
 def generate(kind: str, topic: str, n: int, mode: str = "path") -> dict:
     if kind not in KINDS:
         raise RuntimeError("Unknown video type.")
