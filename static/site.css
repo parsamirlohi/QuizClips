@@ -37,7 +37,8 @@ button, input, select { font:inherit; color:inherit; }
 .brand { display:flex; align-items:center; gap:3px; font-weight:800; font-size:23px; letter-spacing:-.02em; text-decoration:none; white-space:nowrap; }
 .mark { width:56px; height:56px; display:grid; place-items:center; flex:none; }
 .mark img { width:100%; height:100%; display:block; }
-.brand .name { font-family:var(--display); font-weight:400; font-size:30px; letter-spacing:.01em; line-height:1; margin-left:0; margin-bottom:0; padding-top:2px; color:#fff; -webkit-text-stroke:5px #14161f; paint-order:stroke fill; }   /* was: line-height:.7; margin-left:-7px; margin-bottom:7px (tucked bottom right) */
+.brand .name { font-family:var(--display); font-weight:400; font-size:30px; letter-spacing:.01em; line-height:1; margin-left:0; margin-bottom:0; padding-top:2px; color:#14161f; -webkit-text-stroke:0 #14161f; paint-order:stroke fill; }   /* was: line-height:.7; margin-left:-7px; margin-bottom:7px (tucked bottom right) */
+:root[data-theme="dark"] .brand .name { color:#fff; -webkit-text-stroke:5px #14161f; }   /* dark mode keeps the original white name with a dark outline */
 .links { display:flex; gap:14px; margin-left:0; }   /* centered in the bar */
 .links a { text-decoration:none; color:var(--muted); font-weight:600; font-size:18px; line-height:1.3; padding:6px 12px; border-radius:12px; }
 .links a:hover, .links a[aria-current="page"] { color:#000; -webkit-text-stroke:.2px #000; }   /* darker and a touch bolder, without changing the width */
@@ -52,7 +53,7 @@ button, input, select { font:inherit; color:inherit; }
 .btn-lg { padding:15px 26px; font-size:17px; border-radius:14px; }
 
 /* ---------- hero ---------- */
-.hero { padding:64px 0 72px; border-bottom:1px solid var(--line);
+.hero { padding:64px 0 72px; min-height:calc(100vh - 73px); min-height:calc(100svh - 73px); display:flex; flex-direction:column; justify-content:center; border-bottom:1px solid var(--line);
   background:
     radial-gradient(60% 80% at 92% 12%, rgba(255,78,178,.30), transparent 62%),
     radial-gradient(55% 75% at 6% 105%, rgba(112,84,240,.30), transparent 60%),
@@ -100,7 +101,7 @@ button, input, select { font:inherit; color:inherit; }
 section { scroll-margin-top:0; }
 .sec { padding:84px 0; }
 .sec.alt { background:var(--surface); border-block:1px solid var(--line); }
-.sec h2 { font:400 clamp(32px,4.2vw,48px)/1.1 var(--display); letter-spacing:.005em; margin:0 0 14px; max-width:20ch; }
+.sec h2 { font:400 clamp(38px,5vw,58px)/1.1 var(--display); letter-spacing:.005em; margin:0 0 14px; max-width:20ch; }
 .sec .lead { color:var(--muted); font-size:18px; max-width:52ch; margin:0 0 44px; }
 
 .types { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 56px; }
@@ -213,7 +214,7 @@ a.type:hover h3 { color:var(--primary); }
 
 /* ---------- small screens ---------- */
 @media (max-width: 900px) {
-  .hero { padding:36px 0 56px; }
+  .hero { padding:36px 0 56px; min-height:0; }
   .hero-in { grid-template-columns:1fr; gap:44px; }
   .stagewrap { margin-top:0; }
   .stagewrap { order:2; }
