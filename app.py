@@ -6,7 +6,7 @@ import time
 import uuid
 import webbrowser
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -15,6 +15,7 @@ from config import BASE, ENV_STATUS, OUTPUT_DIR, env, is_mock
 from videos import has_video_key
 from pipeline import build_quiz
 import content
+import emojis
 import formats
 import gemini
 import looks
@@ -22,11 +23,27 @@ import io
 from PIL import Image
 import pipeline
 import previews
+import safety
 import site_routes
 from questions import CATEGORY_LABELS
 import tts
 
 app = FastAPI(title="Quizclips")
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Standard browser protections on every response."""
+    resp = await call_next(request)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    return resp
+
+
+def _limited(e: "safety.Limited") -> HTTPException:
+    return HTTPException(e.status, e.message, headers={"Retry-After": str(e.retry_after)})
 jobs: dict = {}
 current = {"id": None}
 lock = threading.Lock()
@@ -44,7 +61,7 @@ class GenerateRequest(BaseModel):
     watermark_handle: str = Field(default="", max_length=60)
     story_mode: str = Field(default="path", pattern="^(path|survive)$")   # Story type: choose your path / would you survive
     custom: dict | None = None   # "I'll write it": the person's own content (see content.clean_custom for the shape)
-    colors: dict[str, str] = Field(default_factory=dict)   # question_box, question_outline, answer_box, answer_outline, frame, highlight
+    colors: dict[str, str] = Field(default_factory=dict, max_length=12)   # question_box, question_outline, answer_box, answer_outline, frame, highlight
     think_seconds: int | None = Field(default=None, ge=5, le=15)  # seconds viewers get to answer; None = the type's default
 
 
@@ -75,7 +92,7 @@ FORMATS = [
 for _f in FORMATS:
     _f["think_default"] = THINK_DEFAULTS.get(_f["key"])   # None = this type has no countdown
     _f["think_choices"] = THINK_CHOICES if _f["key"] in THINK_DEFAULTS else []
-    _f["custom"] = _f["key"] not in ("odd", "clip", "missing")   # these two are written by the AI only for now (no "I'll write it" editor yet)
+    _f["custom"] = True   # every type has an "I'll write it" editor
     _f["build_min"] = 1 if _f["key"] == "trivia" else _f["min"]   # fewest / most items when the person writes their own
     _f["build_max"] = 10 if _f["key"] == "trivia" else _f["max"]
 
@@ -147,6 +164,7 @@ def run_job(job_id: str, req: GenerateRequest):
             print(f"[cleanup] skipped: {e}", flush=True)
     except Exception as e:
         job.update(status="error", error=str(e), message="Failed")
+        safety.refund_video(job.get("ip", ""))   # a video that failed does not count against the visitor's day
     finally:
         pipeline.THINK = THINK_DEFAULTS["trivia"]
         formats.THINK_PERSONALITY = THINK_DEFAULTS["personality"]
@@ -156,10 +174,14 @@ def run_job(job_id: str, req: GenerateRequest):
 
 
 @app.get("/api/preview")
-def preview(kind: str, look: str, colors: str = ""):
+def preview(request: Request, kind: str, look: str, colors: str = ""):
     """The graphics of the Studio phone preview, drawn with the person's own colors (see previews.py)."""
     if kind not in previews.KINDS or look not in looks.LOOKS:
         raise HTTPException(404, "Unknown preview.")
+    try:
+        safety.rate_limit("preview", safety.client_ip(request), 240, 60, "Slow down a little: too many preview updates.")
+    except safety.Limited as e:
+        raise _limited(e)
     try:
         picked = json.loads(colors) if colors else {}
     except ValueError:
@@ -189,6 +211,7 @@ def config():
         "looks": looks.listing(),
         "groups": looks.GROUPS,
         "default_look": looks.DEFAULT,
+        "emoji": [{"theme": t, "items": [[c, n] for c, n in group.items()]} for t, group in emojis.THEMES.items()],
     }
 
 
@@ -221,30 +244,50 @@ def prune_videos():
 
 
 @app.post("/api/generate")
-def generate(req: GenerateRequest):
-    if req.custom:
-        try:
-            content.clean_custom(req.kind, req.custom, req.story_mode)
-        except ValueError as e:
-            raise HTTPException(400, str(e))
+def generate(req: GenerateRequest, request: Request):
+    ip = safety.client_ip(request)
+    try:
+        safety.check_paused(ip)
+    except safety.Limited as e:
+        raise _limited(e)
+    # 1. size and content checks, before anything is started or counted
+    if req.custom and len(json.dumps(req.custom)) > 60000:
+        raise HTTPException(400, "That's more text than one video can hold.")
+    try:
+        safety.check_user_text([req.topic.strip()], "topic", ip)
+        if req.watermark_on and req.watermark_handle.strip():   # drawn on the video, so it follows the rules too (a link is fine here)
+            safety.check(req.watermark_handle.strip(), "watermark", ip, personal=False)
+        if req.custom:
+            cleaned = content.clean_custom(req.kind, req.custom, req.story_mode)   # the rules run on every field
+            if isinstance(cleaned, list):
+                cleaned = {"questions": cleaned}
+            content.review_custom(cleaned, ip)                                      # one AI review of all of it
+    except ValueError as e:   # safety.Blocked is a ValueError too
+        raise HTTPException(400, str(e))
     if not has_video_key():
         raise HTTPException(400, "Add PIXABAY_API_KEY to the .env file first.")
+    # 2. limits: only now does this count as a video for this visitor and for the site
+    try:
+        safety.start_video(ip)
+    except safety.Limited as e:
+        raise _limited(e)
     with lock:
         if current["id"]:
+            safety.refund_video(ip)
             raise HTTPException(409, "A video is already being made. Wait for it to finish.")
         job_id = uuid.uuid4().hex[:10]
         jobs[job_id] = {"id": job_id, "status": "running", "progress": 0.0, "message": "Starting...",
-                        "created": time.time()}
+                        "created": time.time(), "ip": ip}
         current["id"] = job_id
     threading.Thread(target=run_job, args=(job_id, req), daemon=True).start()
-    return jobs[job_id]
+    return {k: v for k, v in jobs[job_id].items() if k != "ip"}
 
 
 @app.get("/api/jobs/{job_id}")
 def get_job(job_id: str):
     if job_id not in jobs:
         raise HTTPException(404, "Job not found")
-    return jobs[job_id]
+    return {k: v for k, v in jobs[job_id].items() if k != "ip"}
 
 
 @app.get("/api/videos")
@@ -256,6 +299,7 @@ def videos():
 
 
 app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
+app.mount("/emoji", StaticFiles(directory=BASE / "assets" / "emoji"), name="emoji")   # the pictures of What's missing, shown in the editor
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 
 

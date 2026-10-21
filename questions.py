@@ -13,9 +13,9 @@ import urllib.parse
 
 import requests
 
-from config import BASE, env, is_mock
+from config import BASE, DATA_DIR, env, is_mock
 
-HISTORY_FILE = BASE / "history.json"
+HISTORY_FILE = DATA_DIR / "history.json"
 LETTERS = "ABCD"
 
 STOP = set(
@@ -229,6 +229,9 @@ def _usable(q: str, correct: str, wrong: list) -> bool:
     if re.search(r"(?i)\b(this image|pictured|shown|following (image|picture|photo|logo|clip))\b", q):
         return False
     if any(re.search(r"(?i)(of the above|both a|both b)", a) for a in answers):
+        return False
+    import safety   # questions from outside are filtered too: nothing the safety rules would block reaches a video
+    if not all(safety.is_clean(t) for t in [q] + answers):
         return False
     return True
 

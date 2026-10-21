@@ -56,3 +56,22 @@ def make_round(topic: str, size: int = 9) -> dict:
     random.shuffle(opts)
     return {"grid": codes, "hole": hole, "options": [names[c] for c in opts], "correct_idx": opts.index(gone),
             "answer": names[gone]}
+
+
+def all_names() -> dict:
+    """code -> name for every picture there is."""
+    return {c: n for group in THEMES.values() for c, n in group.items()}
+
+
+def round_from(codes: list, hole: int) -> dict:
+    """Like make_round, but for pictures the person picked: codes (9 of them) and the index that goes missing. The
+    answer choices are the missing one, one that stays on screen and one that was never there."""
+    names = all_names()
+    gone = codes[hole]
+    seen = [c for i, c in enumerate(codes) if i != hole]
+    other = random.choice(seen)
+    never = random.choice([c for c in names if c not in codes] or [c for c in seen if c != other])
+    opts = [gone, other, never]
+    random.shuffle(opts)
+    return {"grid": list(codes), "hole": hole, "options": [names[c] for c in opts], "correct_idx": opts.index(gone),
+            "answer": names[gone]}

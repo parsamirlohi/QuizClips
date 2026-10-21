@@ -13,11 +13,11 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 import looks
-from config import BASE
+from config import BASE, DATA_DIR
 
 router = APIRouter()
 STATIC = BASE / "static"
-WAITLIST = BASE / "waitlist.jsonl"
+WAITLIST = DATA_DIR / "waitlist.jsonl"
 PAGES = {"/": "home.html", "/app": "index.html", "/pricing": "pricing.html", "/terms": "terms.html",
          "/privacy": "privacy.html", "/settings": "settings.html", "/profile": "profile.html"}
 NO_STORE = {"Cache-Control": "no-store"}

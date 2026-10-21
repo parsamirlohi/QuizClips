@@ -296,6 +296,20 @@
   .cq-a.right i { background:var(--primary); color:var(--on-primary); }
   .cq-a input[type=radio] { width:20px; height:20px; accent-color:var(--primary); justify-self:center; margin:0; }
   .cq-two { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .em-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; max-width:340px; }
+  .em-cell { display:grid; gap:4px; justify-items:center; padding:6px 4px 4px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+  .em-cell.on { border-color:var(--primary); box-shadow:0 0 0 2px var(--primary-soft); }
+  .em-cell.gone { border-color:var(--primary); background:var(--primary-soft); }
+  .em-pic { border:0; background:none; padding:2px; border-radius:10px; cursor:pointer; line-height:0; }
+  .em-pic:hover, .em-pic:focus-visible { background:var(--primary-soft); }
+  .em-gonebtn { display:flex; gap:5px; align-items:center; font-size:12px; color:var(--muted); cursor:pointer; }
+  .em-gonebtn input { accent-color:var(--primary); margin:0; }
+  .em-cell.gone .em-gonebtn { color:var(--primary); font-weight:700; }
+  .em-picker { display:grid; gap:4px; margin:10px 0; padding:10px; border:1px solid var(--line); border-radius:12px; background:var(--surface); max-height:210px; overflow:auto; }
+  .em-row { display:flex; flex-wrap:wrap; gap:2px; }
+  .em-opt { border:0; background:none; padding:3px; border-radius:8px; cursor:pointer; line-height:0; }
+  .em-opt:hover, .em-opt:focus-visible { background:var(--primary-soft); }
+  .em-opt.used { opacity:.38; }
   @media (max-width:640px) { .cq-two { grid-template-columns:1fr; } }
   .cq-f label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px; }
   .cq-f input[type=text], .cq-f textarea { width:100%; }
@@ -485,6 +499,7 @@
       <div class="actions">
         <button class="btn btn-primary" id="go">Generate video</button>
       </div>
+      <p class="help" style="margin:10px 0 0;text-align:center">By generating a video you agree to the <a href="/terms#acceptable-use">acceptable use rules</a>: family friendly, no personal details.</p>
       <div class="err" id="err" role="alert"></div>
 
       <div class="card" id="progress" aria-live="polite">
@@ -631,7 +646,10 @@ function newCData() {
     facts: rows(3, () => ({ name: "", line: "" })),
     story: rows(3, () => ({ s: "", a: "", oa: "", b: "", ob: "", t: "" })),
     personality: { title: "", results: rows(4, () => ({ name: "", line: "" })), questions: rows(3, () => ({ q: "", a: ["", "", "", ""] })) },
-    titles: { wyr: "", toplist: "", facts: "", story: "" },
+    odd: rows(3, () => ({ items: ["", "", "", ""], odd: 0, why: "", search: "" })),
+    clip: rows(3, () => ({ ans: "", w: ["", "", ""], search: "" })),
+    missing: rows(3, () => ({ grid: [], hole: -1 })),
+    titles: { wyr: "", toplist: "", facts: "", story: "", odd: "" },
   };
 }
 let CFG = null;
@@ -1144,10 +1162,12 @@ const building = () => !!S.build[S.kind] && fmt().custom !== false;
 const BK = {
   trivia: { title: "Your questions", noun: "question" }, wyr: { title: "Your rounds", noun: "round" },
   toplist: { title: "Your list", noun: "item" }, facts: { title: "Your facts", noun: "fact" }, story: { title: "Your story", noun: "decision" }, personality: { title: "Your quiz", noun: "question" },
+  odd: { title: "Your rounds", noun: "round" }, clip: { title: "Your rounds", noun: "round" }, missing: { title: "Your rounds", noun: "round" },
 };
 const BLANK = {
   trivia: () => ({ q: "", a: ["", "", "", ""], c: 0 }), wyr: () => ({ a: "", ta: "", b: "", tb: "" }),
   toplist: () => ({ name: "", line: "" }), facts: () => ({ name: "", line: "" }), story: () => ({ s: "", a: "", oa: "", b: "", ob: "", t: "" }), personality: () => ({ q: "", a: ["", "", "", ""] }),
+  odd: () => ({ items: ["", "", "", ""], odd: 0, why: "", search: "" }), clip: () => ({ ans: "", w: ["", "", ""], search: "" }), missing: () => ({ grid: [], hole: -1 }),
 };
 const bItems = () => (S.kind === "personality" ? S.cdata.personality.questions : S.cdata[S.kind]);
 const isBlank = (c) => JSON.stringify(c) === JSON.stringify(BLANK[S.kind]());
@@ -1236,7 +1256,95 @@ function persQCard(c, i, bad, del) {
   }
   card.appendChild(box); return card;
 }
-const CARD = { trivia: triviaCard, wyr: wyrCard, story: storyCard, toplist: listCard, facts: listCard, personality: persQCard };
+function oddCard(c, i, bad, del) {
+  const card = cardShell(i, "Round " + (i + 1), del, bad);
+  const ans = document.createElement("div"); ans.className = "cq-ans";
+  ans.innerHTML = '<div class="cq-ans-head"><span>Four things (three belong together)</span><span>Doesn\'t belong</span></div>';
+  for (let k = 0; k < 4; k++) {
+    const row = document.createElement("div"); row.className = "cq-a" + (c.odd === k ? " right" : "");
+    row.innerHTML = '<i>' + "ABCD"[k] + '</i><input type="text" maxlength="24" autocomplete="off" placeholder="' + ["Apple", "Banana", "Grape", "Hammer"][k] + '" aria-label="Round ' + (i + 1) + ", item " + "ABCD"[k] + '">' +
+      '<input type="radio" name="cqodd' + i + '" aria-label="Item ' + "ABCD"[k] + ' doesn\'t belong">';
+    const t = row.querySelector("input[type=text]"), r = row.querySelector("input[type=radio]");
+    t.value = c.items[k]; r.checked = c.odd === k;
+    t.oninput = () => { c.items[k] = t.value; cqSave(); };
+    r.onchange = () => { c.odd = k; ans.querySelectorAll(".cq-a").forEach((x, j) => x.classList.toggle("right", j === k)); cqSave(); };
+    ans.appendChild(row);
+  }
+  card.appendChild(ans);
+  field(card, "Why it doesn't belong (optional)", c.why, { max: 80, ph: "The others are fruit, a hammer is a tool." }, (v) => { c.why = v; cqSave(); });
+  field(card, "What should the footage show? (optional)", c.search, { max: 40, ph: "fruit market" }, (v) => { c.search = v; cqSave(); });
+  return card;
+}
+function clipCard(c, i, bad, del) {
+  const card = cardShell(i, "Round " + (i + 1), del, bad);
+  field(card, "What does the clip show? (the right answer)", c.ans, { max: 24, ph: "A lion" }, (v) => { c.ans = v; cqSave(); });
+  const box = document.createElement("div"); box.className = "cq-sec";
+  box.innerHTML = '<span class="help">Three wrong choices that look alike when the picture is blurry. They are shuffled in with the right one.</span>';
+  for (let k = 0; k < 3; k++) {
+    const row = document.createElement("div"); row.className = "cq-a"; row.style.gridTemplateColumns = "34px minmax(0,1fr)";
+    row.innerHTML = '<i>' + "XYZ"[k] + '</i><input type="text" maxlength="24" autocomplete="off" placeholder="' + ["A tiger", "A bear", "A wolf"][k] + '" aria-label="Round ' + (i + 1) + ', wrong choice ' + (k + 1) + '">';
+    const t = row.querySelector("input"); t.value = c.w[k]; t.oninput = () => { c.w[k] = t.value; cqSave(); };
+    box.appendChild(row);
+  }
+  card.appendChild(box);
+  field(card, "What should the footage search for? (optional)", c.search, { max: 40, ph: "lion" }, (v) => { c.search = v; cqSave(); });
+  const tip = document.createElement("p"); tip.className = "help"; tip.style.margin = "0";
+  tip.textContent = "Pick something a camera can film. If you leave the search empty, we find footage from the answer.";
+  card.appendChild(tip);
+  return card;
+}
+const EMOJI_ALL = () => ((CFG && CFG.emoji) || []).flatMap((g) => g.items);
+function emoRandom(c) {
+  const all = EMOJI_ALL().map((e) => e[0]);
+  for (let n = all.length - 1; n > 0; n--) { const j = Math.floor(Math.random() * (n + 1)); [all[n], all[j]] = [all[j], all[n]]; }
+  c.grid = all.slice(0, 9); c.hole = Math.floor(Math.random() * 9);
+}
+function missingCard(c, i, bad, del) {
+  if (c.grid.length !== 9) emoRandom(c);
+  const names = {}; EMOJI_ALL().forEach(([code, n]) => { names[code] = n; });
+  const card = cardShell(i, "Round " + (i + 1), del, bad);
+  const help = document.createElement("p"); help.className = "help"; help.style.margin = "0 0 8px";
+  help.textContent = "Click a picture to swap it. The marked one is the one that disappears.";
+  card.appendChild(help);
+  const grid = document.createElement("div"); grid.className = "em-grid";
+  const picker = document.createElement("div"); picker.className = "em-picker"; picker.hidden = true;
+  let active = -1;
+  const draw = () => {
+    grid.innerHTML = "";
+    c.grid.forEach((code, k) => {
+      const cell = document.createElement("div"); cell.className = "em-cell" + (c.hole === k ? " gone" : "") + (active === k ? " on" : "");
+      cell.innerHTML = '<button type="button" class="em-pic" title="' + esc(names[code] || "") + '" aria-label="Picture ' + (k + 1) + ": " + esc(names[code] || "") + '. Click to change"><img src="/emoji/' + code + '.png" alt="" width="56" height="56"></button>' +
+        '<label class="em-gonebtn"><input type="radio" name="emh' + i + '"' + (c.hole === k ? " checked" : "") + ' aria-label="Picture ' + (k + 1) + ' disappears"><span>Disappears</span></label>';
+      cell.querySelector(".em-pic").onclick = () => { active = active === k ? -1 : k; picker.hidden = active < 0; drawPicker(); draw(); };
+      cell.querySelector("input").onchange = () => { c.hole = k; cqSave(); draw(); };
+      grid.appendChild(cell);
+    });
+  };
+  const drawPicker = () => {
+    picker.innerHTML = "";
+    if (active < 0) return;
+    (CFG.emoji || []).forEach((g) => {
+      const row = document.createElement("div"); row.className = "em-row";
+      g.items.forEach(([code, n]) => {
+        const b = document.createElement("button"); b.type = "button"; b.className = "em-opt" + (c.grid.includes(code) ? " used" : ""); b.title = n; b.setAttribute("aria-label", n);
+        b.innerHTML = '<img src="/emoji/' + code + '.png" alt="" width="36" height="36">';
+        b.onclick = () => {
+          const at = c.grid.indexOf(code);
+          if (at >= 0 && at !== active) c.grid[at] = c.grid[active];   // already in this round: swap places, so no picture appears twice
+          c.grid[active] = code; active = -1; picker.hidden = true; cqSave(); draw();
+        };
+        row.appendChild(b);
+      });
+      picker.appendChild(row);
+    });
+  };
+  const shuffle = document.createElement("button"); shuffle.type = "button"; shuffle.className = "btn btn-sm"; shuffle.textContent = "Shuffle pictures";
+  shuffle.onclick = () => { emoRandom(c); active = -1; picker.hidden = true; cqSave(); draw(); };
+  card.appendChild(grid); card.appendChild(picker);
+  const act = document.createElement("div"); act.className = "cq-actions"; act.appendChild(shuffle); card.appendChild(act);
+  draw(); return card;
+}
+const CARD = { trivia: triviaCard, wyr: wyrCard, story: storyCard, toplist: listCard, facts: listCard, personality: persQCard, odd: oddCard, clip: clipCard, missing: missingCard };
 function renderBuild(badIdx) {
   if (fmt().custom === false) return;   // types without an "I'll write it" editor have nothing to draw here
   const f = fmt(), k = S.kind, list = $("cq-list"); list.innerHTML = "";
@@ -1244,12 +1352,13 @@ function renderBuild(badIdx) {
   $("cq-tools").hidden = k !== "trivia";
   if (k !== "trivia") $("cq-paste").hidden = true;
   // title box (every type except trivia)
-  $("cq-titlewrap").hidden = k === "trivia";
-  if (k !== "trivia") {
+  const noTitle = k === "trivia" || k === "clip" || k === "missing";   // a guessing game's title could give an answer away
+  $("cq-titlewrap").hidden = noTitle;
+  if (!noTitle) {
     const tin = $("cq-title-in");
-    tin.value = k === "personality" ? S.cdata.personality.title : S.cdata.titles[k];
+    tin.value = (k === "personality" ? S.cdata.personality.title : S.cdata.titles[k]) || "";
     $("cq-title-lab").textContent = k === "personality" ? "Quiz title" : "Video title (optional)";
-    tin.placeholder = { personality: "Which season are you?", wyr: "Would you rather", toplist: "Top 5 fastest animals", facts: "Wild facts about the ocean", story: "Would you survive the haunted mansion?" }[k];
+    tin.placeholder = { personality: "Which season are you?", wyr: "Would you rather", toplist: "Top 5 fastest animals", facts: "Wild facts about the ocean", story: "Would you survive the haunted mansion?", odd: "Odd one out: fruit edition" }[k];
     $("cq-title-help").textContent = k === "personality" ? "Shown and read out at the start, like a question to the viewer." : "Shown and read out at the start. Leave it empty to use a simple default.";
     tin.oninput = () => { if (k === "personality") S.cdata.personality.title = tin.value; else S.cdata.titles[k] = tin.value; cqSave(); };
   }
@@ -1268,7 +1377,7 @@ function renderBuild(badIdx) {
   const items = bItems();
   items.forEach((c, i) => list.appendChild(CARD[k](c, i, badIdx === i, () => { items.splice(i, 1); if (!items.length) items.push(BLANK[k]()); cqSave(); renderBuild(); })));
   const max = f.build_max || 10;
-  $("cq-add").textContent = "Add " + (k === "wyr" ? "a round" : k === "story" ? "a decision" : k === "toplist" ? "an item" : k === "facts" ? "a fact" : "a question");
+  $("cq-add").textContent = "Add " + (k === "wyr" || k === "odd" || k === "clip" || k === "missing" ? "a round" : k === "story" ? "a decision" : k === "toplist" ? "an item" : k === "facts" ? "a fact" : "a question");
   $("cq-add").disabled = items.length >= max;
   $("cq-msg").textContent = items.length >= max ? "That's the most one video can hold (" + max + ")." : (k === "toplist" ? "First card is shown first (the biggest number); the last card is number 1." : "");
   renderSummary();
@@ -1307,6 +1416,18 @@ function customPayload() {
   if (k === "toplist" || k === "facts") {
     for (const [c, i] of filled) { if (!T(c.name) || !T(c.line)) return bad((k === "toplist" ? "Number " + (items.length - i) : "Fact " + (i + 1)) + " needs both a " + (k === "toplist" ? "name" : "headline") + " and a sentence.", i); }
     return { data: { title: T(S.cdata.titles[k]), items: filled.map(([c]) => ({ name: T(c.name), line: T(c.line) })) } };
+  }
+  if (k === "odd") {
+    for (const [c, i] of filled) { if (c.items.some((x) => !T(x))) return bad("Round " + (i + 1) + " needs all four items.", i); if (new Set(c.items.map((x) => T(x).toLowerCase())).size !== 4) return bad("Round " + (i + 1) + " has two items that are the same.", i); }
+    return { data: { title: T(S.cdata.titles.odd), rounds: filled.map(([c]) => ({ items: c.items.map(T), odd: c.odd, reason: T(c.why), search: T(c.search) })) } };
+  }
+  if (k === "clip") {
+    for (const [c, i] of filled) { if (!T(c.ans) || c.w.some((x) => !T(x))) return bad("Round " + (i + 1) + " needs the right answer and three wrong choices.", i); if (new Set([c.ans, ...c.w].map((x) => T(x).toLowerCase())).size !== 4) return bad("Round " + (i + 1) + " has two choices that are the same.", i); }
+    return { data: { rounds: filled.map(([c]) => ({ answer: T(c.ans), wrong: c.w.map(T), search: T(c.search) })) } };
+  }
+  if (k === "missing") {
+    for (const [c, i] of filled) { if (c.grid.length !== 9 || c.hole < 0) return bad("Round " + (i + 1) + ": pick which picture disappears.", i); }
+    return { data: { rounds: filled.map(([c]) => ({ grid: c.grid, hole: c.hole })) } };
   }
   const P = S.cdata.personality;
   if (!T(P.title)) return { error: "Give your quiz a title.", bad: -1 };

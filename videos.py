@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 
 import vision
-from config import flog, BASE, CACHE_DIR, env, is_mock, run_ffmpeg
+from config import flog, BASE, CACHE_DIR, DATA_DIR, env, is_mock, run_ffmpeg
 
 API = "https://api.pexels.com/videos/search"
 
@@ -99,7 +99,7 @@ def need_score(query: str) -> int:
     return max(1, n if n <= 2 else (n + 1) // 2)
 
 
-BLOCKLIST_FILE = BASE / "blocked_clips.json"
+BLOCKLIST_FILE = DATA_DIR / "blocked_clips.json"
 
 
 def _blocked() -> set:

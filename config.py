@@ -5,11 +5,14 @@ import subprocess
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
-OUTPUT_DIR = BASE / "output"
-CACHE_DIR = BASE / "cache"
-WORK_DIR = BASE / "work"
+# Everything the app writes (videos, caches, logs, sign-ups) lives under DATA_DIR. It is the project folder on your own
+# computer; on a server set DATA_DIR to a mounted volume so nothing is lost when the app is updated (see DEPLOY.md).
+DATA_DIR = Path(os.environ.get("DATA_DIR") or BASE)
+OUTPUT_DIR = DATA_DIR / "output"
+CACHE_DIR = DATA_DIR / "cache"
+WORK_DIR = DATA_DIR / "work"
 ASSETS_DIR = BASE / "assets"
-for _d in (OUTPUT_DIR, CACHE_DIR, WORK_DIR, ASSETS_DIR):
+for _d in (DATA_DIR, OUTPUT_DIR, CACHE_DIR, WORK_DIR, ASSETS_DIR):
     _d.mkdir(exist_ok=True)
 
 
@@ -77,7 +80,7 @@ def flog(msg: str) -> None:
     print(msg, flush=True)
     try:
         import time as _t
-        with open(BASE / "footage.log", "a", encoding="utf-8") as f:
+        with open(DATA_DIR / "footage.log", "a", encoding="utf-8") as f:
             f.write(f"{_t.strftime('%H:%M:%S')} {msg}\n")
     except OSError:
         pass

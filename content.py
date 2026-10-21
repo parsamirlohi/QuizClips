@@ -397,16 +397,30 @@ def generate(kind: str, topic: str, n: int, mode: str = "path") -> dict:
         raise RuntimeError("Unknown video type.")
     spec = KINDS[kind]
     n = max(spec["min"], min(spec["max"], int(n)))
-    topic = _s(topic, 80) or ("" if kind == "missing" else random_topic(kind))
+    topic = _s(topic, 80)
+    if topic:
+        import safety
+        safety.check(topic, "topic")   # the endpoint already ran the full check (rules + AI review); this keeps other callers safe
+    topic = topic or ("" if kind == "missing" else random_topic(kind))
     mode = mode if mode in MODES else "path"
     if kind == "missing":   # no AI needed: the pictures come from our own set (emojis.py)
         import emojis
         return {"title": "What's missing?", "rounds": [emojis.make_round(topic) for _ in range(n)], "kind": kind,
                 "topic": topic, "mode": "path"}
-    data = _mock(kind, topic, n) if is_mock() else (
-        _personality(topic, n) if kind == "personality" else _wyr(topic, n) if kind == "wyr"
-        else _story(topic, n, mode) if kind == "story" else _odd(topic, n) if kind == "odd"
-        else _clip(topic, n) if kind == "clip" else _items(kind, topic, n))
+    import safety
+    for attempt in range(2):   # what the AI wrote goes through the safety rules; if it slipped, write it once more
+        data = _mock(kind, topic, n) if is_mock() else (
+            _personality(topic, n) if kind == "personality" else _wyr(topic, n) if kind == "wyr"
+            else _story(topic, n, mode) if kind == "story" else _odd(topic, n) if kind == "odd"
+            else _clip(topic, n) if kind == "clip" else _items(kind, topic, n))
+        try:
+            safety.check_output(data)
+            break
+        except safety.Blocked as e:
+            flog(f"[content] generated script rejected ({e.category}), attempt {attempt + 1}")
+            if attempt:
+                raise RuntimeError("We couldn't write a script for that topic that fits our family friendly rules. "
+                                   "Please try a different topic.")
     data["kind"], data["topic"], data["mode"] = kind, topic, mode
     return data
 
@@ -420,6 +434,11 @@ def _text(v, limit: int, what: str, required: bool = True) -> str:
         return ""
     if len(s) > limit:
         raise ValueError(f"{what} is too long (most is {limit} characters).")
+    import safety
+    try:
+        safety.check(s, "custom")   # the rules for every field, right away; the AI review runs once on all of it (clean_custom)
+    except safety.Blocked as e:
+        raise ValueError(f"{what}: {e}")
     return s
 
 
@@ -498,7 +517,70 @@ def clean_custom(kind: str, c, mode: str = "path") -> object:
             qs.append({"q": _text(q.get("q"), 80, f"Question {i}"),
                        "options": [_text(o, 30, f"Question {i}, an answer") for o in opts]})
         return {"title": _text(c.get("title"), 60, "The quiz title"), "questions": qs, "results": results}
+    if kind == "odd":
+        rounds = []
+        for i, r in enumerate(_rows(c.get("rounds"), 3, 8, "rounds"), 1):
+            r = r if isinstance(r, dict) else {}
+            raw = r.get("items") if isinstance(r.get("items"), list) else []
+            items = [_text(x, 24, f"Round {i}, an item") for x in raw]
+            if len(items) != 4:
+                raise ValueError(f"Round {i} needs 4 items.")
+            if len({x.lower() for x in items}) != 4:
+                raise ValueError(f"Round {i} has two items that are the same.")
+            odd = r.get("odd")
+            if not isinstance(odd, int) or not 0 <= odd < 4:
+                raise ValueError(f"Round {i}: pick which item doesn't belong.")
+            reason = _text(r.get("reason"), 80, f"Round {i}, why it doesn't belong", False) or f"{items[odd]} doesn't belong with the others."
+            term = _text(r.get("search"), 40, f"Round {i}, the footage search", False)
+            rounds.append({"items": items, "odd": odd, "reason": reason, "search": [term] if term else []})
+        return {"title": _text(c.get("title"), 50, "The title", False) or "Odd one out", "rounds": rounds}
+    if kind == "clip":
+        rounds = []
+        for i, r in enumerate(_rows(c.get("rounds"), 3, 8, "rounds"), 1):
+            r = r if isinstance(r, dict) else {}
+            ans = _text(r.get("answer"), 24, f"Round {i}, the answer")
+            raw = r.get("wrong") if isinstance(r.get("wrong"), list) else []
+            wrong = [_text(x, 24, f"Round {i}, a wrong choice") for x in raw]
+            if len(wrong) != 3:
+                raise ValueError(f"Round {i} needs 3 wrong choices.")
+            if len({x.lower() for x in wrong + [ans]}) != 4:
+                raise ValueError(f"Round {i} has two choices that are the same.")
+            term = _text(r.get("search"), 40, f"Round {i}, the footage search", False)
+            idx = random.randrange(4)
+            opts = wrong[:]
+            opts.insert(idx, ans)
+            rounds.append({"answer": ans, "options": opts, "correct_idx": idx, "search": [term] if term else []})
+        # a title the person wrote could give an answer away, so it is always the same
+        return {"title": "Can you guess the clip?", "rounds": rounds}
+    if kind == "missing":
+        import emojis
+        known = emojis.all_names()
+        rounds = []
+        for i, r in enumerate(_rows(c.get("rounds"), 3, 8, "rounds"), 1):
+            r = r if isinstance(r, dict) else {}
+            grid = r.get("grid") if isinstance(r.get("grid"), list) else []
+            if len(grid) != 9 or not all(isinstance(x, str) and x in known for x in grid):
+                raise ValueError(f"Round {i} needs 9 pictures.")
+            if len(set(grid)) != 9:
+                raise ValueError(f"Round {i} uses the same picture twice.")
+            hole = r.get("hole")
+            if not isinstance(hole, int) or not 0 <= hole < 9:
+                raise ValueError(f"Round {i}: pick which picture disappears.")
+            rounds.append(emojis.round_from(grid, hole))
+        return {"title": "What's missing?", "rounds": rounds}
     raise ValueError("Unknown video type.")
+
+
+def review_custom(cleaned, ip: str = "") -> None:
+    """The AI review of everything the person typed (the rules already ran on each field). Raises ValueError."""
+    import safety
+    rounds = cleaned.get("rounds") if isinstance(cleaned, dict) else None
+    if rounds and isinstance(rounds[0], dict) and "grid" in rounds[0]:
+        return   # What's missing: only pictures from our own set, nothing was typed
+    try:
+        safety.review(safety.strings(cleaned), "custom", ip)
+    except safety.Blocked as e:
+        raise ValueError(str(e))
 
 
 def _terms_for(texts: list, theme: str = "") -> list:
@@ -542,6 +624,16 @@ def add_terms(kind: str, data: dict) -> dict:
         t = _terms_for([f'{it["name"]}. {it["line"]}' for it in data["items"]], data["title"])
         for it, s in zip(data["items"], t):
             it["search"] = s
+    elif kind == "odd":
+        todo = [r for r in data["rounds"] if not r["search"]]
+        t = _terms_for([" ".join(x for j, x in enumerate(r["items"]) if j != r["odd"]) for r in todo], data["title"])
+        for r, s in zip(todo, t):
+            r["search"] = s
+    elif kind == "clip":
+        todo = [r for r in data["rounds"] if not r["search"]]
+        t = _terms_for([r["answer"] for r in todo], "")
+        for r, s in zip(todo, t):
+            r["search"] = s
     elif kind == "personality":
         texts = [q["q"] for q in data["questions"]] + [f'{r["name"]}. {r["description"]}' for r in data["results"]]
         t = _terms_for(texts, data["title"])
