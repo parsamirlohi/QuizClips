@@ -250,7 +250,7 @@ def _match_rms(a: np.ndarray, rms: float) -> np.ndarray:
     loud = a[np.abs(a) > 0.01]
     cur = float(np.sqrt(np.mean(loud ** 2))) or 1.0
     a = a * (rms / cur)
-    return np.clip(a, -0.85, 0.85).astype(np.float32)
+    return np.clip(a, -0.95, 0.95).astype(np.float32)
 
 
 def effects() -> dict:
@@ -259,5 +259,5 @@ def effects() -> dict:
            "sting": challenge_sting()}
     out = {k: _level(v) for k, v in raw.items()}
     out["tick"] = (out["tick"] * TICK_TRIM).astype(np.float32)   # the countdown plays the whole time, so it sits a little under the rest
-    out["pop"] = _match_rms(out["pop"], 0.3)   # a short sound needs a higher peak to feel as loud as the others
+    out["pop"] = _match_rms(out["pop"], 0.42)   # a short sound needs a higher peak to feel as loud as the others
     return out

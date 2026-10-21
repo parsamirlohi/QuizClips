@@ -79,6 +79,7 @@
 
   .card { background:var(--surface); border:1px solid var(--line); border-radius:16px; }
   .card-head { background:#8d77ff; border-radius:inherit; border-bottom-left-radius:0; border-bottom-right-radius:0; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 22px; border-bottom:1px solid var(--line); }
+  .card-head h2::before { content:""; display:inline-block; width:11px; height:11px; border-radius:50%; background:#ffe228; margin-right:11px; vertical-align:.12em; }
   .card-head h2 { color:#fff; margin:0; font-family:"Lilita One","Plus Jakarta Sans",system-ui,sans-serif; font-size:25px; font-weight:400; letter-spacing:.01em; line-height:1.1; }
   .rows { margin:0; padding:0; list-style:none; }
   .row { display:grid; grid-template-columns:170px minmax(0,1fr) auto; align-items:center; gap:16px; padding:20px 22px; border-bottom:1px solid var(--line); }
@@ -104,9 +105,9 @@
   .actions { display:flex; align-items:center; justify-content:center; gap:14px; margin-top:20px; }
   #open-custom { background:#fff; color:#14161f; border-color:#fff; font-weight:700; }
   #open-custom:hover { background:#fff; border-color:#14161f; }
-  #go { background:#f6248c; border-color:#f6248c; color:#fff; }
-  #go:hover { background:#ff3d9e; border-color:#ff3d9e; }
-  #go { flex:none; width:138px; height:138px; padding:0 16px; display:grid; place-items:center; text-align:center; line-height:1.15; font-size:18px; font-weight:800; border-radius:50%; }
+  #go { background:#f6248c; border-color:#f6248c; color:#ffe228; }
+  #go:hover { background:#ff3d9e; border-color:#ff3d9e; color:#ffe228; }
+  #go { flex:none; width:128px; height:128px; padding:0 14px; display:grid; place-items:center; text-align:center; line-height:1.15; font-size:17px; font-weight:800; border-radius:50%; }
   .actions .btn:not(#go) { padding:15px 20px; border-radius:12px; }
   .err { color:var(--err); margin-top:14px; white-space:pre-wrap; }
 
@@ -204,8 +205,8 @@
   .topic-body input[type=text] { font-size:16px; padding:13px 14px; }
   .topic-body .help { color:var(--muted); font-size:13px; margin:8px 0 16px; }
   .dl-wrap { margin-top:16px; }
-  .dl-btn { display:flex; align-items:center; justify-content:center; gap:10px; width:300px; max-width:100%; margin:0 auto; padding:13px 18px; border-radius:12px; background:#f6248c; color:#fff; font-weight:700; font-size:16px; text-decoration:none; transition:background .15s, transform .15s; }
-  .dl-btn:hover { background:#ff3d9e; transform:translateY(-1px); }
+  .dl-btn { display:flex; align-items:center; justify-content:center; gap:10px; width:300px; max-width:100%; margin:0 auto; padding:13px 18px; border-radius:12px; background:#f6248c; color:#ffe228; font-weight:700; font-size:16px; text-decoration:none; transition:background .15s, transform .15s; }
+  .dl-btn:hover { background:#ff3d9e; color:#ffe228; transform:translateY(-1px); }
   .dl-btn svg { width:20px; height:20px; }
   .dl-btn[hidden] { display:none; }
   .try { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
