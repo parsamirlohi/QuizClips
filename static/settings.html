@@ -8,8 +8,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script>try{var t=localStorage.getItem("qvm_theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
-<link rel="stylesheet" href="/static/site.css?v=102">
+<script>(function(){var d=document.documentElement,q=null;try{q=matchMedia("(prefers-color-scheme: dark)")}catch(e){}function set(){var t=null;try{t=localStorage.getItem("qvm_theme")}catch(e){}if(t!=="light"&&t!=="dark")t=q&&q.matches?"dark":"light";d.setAttribute("data-theme",t)}set();if(q&&q.addEventListener)q.addEventListener("change",set)})()</script>
+<link rel="stylesheet" href="/static/site.css?v=106">
 <title>Settings: Quizclips</title>
 <meta name="robots" content="noindex">
 </head>
@@ -17,11 +17,11 @@
 <div id="site-header"></div>
 <main class="acct">
   <h1>Settings</h1>
-  <p class="sub">How the site looks and what it remembers.</p>
   <div class="pcard">
     <h2>Appearance</h2>
-    <p class="hint">Pages start in light mode. Switch to dark mode here any time.</p>
+    <p class="hint">System follows your device. Light and dark stay as you set them.</p>
     <div class="themes" role="radiogroup" aria-label="Theme">
+      <button class="theme-opt" role="radio" data-theme-opt="system"><span class="sw sw-sys"><i></i><i><em></em></i></span><b>System</b></button>
       <button class="theme-opt" role="radio" data-theme-opt="light"><span class="sw sw-light"><i></i><i><em></em></i></span><b>Light</b></button>
       <button class="theme-opt" role="radio" data-theme-opt="dark"><span class="sw sw-dark"><i></i><i><em></em></i></span><b>Dark</b></button>
     </div>
@@ -34,17 +34,18 @@
   </div>
 </main>
 <div id="site-footer"></div>
-<script src="/static/site.js?v=66"></script>
+<script src="/static/site.js?v=67"></script>
 <script>
 (function () {
   var $ = function (s) { return document.querySelector(s); };
-  function mode() { try { var t = localStorage.getItem("qvm_theme"); return t === "dark" ? "dark" : "light"; } catch (e) { return "light"; } }
+  function mode() { try { var t = localStorage.getItem("qvm_theme"); return t === "dark" || t === "light" ? t : "system"; } catch (e) { return "system"; } }
   function paint() { var m = mode(); document.querySelectorAll("[data-theme-opt]").forEach(function (b) { b.setAttribute("aria-checked", b.dataset.themeOpt === m ? "true" : "false"); }); }
   document.querySelectorAll("[data-theme-opt]").forEach(function (b) {
     b.onclick = function () {
       var m = b.dataset.themeOpt;
-      try { if (m === "light") localStorage.removeItem("qvm_theme"); else localStorage.setItem("qvm_theme", m); } catch (e) {}
-      if (m === "light") document.documentElement.removeAttribute("data-theme"); else document.documentElement.setAttribute("data-theme", m);
+      try { if (m === "system") localStorage.removeItem("qvm_theme"); else localStorage.setItem("qvm_theme", m); } catch (e) {}
+      var eff = m; if (m === "system") { eff = (window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light"; }
+      document.documentElement.setAttribute("data-theme", eff);
       paint();
     };
   });

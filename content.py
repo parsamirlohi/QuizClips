@@ -102,6 +102,15 @@ def _need(cond, msg="the script came back incomplete"):
         raise RuntimeError(f"Could not write the script just now ({msg}). Please try again.")
 
 
+TONE_RULE = (
+    "IMPORTANT about the topic: it may be a SUBJECT (like 'pizza' or 'space') or a TONE or STYLE (like 'funny', 'comedy', "
+    "'silly', 'gross', 'wholesome', 'spooky', 'romantic', 'epic'). If it is a tone or style, write everything IN that tone, "
+    "about ordinary, relatable, filmable situations. Do NOT make the content about the tone itself: for 'comedy' or 'funny' "
+    "write genuinely funny, absurd, laugh-out-loud items about everyday life (not options about comedians, stand-up, jokes "
+    "or comedy clubs); for 'spooky' write spooky situations, not items about Halloween as a topic."
+)
+
+
 PEOPLE_RULE = (
     "When a question or option is about the viewer's own habits, feelings, personality, social life, choices or "
     "preferences (for example 'What is your social style?' or 'How do you spend a free weekend?'), film the real human "
@@ -122,6 +131,12 @@ def _personality(topic: str, n: int) -> dict:
         "option 4 to result 4, so the four options of a question must reflect the four different results.\n"
         "- results: exactly 4 items {\"name\": ..., \"description\": ..., \"search\": [...]}. name max 4 words. "
         "description is 1-2 upbeat sentences, max 140 characters, written as 'You are ...' or 'You're ...'.\n"
+        "- If the title asks WHICH specific person, character, team, animal, place or other named thing the viewer is "
+        "(for example 'Which soccer player are you?', 'Which Disney character are you?', 'Which planet are you?'), then every "
+        "result name must be a real, specific, well-known example of it (for the soccer example: Messi, Ronaldo, Neymar, "
+        "Mbappe), never an invented label like 'The Playmaker'. Choose four clearly different ones so each question's options "
+        "can point to a different result. For real people use only widely loved public figures, say only positive things about "
+        "how they play or work, and never mention their private life, controversies or anything unflattering.\n"
         f"Footage rules (very important): the quiz theme is \"{topic}\". The footage for every question AND every result "
         "must show something from the world of that theme, shaped by what that specific question or result is about. "
         "Example: for the theme 'Which Hogwarts house are you?', a question about a pet gets search terms like 'harry potter owl' "
@@ -133,7 +148,7 @@ def _personality(topic: str, n: int) -> dict:
         f"{PEOPLE_RULE}\n"
         "Keep everything family friendly."
     )
-    d = _ask(p)
+    d = _ask(p + "\n" + TONE_RULE)
     qs, rs = d.get("questions"), d.get("results")
     _need(isinstance(qs, list) and isinstance(rs, list) and len(rs) >= 4)
     results = [{"name": _s(r.get("name"), 36), "description": _s(r.get("description"), 160),
@@ -163,7 +178,7 @@ def _wyr(topic: str, n: int) -> dict:
         "(the place, activity or scene), not a symbol for it.\n"
         "Keep everything family friendly."
     )
-    d = _ask(p)
+    d = _ask(p + "\n" + TONE_RULE)
     rounds = []
     for r in (d.get("rounds") or [])[:n]:
         a, b = _s(r.get("a"), 46), _s(r.get("b"), 46)
@@ -184,11 +199,10 @@ def _odd(topic: str, n: int) -> dict:
         f"Write {n} 'odd one out' puzzles for a short vertical video. Theme: \"{topic}\".\n"
         "Return ONLY a JSON object: {\"title\": ..., \"rounds\": [...]}\n"
         "- title: max 6 words.\n"
-        "- rounds: each {\"items\": [4 strings], \"odd\": 0-3, \"reason\": ..., \"search\": [...]}. Three items clearly belong "
+        "- rounds: each {\"items\": [4 strings], \"odd\": 0-3, \"search\": [...]}. Three items clearly belong "
         "to the same group and one does not. items are 1-3 words each, max 22 characters, easy to picture. odd is the index "
         "(0-3) of the one that does not belong; vary which position it is. Make it fun and fair: a clear, single answer "
-        "(for example apple, banana, grape and hammer). reason is one short sentence saying why, max 70 characters, "
-        "for example 'The others are fruit, a hammer is a tool.'\n"
+        "(for example apple, banana, grape and hammer).\n"
         "  search: 3 short stock-footage search terms (1-3 words each) showing the group the three belong to, or the "
         "setting, concrete and filmable, no brand or real people's names.\n"
         "Keep everything family friendly."
@@ -198,9 +212,9 @@ def _odd(topic: str, n: int) -> dict:
     for r in (d.get("rounds") or [])[:n]:
         items = [_s(x, 24) for x in (r.get("items") or [])][:4]
         odd = r.get("odd")
-        if len(items) == 4 and all(items) and len({x.lower() for x in items}) == 4 and isinstance(odd, int) and 0 <= odd < 4 \
-                and _s(r.get("reason"), 80):
-            rounds.append({"items": items, "odd": odd, "reason": _s(r.get("reason"), 80), "search": _search(r, topic)})
+        if len(items) == 4 and all(items) and len({x.lower() for x in items}) == 4 and isinstance(odd, int) and 0 <= odd < 4:
+            rounds.append({"items": items, "odd": odd, "reason": _s(r.get("reason"), 80) or f"{items[odd]} doesn't belong.",
+                           "search": _search(r, topic)})
     _need(len(rounds) >= 3)
     return {"title": _s(d.get("title"), 50) or "Odd one out", "rounds": rounds}
 
@@ -268,7 +282,7 @@ def _story(topic: str, n: int, mode: str) -> dict:
         "things, most specific first, no brand, franchise or real people's names.\n"
         "Keep everything family friendly."
     )
-    d = _ask(p)
+    d = _ask(p + "\n" + TONE_RULE)
     steps = []
     for i, r in enumerate((d.get("steps") or [])[:n]):
         sit, a, b = _s(r.get("situation"), 70), _s(r.get("a"), 38), _s(r.get("b"), 38)
@@ -304,7 +318,7 @@ def _items(kind: str, topic: str, n: int) -> dict:
             "headline of max 5 words. line is one clear sentence stating the fact with a specific detail, max 130 "
             f"characters.\n{SEARCH_RULES}\nOnly include facts you are confident are true and widely documented."
         )
-    d = _ask(p)
+    d = _ask(p + "\n" + TONE_RULE)
     items = []
     for it in (d.get("items") or [])[:n]:
         name, line = _s(it.get("name"), 40), _s(it.get("line"), 150)
@@ -379,10 +393,13 @@ def random_topic(kind: str) -> str:
     if is_mock() or not gemini.available():
         return area
     p = (f"Invent ONE fresh, fun, specific topic for {_WHAT[kind]}. Take loose inspiration from \"{area}\" but make it "
-         "something unexpected, not the first idea that comes to mind. Family friendly. Max 8 words. "
+         "something a little unexpected, not the first idea that comes to mind. It must be about real, recognisable things "
+         "that a camera can film and stock-video sites have plenty of clips for (places, animals, food, sports, hobbies, "
+         "jobs, nature, technology, travel, music). No made-up scenarios, absurd mashups or invented creatures "
+         "(not 'a narwhal symphony flash mob'; yes 'Life as a lighthouse keeper'). Family friendly. Max 8 words. "
          "Reply with ONLY a JSON object: {\"topic\": \"...\"}")
     try:
-        text = gemini.generate([{"text": p}], timeout=30, temperature=1.2)
+        text = gemini.generate([{"text": p}], timeout=30, temperature=1.0)
         t = _s(json.loads(text[text.index("{"): text.rindex("}") + 1]).get("topic"), 80)
         if t:
             flog(f"[content] random topic: {t}")

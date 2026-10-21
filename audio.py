@@ -8,11 +8,15 @@ from config import ASSETS_DIR, ffmpeg_exe
 
 SR = 44100
 CEILING = 0.95      # the loudest moment of a finished video sits here (just under clipping)
-TARGET_RMS = 0.2    # the average level every finished video is brought to, whatever its type
-MAX_BOOST = 4.0     # never lift a mix by more than this
+TARGET_RMS = 0.25   # the average level every finished video is brought to, whatever its type (was 0.2: a bit over 3 dB louder)
+MAX_BOOST = 5.0     # never lift a mix by more than this
+KNEE = 0.7          # above this a peak is eased down (see finish) instead of cutting off
 VOICE_GAIN = 1.7    # the narrator, relative to the sound effects
-# How loud each sound effect is, in ONE place so every video type has the same levels
-LEVELS = {"pop": 2.2, "tick": 0.65, "bing": 1.2, "sparkle": 0.8, "whoosh": 0.8, "siren": 1.0, "sting": 0.95}
+# How loud the sound effects are, in ONE place so every video type has the same levels. Every effect peaks at the same level
+# as the timer tick, so none of them is louder or quieter than another. A long, steady sound (the siren) is also held to a
+# maximum average level, otherwise being as tall as a click would make it drown the narrator.
+EFFECT_PEAK = 0.68
+EFFECT_MAX_RMS = 0.16
 
 
 def decode_audio(path) -> np.ndarray:
@@ -58,17 +62,20 @@ class Mixer:
 
 def finish(a: np.ndarray) -> np.ndarray:
     """Final loudness: ONE volume change applied to the whole mix, so the balance between the narrator, the ticking, the
-    pops and the ding is exactly what LEVELS and VOICE_GAIN say, in every video type. The mix is brought up toward a
+    pops and the ding is exactly what EFFECT_PEAK and VOICE_GAIN say, in every video type. The mix is brought up toward a
     target average level but never past the point where its loudest moment would clip, so nothing is distorted."""
     peak = float(np.max(np.abs(a))) if len(a) else 0.0
     if peak <= 0:
         return a
     active = a[np.abs(a) > 0.01]
     rms = float(np.sqrt(np.mean(active ** 2))) if len(active) else 0.0
-    gain = CEILING / peak
-    if rms > 0:
-        gain = min(gain, TARGET_RMS / rms)
-    return (a * min(gain, MAX_BOOST)).astype(np.float32)
+    # The volume follows the average level, not the single loudest sound: a short pop used to set the limit and hold the whole
+    # video down. Peaks above the knee are eased down smoothly (a soft limiter) so they never clip.
+    gain = TARGET_RMS / rms if rms > 0 else CEILING / peak
+    x = np.abs(a * min(gain, MAX_BOOST))
+    over = x > KNEE
+    x[over] = KNEE + (CEILING - KNEE) * np.tanh((x[over] - KNEE) / (CEILING - KNEE))
+    return (np.sign(a) * x).astype(np.float32)
 
 
 def _tones(parts, dur, decay, attack=0.002) -> np.ndarray:
@@ -222,8 +229,20 @@ def challenge_sting() -> np.ndarray:
     return out / peak * 0.62
 
 
+def _level(a: np.ndarray) -> np.ndarray:
+    """One sound effect brought to the common level (see EFFECT_PEAK)."""
+    peak = float(np.max(np.abs(a))) or 1.0
+    a = a / peak * EFFECT_PEAK
+    loud = a[np.abs(a) > 0.01]
+    if len(a) >= SR and len(loud):   # a sound that lasts a second or more
+        rms = float(np.sqrt(np.mean(loud ** 2)))
+        if rms > EFFECT_MAX_RMS:
+            a = a * (EFFECT_MAX_RMS / rms)
+    return a.astype(np.float32)
+
+
 def effects() -> dict:
-    """Every sound effect already set to its level (see LEVELS). All video types use this, so they all sound the same."""
+    """Every sound effect already set to its level (see EFFECT_PEAK). All video types use this, so they all sound the same."""
     raw = {"bing": bing(), "tick": tick(), "pop": pop(), "whoosh": whoosh(), "sparkle": sparkle(), "siren": siren(),
            "sting": challenge_sting()}
-    return {k: v * LEVELS[k] for k, v in raw.items()}
+    return {k: _level(v) for k, v in raw.items()}

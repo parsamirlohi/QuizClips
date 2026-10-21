@@ -64,9 +64,13 @@
       /* each word is lit for about as long as it takes to say: short words go by quickly, longer ones linger */
       var quick = { own: 130 };   // words that should go by faster than the letter count suggests
       var hold = function (w) { var t = w.textContent.replace(/[^a-z0-9]/gi, ""); return quick[t.toLowerCase()] || 95 + 42 * t.length; };
+      var paused = false;   // true while the pointer is over the headline: the lit word stays where it is
+      title.addEventListener("mouseenter", function () { paused = true; });
+      title.addEventListener("mouseleave", function () { paused = false; });
       var tick = function () {
         var wait = 300;
-        if (!document.hidden) {
+        if (paused) wait = 80;
+        else if (!document.hidden) {
           words.forEach(function (w) { w.classList.remove("on"); });
           i = (i + 1) % (words.length + 1);   // one short beat with nothing lit before it starts over
           if (i < words.length) { words[i].classList.add("on"); wait = hold(words[i]); }

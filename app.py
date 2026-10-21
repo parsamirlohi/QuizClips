@@ -89,6 +89,9 @@ FORMATS = [
     for k, v in content.KINDS.items() for d in [FORMAT_DESC[k]]
 ]
 
+_ORDER = ["trivia", "personality", "clip", "story", "wyr", "toplist", "facts", "missing", "odd"]
+FORMATS.sort(key=lambda f: _ORDER.index(f["key"]) if f["key"] in _ORDER else 99)
+
 for _f in FORMATS:
     _f["think_default"] = THINK_DEFAULTS.get(_f["key"])   # None = this type has no countdown
     _f["think_choices"] = THINK_CHOICES if _f["key"] in THINK_DEFAULTS else []
@@ -179,7 +182,7 @@ def preview(request: Request, kind: str, look: str, colors: str = ""):
     if kind not in previews.KINDS or look not in looks.LOOKS:
         raise HTTPException(404, "Unknown preview.")
     try:
-        safety.rate_limit("preview", safety.client_ip(request), 240, 60, "Slow down a little: too many preview updates.")
+        safety.rate_limit("preview", safety.client_ip(request), 1500, 60, "Slow down a little: too many preview updates.")   # dragging a color picker asks for several a second
     except safety.Limited as e:
         raise _limited(e)
     try:

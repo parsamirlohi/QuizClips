@@ -110,6 +110,39 @@ def _blocked() -> set:
         return set()
 
 
+RECENT_FILE = DATA_DIR / "recent_footage.json"   # the clips the last videos used, so the next ones look different
+RECENT_KEEP = 150
+_recent_lock = threading.Lock()
+
+
+def _recent() -> set:
+    try:
+        return {str(x) for x in json.loads(RECENT_FILE.read_text(encoding="utf-8"))}
+    except Exception:
+        return set()
+
+
+def _remember(clip_id) -> None:
+    """Note that a clip was used. A later video prefers other clips when it has a choice (see the 'fresh' filters below)."""
+    with _recent_lock:
+        try:
+            ids = [str(x) for x in json.loads(RECENT_FILE.read_text(encoding="utf-8"))]
+        except Exception:
+            ids = []
+        ids = [x for x in ids if x != str(clip_id)] + [str(clip_id)]
+        try:
+            RECENT_FILE.write_text(json.dumps(ids[-RECENT_KEEP:]), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def _fresh(hits: list, prefix: str = "") -> list:
+    """The hits that were not used lately; if every one was, all of them (a narrow topic must still find a clip)."""
+    recent = _recent()
+    fresh = [h for h in hits if prefix + str(h["id"]) not in recent]
+    return fresh or hits
+
+
 def _pick_best(hits: list, query: str):
     """Best-matching clip first (most search words in its tags, then the more popular), with a little variety
     among the top three so repeated topics don't always give the same clip."""
@@ -161,10 +194,41 @@ def _thumb(h: dict, kind: str) -> bytes:
                 pass
 
 
+def _claim(used: set, clip_id) -> bool:
+    """Reserve a clip for this video, atomically. Scenes search side by side, so two of them can pick the same clip in the
+    same moment (every scene had checked 'is it used yet?' before any had marked it); only the first to claim it gets it."""
+    if hasattr(used, "claim"):
+        return used.claim(clip_id)
+    if clip_id in used:
+        return False
+    used.add(clip_id)
+    return True
+
+
+def _take_other(used: set, hits: list, q: str, prefix: str = ""):
+    """The best clip among `hits` that nobody has claimed yet, or None."""
+    rest = list(hits)
+    while rest:
+        c = _pick_best(rest, q)
+        if _claim(used, prefix + str(c["id"]) if prefix else c["id"]):
+            return c
+        rest = [x for x in rest if x["id"] != c["id"]]
+    return None
+
+
+_budget = threading.local()   # how many picture checks the scene being searched may still use
+
+
 def _vision_check(hits: list, q: str, question: str, kind: str):
     """Ask Gemini which of the best-matching candidates really shows the topic. ("skip", None) = no check done."""
     if not question or not vision.enabled():
         return ("skip", None)
+    left = getattr(_budget, "left", None)
+    if left is not None:
+        if left <= 0:   # this scene has used its checks: take the best tag match instead of asking again
+            flog(f"[footage]   check limit reached for this scene; using the best tag match for '{q}'")
+            return ("skip", None)
+        _budget.left = left - 1
     ranked = sorted(hits, key=lambda h: (tag_score(h, q), h.get("likes", 0) + h.get("downloads", 0) / 50),
                     reverse=True)[:3]
     cands = []
@@ -208,6 +272,7 @@ def _find_pixabay_photo(q: str, key: str, used: set, question: str = ""):
     scored = [(tag_score(h, q), h) for h in hits]
     best = max((sc for sc, _ in scored), default=0)
     hits = [h for sc, h in scored if best >= need_score(q) and sc >= best]
+    hits = _fresh(hits, "p")
     flog(f"[footage] photo search '{q}': {len(hits)} matching results")
     if not hits:
         return None
@@ -215,13 +280,17 @@ def _find_pixabay_photo(q: str, key: str, used: set, question: str = ""):
     if verdict == "reject":
         return None
     h = h or _pick_best(hits, q)
+    if not _claim(used, "p%s" % h["id"]):   # another scene took it a moment ago
+        h = _take_other(used, [x for x in hits if x["id"] != h["id"]], q, "p")
+        if h is None:
+            return None
     url = h.get("largeImageURL") or h.get("webformatURL")
     if not url:
         return None
     dest = CACHE_DIR / f"pixabay_photo_{h['id']}.jpg"
     if not dest.exists():
         _download(url, dest)
-    used.add("p%s" % h["id"])
+    _remember("p%s" % h["id"])
     flog(f"[footage]   -> picked photo tagged: {h.get('tags', '')}")
     return dest, f"{q}  ->  photo tags: {h.get('tags', '')[:60]}"
 
@@ -240,6 +309,7 @@ def _find_pixabay(queries: list, used: set, question: str = ""):
             scored = [(tag_score(h, q), h) for h in hits]
             best = max((sc for sc, _ in scored), default=0)
             hits = [h for sc, h in scored if sc >= max(need_score(q), best)] if best >= need_score(q) else []
+        hits = _fresh(hits)
         flog(f"[footage] searched '{q}': {len(hits)} matching results")
         if not hits and not generic:
             try:
@@ -258,6 +328,10 @@ def _find_pixabay(queries: list, used: set, question: str = ""):
             if verdict == "reject":
                 continue
             h = h or _pick_best(hits, q)
+        if not _claim(used, h["id"]):   # another scene took it a moment ago
+            h = _take_other(used, [x for x in hits if x["id"] != h["id"]], q)
+            if h is None:
+                continue
         sizes = h.get("videos", {})
         f = next((sizes[k] for k in ("medium", "large", "small") if sizes.get(k, {}).get("url")), None)
         if not f:
@@ -265,14 +339,28 @@ def _find_pixabay(queries: list, used: set, question: str = ""):
         dest = CACHE_DIR / f"pixabay_{h['id']}.mp4"
         if not dest.exists():
             _download(f["url"], dest)
-        used.add(h["id"])
+        _remember(h["id"])
         flog(f"[footage]   -> picked video tagged: {h.get('tags', '')}")
         return dest, f"{q}  ->  video tags: {h.get('tags', '')[:60]}"
     raise RuntimeError(f"No Pixabay videos found for any of: {queries}")
 
 
 def find_background(queries: list, used: set, question: str = ""):
-    """Return a local path to a video matching the first query that has results."""
+    """Return a local path to a video matching the first query that has results.
+    The AI picture check is shared by every scene and goes out one at a time, so a niche topic (many searches that miss, each
+    followed by a check) used to make the whole video wait in line. Each scene now gets a few checks (VISION_MAX_PER_SCENE);
+    after that it takes the best tag match."""
+    try:
+        _budget.left = int(env("VISION_MAX_PER_SCENE", "2"))
+    except ValueError:
+        _budget.left = 2
+    try:
+        return _find_background(queries, used, question)
+    finally:
+        _budget.left = None
+
+
+def _find_background(queries: list, used: set, question: str = ""):
     if is_mock():
         return _mock_clip(), queries[0] if queries else "mock"
     src = _source()
@@ -319,6 +407,14 @@ class UsedSet(set):
     def add(self, x):
         with self._lock:
             super().add(x)
+
+    def claim(self, x) -> bool:
+        """Add x unless it is already there, in one step. True = it is yours."""
+        with self._lock:
+            if x in self:
+                return False
+            super().add(x)
+            return True
 
 
 def find_many(jobs: list, workers: int = 4, on_done=lambda done, total: None) -> list:

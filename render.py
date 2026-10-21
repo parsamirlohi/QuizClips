@@ -5,6 +5,7 @@ Layers per scene:  animated marble background  ->  framed stock clip  ->  Pillow
 import math
 import random
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 
 import numpy as np
@@ -100,7 +101,10 @@ def _font(size, face, _thread):
     return ImageFont.load_default(size)
 
 
+@lru_cache(maxsize=256)
 def _mask(w, h, radius):
+    """Anti-aliased rounded-rectangle mask. Cached: the same few shapes are drawn over and over (every preview, every frame),
+    and only ever read from (used as a paste mask), so one copy is shared."""
     m = Image.new("L", (w * SS, h * SS), 0)
     ImageDraw.Draw(m).rounded_rectangle((0, 0, w * SS - 1, h * SS - 1), radius * SS, fill=255)
     return m.resize((w, h), Image.LANCZOS)
@@ -253,13 +257,18 @@ PREVIEW_RADIUS = 130    # corner radius of the phone screens on the site (12% of
 
 def _rounded_ring(img, color, t):
     """A full border whose corners follow the rounded screen of the phone preview."""
-    r, S = BORDER_RADIUS, 3   # drawn 3x bigger and shrunk back, so the curve is smooth
+    img.paste(Image.new("RGBA", (W, H), tuple(color) + (255,)), (0, 0), _ring_mask(BORDER_RADIUS, t))
+
+
+@lru_cache(maxsize=4)
+def _ring_mask(r, t):
+    """The ring's shape only (it does not depend on the colour), drawn 3x bigger and shrunk back so the curve is smooth. Cached."""
+    S = 3
     ring = Image.new("L", (W * S, H * S), 0)
     d = ImageDraw.Draw(ring)
     d.rounded_rectangle((0, 0, W * S - 1, H * S - 1), radius=r * S, fill=255)
     d.rounded_rectangle((t * S, t * S, W * S - 1 - t * S, H * S - 1 - t * S), radius=max(0, r - t) * S, fill=0)
-    ring = ring.resize((W, H), Image.LANCZOS)
-    img.paste(Image.new("RGBA", (W, H), tuple(color) + (255,)), (0, 0), ring)
+    return ring.resize((W, H), Image.LANCZOS)
 
 
 def _border_path(img, color, frac=1.0, t=24, track=(255, 255, 255)):
@@ -831,18 +840,53 @@ def _q(path) -> str:
     return path.as_posix().replace("'", "'\\''")
 
 
+FPS = 30
+
+
+def frames_for(seconds):
+    """How many whole video frames a stretch of this length takes (never fewer than one)."""
+    return max(1, math.ceil(seconds * FPS - 1e-6))
+
+
+def frame_ceil(seconds):
+    """Round a length up to a whole number of video frames. Every scene is cut to whole frames, so the audio (which is placed by
+    adding up these lengths) stays exactly in step with the picture instead of drifting a fraction of a frame per scene."""
+    return frames_for(seconds) / FPS
+
+
 def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=None, pixel=None):
     """frame_specs: list of (start_time, kind, args). Each overlay holds until the next one starts.
-    clip: path of a stock video shown inside the frame, or None."""
-    items = []
-    for idx, (start, kind, args) in enumerate(frame_specs):
-        end = frame_specs[idx + 1][0] if idx + 1 < len(frame_specs) else duration
+    clip: path of a stock video shown inside the frame, or None.
+    Everything is placed on whole video frames: each overlay picture starts on a frame and lasts a whole number of them, and
+    the scene has exactly frames_for(duration) frames."""
+    n_frames = frames_for(duration)
+    duration = n_frames / FPS
+    placed = []   # (first frame, kind, args)
+    for start, kind, args in sorted(frame_specs, key=lambda f: f[0]):
+        f = 0 if not placed else min(n_frames - 1, max(0, round(start * FPS)))
+        if placed and placed[-1][0] >= f:   # two pictures landing on the same frame: only the later one is ever seen
+            placed.pop()
+        placed.append((f, kind, args))
+    items, jobs = [], []
+    for idx, (f, kind, args) in enumerate(placed):
+        nxt = placed[idx + 1][0] if idx + 1 < len(placed) else n_frames
         png = tmp / f"{out_path.stem}_{idx:02d}.png"
+        jobs.append((png, kind, args))
+        items.append((png, (nxt - f) / FPS))
+
+    def draw_one(job):
+        png, kind, args = job
         make_overlay(kind, args).save(png, compress_level=1)
-        items.append((png, max(0.04, end - start)))
+
+    if len(jobs) > 8:   # many pictures (smooth pop-ins): draw several at once, it is about three times quicker
+        with ThreadPoolExecutor(max_workers=int(env("OVERLAY_THREADS", "4"))) as ex:
+            list(ex.map(draw_one, jobs))
+    else:
+        for job in jobs:
+            draw_one(job)
     lines = []
     for png, dur in items:
-        lines += [f"file '{_q(png)}'", f"duration {dur:.3f}"]
+        lines += [f"file '{_q(png)}'", f"duration {dur:.6f}"]
     lines.append(f"file '{_q(items[-1][0])}'")
     lst = tmp / f"{out_path.stem}.txt"
     lst.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -871,7 +915,7 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
                 pre = "[0:v]split=2[s1][s2];"
                 bsrc, src, ov = "s1", "s2", 1
             # darken / tint at the small size, then enlarge: same picture, a sixteenth of the pixels to process
-            bgf = (f"[{bsrc}]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,setsar=1,fps=30,"
+            bgf = (f"[{bsrc}]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,setsar=1,framerate=fps=30,"
                    f"gblur=sigma=8,eq=brightness={-blur.get('dark', 0.3):.2f}:saturation={blur.get('sat', 0.9):.2f}")
             if blur.get("tint"):
                 bgf += f",drawbox=x=0:y=0:w=iw:h=ih:color=0x{blur['tint']}@{blur.get('alpha', 0.35)}:t=fill"
@@ -879,14 +923,14 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
         else:
             inputs += ["-i", str(clip)] if photo else ["-stream_loop", "-1", "-i", str(clip)]
             src, ov = "1:v", 2
-            bgf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];"
+            bgf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,framerate=fps=30[bg];"
         if photo:  # a single photo with a slow zoom-in
             frames = int(duration * 30) + 30
             cvf = (f"[{src}]scale={cw * 2}:{ch * 2}:force_original_aspect_ratio=increase,crop={cw * 2}:{ch * 2},"
                    f"zoompan=z='min(1+0.0009*on,1.25)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={cw}x{ch}:fps=30,"
                    f"setsar=1[c];")
         else:
-            cvf = f"[{src}]scale={cw}:{ch}:force_original_aspect_ratio=increase,crop={cw}:{ch},setsar=1,fps=30[c];"
+            cvf = f"[{src}]scale={cw}:{ch}:force_original_aspect_ratio=increase,crop={cw}:{ch},setsar=1,framerate=fps=30[c];"
         vf = pre + bgf + cvf + f"[bg][c]overlay={CLIP[0]}:{CLIP[1]}:shortest=0[b2];"
         base = "b2"
     else:
@@ -897,7 +941,7 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
             steps = sorted(pixel)
             n = len(steps)
             vf = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase:flags=bicubic,crop=1080:1920,setsar=1,"
-                  f"fps=30,eq=brightness=-0.10:saturation=0.9,split={n}" + "".join(f"[px{k}]" for k in range(n)) + ";")
+                  f"framerate=fps=30,eq=brightness=-0.10:saturation=0.9,split={n}" + "".join(f"[px{k}]" for k in range(n)) + ";")
             for k, (st, size) in enumerate(steps):
                 en = steps[k + 1][0] if k + 1 < n else duration + 5
                 w, h = max(2, int(1080 / size) // 2 * 2), max(2, int(1920 / size) // 2 * 2)
@@ -907,9 +951,9 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
             vf += "".join(f"[pz{k}]" for k in range(n)) + f"concat=n={n}:v=1:a=0[bg];"
         elif full:
             vf = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase:flags=bicubic,crop=1080:1920,setsar=1,"
-                  "fps=30,eq=brightness=-0.10:saturation=0.9[bg];")
+                  "framerate=fps=30,eq=brightness=-0.10:saturation=0.9[bg];")
         else:
-            vf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,fps=30[bg];"
+            vf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,framerate=fps=30[bg];"
         base = "bg"
     smooth = [(st, a) for st, k, a in frame_specs if k in ("scene", "story", "missing") and a.get("smooth") and a.get("timer") is not None]
     if smooth:   # the countdown bar is drawn by ffmpeg on every video frame, not once per overlay picture
@@ -923,14 +967,14 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
         cur = "vo"
         for gi, g in enumerate(groups):
             last = gi == len(groups) - 1
-            vf += _bar_filters(g[0][0], g[0][1].get("think", 5), color, cur, "vb" if last else f"vg{gi}", tag=f"g{gi}",
+            vf += _bar_filters(round(g[0][0] * FPS) / FPS, g[0][1].get("think", 5), color, cur, "vb" if last else f"vg{gi}", tag=f"g{gi}",
                                only_during=len(groups) > 1)
             cur = "vb" if last else f"vg{gi}"
         vf += "[vb]format=yuv420p[v]"
     else:
         vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto,format=yuv420p[v]"
     run_ffmpeg(inputs + ["-f", "concat", "-safe", "0", "-i", lst, "-filter_complex", vf, "-map", "[v]",
-                         "-t", f"{duration:.3f}", "-an"]
+                         "-frames:v", str(n_frames), "-an"]
                + _vcodec_args() + ["-pix_fmt", "yuv420p", "-r", "30", out_path])
 
 

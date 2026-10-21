@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script>try{var t=localStorage.getItem("qvm_theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+<script>(function(){var d=document.documentElement,q=null;try{q=matchMedia("(prefers-color-scheme: dark)")}catch(e){}function set(){var t=null;try{t=localStorage.getItem("qvm_theme")}catch(e){}if(t!=="light"&&t!=="dark")t=q&&q.matches?"dark":"light";d.setAttribute("data-theme",t)}set();if(q&&q.addEventListener)q.addEventListener("change",set)})()</script>
 <style>
   :root {
     color-scheme: light;
@@ -96,9 +96,9 @@
   .link { border:0; background:none; color:var(--primary); font-weight:600; padding:4px 2px; }
   .link:hover { text-decoration:underline; }
   .row .link[data-edit] { width:28px; height:28px; display:grid; place-items:center; padding:0; color:var(--muted); opacity:.55; transition:opacity .15s, color .15s, transform .15s; }
-  .row:has([data-edit]) { cursor:pointer; transition:background .15s; }
-  .row:has([data-edit]):hover { background:var(--primary-soft); }
-  .row:has([data-edit]):hover .link[data-edit], .row .link[data-edit]:focus-visible { opacity:1; color:var(--primary); transform:translateX(2px); }
+  .row.editable { cursor:pointer; }
+  .row.editable:hover { background:var(--primary-soft); }
+  .row.editable:hover .link[data-edit], .row .link[data-edit]:focus-visible { opacity:1; color:var(--primary); transform:translateX(2px); }
   .row .link[data-edit]:hover { text-decoration:none; }
 
   .actions { display:flex; align-items:center; gap:14px; margin-top:20px; }
@@ -488,13 +488,13 @@
           <button class="btn btn-sm" id="open-custom">Customize</button>
         </div>
         <dl class="rows" style="margin:0">
-          <div class="row" id="row-questions"><dt id="k-count">Questions</dt><dd class="v" id="s-questions" style="margin:0"></dd><button class="link" data-edit="questions" aria-label="Change number of questions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row editable" id="row-questions"><dt id="k-count">Questions</dt><dd class="v" id="s-questions" style="margin:0"></dd><button class="link" data-edit="questions" aria-label="Change number of questions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row row-timer" id="row-timer"><dt id="tm-lab">Timer</dt><dd class="v" id="s-timer" style="margin:0"></dd></div>
-          <div class="row" id="row-topics"><dt>Topics</dt><dd class="v" id="s-topics" style="margin:0"></dd><button class="link" data-edit="topics" aria-label="Change topics"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
-          <div class="row"><dt>Look</dt><dd class="v" id="s-look" style="margin:0"></dd><button class="link" data-edit="look" aria-label="Change look"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
-          <div class="row" id="row-colors"><dt>Colors</dt><dd class="v" id="s-colors" style="margin:0"></dd><button class="link" data-edit="colors" aria-label="Change colors"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
-          <div class="row"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
-          <div class="row"><dt>Link on video</dt><dd class="v" id="s-link" style="margin:0"></dd><button class="link" data-edit="link" aria-label="Change link on video"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row editable" id="row-topics"><dt>Topics</dt><dd class="v" id="s-topics" style="margin:0"></dd><button class="link" data-edit="topics" aria-label="Change topics"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row editable"><dt>Look</dt><dd class="v" id="s-look" style="margin:0"></dd><button class="link" data-edit="look" aria-label="Change look"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row editable" id="row-colors"><dt>Colors</dt><dd class="v" id="s-colors" style="margin:0"></dd><button class="link" data-edit="colors" aria-label="Change colors"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row editable"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row editable"><dt>Link on video</dt><dd class="v" id="s-link" style="margin:0"></dd><button class="link" data-edit="link" aria-label="Change link on video"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
         </dl>
       </div>
 
@@ -852,16 +852,21 @@ function buildTimer() {
   const f = fmt(), box = $("s-timer");
   $("row-timer").hidden = !f.think_default;
   if (!f.think_default) { box.innerHTML = ""; return; }
-  box.innerHTML = '<input type="range" id="tm-range" min="5" max="15" step="1" aria-labelledby="tm-lab"><span class="tm-val"><span><b id="tm-out"></b> <small id="tm-def"></small></span><small id="tm-est"></small></span>';
-  const r = $("tm-range"), paint = () => {
-    const n = +r.value;
+  box.innerHTML = '<input type="range" id="tm-range" min="5" max="15" step="0.05" aria-labelledby="tm-lab"><span class="tm-val"><span><b id="tm-out"></b> <small id="tm-def"></small></span><small id="tm-est"></small></span>';
+  const r = $("tm-range"); let raf = 0, last = -1;
+  const paint = () => {
+    raf = 0;
+    const v = +r.value, n = Math.round(v);
+    r.style.setProperty("--p", ((v - 5) / 10 * 100) + "%");   // the fill follows the thumb continuously
+    if (n === last) return; last = n;
+    S.think[f.key] = n; saveSettings();
     $("tm-out").textContent = n + " seconds";
     $("tm-def").textContent = n === f.think_default ? "(default)" : "";
     $("tm-est").textContent = "about " + estLength(f);
-    r.style.setProperty("--p", ((n - 5) / 10 * 100) + "%");
   };
   r.value = thinkFor(f); paint();
-  r.oninput = () => { S.think[f.key] = +r.value; saveSettings(); paint(); };
+  r.oninput = () => { if (!raf) raf = requestAnimationFrame(paint); };
+  r.onchange = () => { r.value = Math.round(+r.value); paint(); };
 }
 function renderSummary() {
   const f = fmt();
@@ -1136,13 +1141,18 @@ const FALLBACK_COLORS = { question_box: "#8d77ff", question_outline: "#ff4eb2", 
 const lookColors = () => { const l = CFG && CFG.looks.find((x) => x.key === S.look); return (l && l.colors) || FALLBACK_COLORS; };
 const colorOf = (k) => S.colors[k] || lookColors()[k];
 const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255; };
+let colorFrame = 0, colorSaved = 0;
 function buildColors() {
   const box = $("c-rows"); box.innerHTML = "";
   COLOR_FIELDS.forEach(([k, label]) => {
     const row = document.createElement("div"); row.className = "crow"; row.dataset.k = k;
     row.innerHTML = '<div><b>' + esc(label) + '</b><small></small></div><input type="color" aria-label="' + esc(label) + '">';
     const inp = row.querySelector("input");
-    inp.oninput = () => { S.colors[k] = inp.value; saveSettings(); renderSummary(); refreshOverlay(); };
+    inp.oninput = () => {   // dragging in the color picker fires many times a second, so only the cheap work happens right away
+      S.colors[k] = inp.value;
+      if (!colorFrame) colorFrame = requestAnimationFrame(() => { colorFrame = 0; paintColors(); refreshOverlay(); });   // at most once per screen frame
+      clearTimeout(colorSaved); colorSaved = setTimeout(() => { saveSettings(); renderSummary(); }, 250);   // saving and redrawing the settings wait until it settles
+    };
     box.appendChild(row);
   });
   $("c-reset").onclick = () => { S.colors = {}; saveSettings(); renderSummary(); refreshOverlay(); };
@@ -1273,7 +1283,6 @@ function oddCard(c, i, bad, del) {
     ans.appendChild(row);
   }
   card.appendChild(ans);
-  field(card, "Why it doesn't belong (optional)", c.why, { max: 80, ph: "The others are fruit, a hammer is a tool." }, (v) => { c.why = v; cqSave(); });
   field(card, "What should the footage show? (optional)", c.search, { max: 40, ph: "fruit market" }, (v) => { c.search = v; cqSave(); });
   return card;
 }

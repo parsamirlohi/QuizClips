@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from audio import Mixer, SR, bing, challenge_sting, effects, pop, siren, sparkle, tick, whoosh
 from chalkboard import ensure_chalkboard
-from config import ASSETS_DIR, CACHE_DIR, OUTPUT_DIR, WORK_DIR, env
+from config import ASSETS_DIR, CACHE_DIR, OUTPUT_DIR, WORK_DIR, env, flog
 from videos import UsedSet, find_background, find_many
 from questions import LETTERS, get_questions, keywords_from, mark_used, pick_letters
 import looks
@@ -23,7 +23,26 @@ INTRO_QUERIES = ["neon lights abstract", "colorful abstract background", "light 
 PROMPTS = ["Pick your answer!", "Comment your guess!", "Lock it in!", "No cheating!", "Think fast!",
            "Shout it out in the comments!", "Which one is it?"]
 THINK = int(env("THINK_SECONDS", "8"))
-POP_ANIM = (0.55, 1.08, 0.96, 1.0)
+FRAME_RATE = 30
+FRAME = 1 / FRAME_RATE   # one video frame. Pop-ins step in whole frames, so every frame of the motion is different and none is shown twice
+
+
+def pop_curve(start=0.55, n=8, c1=2.6):
+    """Sizes for a pop-in: grows from `start`, overshoots a little, settles at exactly 1.0 (an ease-out-back curve)."""
+    c3 = c1 + 1
+    out = []
+    for k in range(n - 1):
+        x = k / (n - 1) - 1
+        out.append(round(start + (1 - start) * (1 + c3 * x ** 3 + c1 * x ** 2), 4))
+    return tuple(out) + (1.0,)
+
+
+POP_ANIM = pop_curve(0.55, 8)   # an answer choice popping in (size and fade together)
+
+
+def pop_in(t, kind, args, start=0.8, n=7):
+    """Frames for a whole graphic popping in at time t: one picture per video frame, ending at its normal size."""
+    return [(round(t + k * FRAME, 4), kind, dict(args, hscale=v)) for k, v in enumerate(pop_curve(start, n))]
 
 
 def _intro_background(used):
@@ -41,8 +60,9 @@ def _intro_background(used):
 
 
 def _pops(frames, t, base, key="anim"):
+    frames[:] = [f for f in frames if not (f[0] >= t and key in f[2])]   # a pop that starts before the last one has finished takes over from it
     for k, a in enumerate(POP_ANIM):
-        frames.append((t + 0.05 * k, "scene", dict(base, **{key: a})))
+        frames.append((round(t + FRAME * k, 4), "scene", dict(base, **{key: a})))
 
 
 def _plan_hook(clip, n, sfx):
@@ -52,8 +72,7 @@ def _plan_hook(clip, n, sfx):
     spoken = ["only", "a", "genius", "can", "get", f"{w} out of {w}"]
     weights = [len(x) + 1 for x in spoken]
     text = " ".join(words)
-    frames = [(0.0, "hook", dict(text=text, hl=-1, hscale=0.7)), (0.06, "hook", dict(text=text, hl=-1, hscale=1.08)),
-              (0.12, "hook", dict(text=text, hl=-1, hscale=1.0))]
+    frames = pop_in(0.0, "hook", dict(text=text, hl=-1), start=0.7)
     t0, dur = 0.4, len(clip) / SR
     acc = 0.0
     for k, wt in enumerate(weights):
@@ -65,12 +84,10 @@ def _plan_hook(clip, n, sfx):
 
 
 def _plan_challenge(clip, sfx):
-    """Slam-in title card: riser, two hits (CHALLENGE, ROUND), then the narrator. Smooth 24-30 fps animation."""
+    """Slam-in title card: riser, two hits (CHALLENGE, ROUND), then the narrator. A new picture for every video frame (30 per
+    second); it used to step at 24 and then 15 per second, which does not divide evenly into 30 and so moved unevenly."""
     dur = max(3.4, 1.25 + len(clip) / SR + 0.45)
-    times, t = [], 0.0
-    while t < dur:
-        times.append(round(t, 4))
-        t += 1 / 24 if t < 1.7 else 1 / 15
+    times = [round(k / FRAME_RATE, 4) for k in range(int(dur * FRAME_RATE) + 1) if k / FRAME_RATE < dur]
     frames = [(t, "challenge", dict(t=t, dur=dur)) for t in times]
     events = [(0.0, sfx["sting"], 1.0), (1.25, clip, 1.0)]
     return frames, dur, events, False
@@ -82,8 +99,7 @@ def _plan_question(i, total, q, clips, sfx, challenge=False):
     theme = "red" if challenge else "purple"
     base = dict(theme=theme, q_num=i + 1, header=q["question"], choices=q["choices"], correct_idx=q["correct_idx"],
                 label=f"QUESTION {i + 1}/{total}", think=THINK)
-    frames = [(0.0, "scene", dict(base, visible=0, hscale=0.8)), (0.05, "scene", dict(base, visible=0, hscale=1.06)),
-              (0.1, "scene", dict(base, visible=0))]
+    frames = pop_in(0.0, "scene", dict(base, visible=0))
     events = [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0), (0.4, cq, 1.0)]
     t = 0.4 + len(cq) / SR + 0.3
     for k in range(len(q["choices"])):
@@ -106,8 +122,7 @@ def _plan_question(i, total, q, clips, sfx, challenge=False):
 def _plan_outro(clip, sfx):
     base = dict(theme="purple", header="How did you do?", num_label=False, label="COMMENT YOUR SCORE",
                 letters="SAB", choices=["All correct: Quiz Master", "Most correct: Sharp Mind", "Few correct: Keep Trying"])
-    frames = [(0.0, "scene", dict(base, lit=0, hscale=0.8)), (0.05, "scene", dict(base, lit=0, hscale=1.06)),
-              (0.1, "scene", dict(base, lit=0))]
+    frames = pop_in(0.0, "scene", dict(base, lit=0))
     events = [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0), (0.4, clip, 1.0)]
     dur = 0.4 + len(clip) / SR + 1.0
     for k in range(3):
@@ -131,6 +146,7 @@ def cleanup_disk() -> None:
 def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None,
                categories=None, watermark: str = "", style: str = looks.DEFAULT, custom=None, colors=None) -> dict:
     """custom = the person's own questions: [{"question", "choices", "correct_idx"}]. colors = their colour changes."""
+    t_begin = time.time()
     render.WATERMARK = watermark or ""
     look = looks.with_colors(looks.resolve(style), colors)
     render.apply_skin(look["skin"])
@@ -196,7 +212,8 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
                         plans.append(_plan_question(i, n, q, clips[ci:ci + 3], sfx, is_ch))
                         ci += 3
                     plans.append(_plan_outro(clips[ci], sfx))
-                    box["plans"] = plans
+                    # every scene is a whole number of video frames long, so the audio placed by adding the lengths stays in step
+                    box["plans"] = [(f, render.frame_ceil(d), e, h) for f, d, e, h in plans]
                 return box["plans"]
 
         def scene(si):
@@ -224,6 +241,7 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
                       lambda d, t: progress(f"Finding footage and rendering {d} of {t}...", 0.14 + 0.74 * d / max(1, t)))
 
         plans = get_plans()
+        t_scenes = time.time()
         total = sum(p[1] for p in plans)
         mixer, seg_paths, offset = Mixer(total), [], 0.0
         for si, (frames, dur, events, has_clip) in enumerate(plans):
@@ -242,6 +260,8 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
 
         if not custom:
             mark_used(quiz)
+        flog(f"[timing] trivia: narration, footage and scenes {t_scenes - t_begin:.0f}s | mixing and finishing "
+             f"{time.time() - t_scenes:.0f}s | total {time.time() - t_begin:.0f}s for a {total:.0f}s video")
         return {
             "look": look["title"],
             "file": name,

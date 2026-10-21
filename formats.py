@@ -4,6 +4,7 @@ Same pipeline as the trivia video (script -> narration -> footage -> scenes -> m
 content.py and each format has its own scene layouts.
 """
 import random
+import re
 import shutil
 import threading
 import time
@@ -14,8 +15,9 @@ import content
 import looks
 import render
 from audio import Mixer, SR, bing, effects, pop, sparkle, tick, whoosh
-from config import OUTPUT_DIR, WORK_DIR, env
-from pipeline import INTRO_QUERIES, POP_ANIM, _intro_background, cleanup_disk
+from config import OUTPUT_DIR, WORK_DIR, env, flog
+from questions import EXTRA_STOP, GENERIC, STOP
+from pipeline import FRAME, INTRO_QUERIES, POP_ANIM, _intro_background, cleanup_disk, pop_in
 from render import concat_videos, mux, render_segment
 from tts import synthesize_all
 from videos import UsedSet, find_background, find_many
@@ -33,12 +35,13 @@ def _lc(s: str) -> str:
 
 
 def _pops(frames, t, kind, base, key="anim"):
+    frames[:] = [f for f in frames if not (f[0] >= t and key in f[2])]   # a pop that starts before the last one has finished takes over from it
     for k, a in enumerate(POP_ANIM):
-        frames.append((t + 0.05 * k, kind, dict(base, **{key: a})))
+        frames.append((round(t + FRAME * k, 4), kind, dict(base, **{key: a})))
 
 
 def _intro(frames, kind, base, events, sfx, hs=True):
-    frames += [(0.0, kind, dict(base, hscale=0.8)), (0.05, kind, dict(base, hscale=1.06)), (0.1, kind, dict(base))]
+    frames += pop_in(0.0, kind, base)
     events += [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0)]
 
 
@@ -49,8 +52,7 @@ def _plan_title(spec, clips, sfx):
     words = spec["title"].upper().split()
     text = " ".join(words)
     weights = [len(w) + 1 for w in words]
-    frames = [(0.0, "hook", dict(text=text, hl=-1, hscale=0.7)), (0.06, "hook", dict(text=text, hl=-1, hscale=1.08)),
-              (0.12, "hook", dict(text=text, hl=-1, hscale=1.0))]
+    frames = pop_in(0.0, "hook", dict(text=text, hl=-1), start=0.7)
     t0, dur, acc = 0.4, len(clip) / SR, 0.0
     for k, wt in enumerate(weights):
         frames.append((t0 + dur * acc / sum(weights), "hook", dict(text=text, hl=k, hscale=1.0)))
@@ -104,8 +106,7 @@ def _plan_wyr_a(spec, clips, sfx):
     """Both options are on screen from the first frame; the narrator reads 'Would you rather A...'"""
     base = _wyr_base(spec)
     frames, events = [], [(0.35, clips[0], 1.0), (0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0)]
-    frames += [(0.0, "scene", dict(base, visible=2, hscale=0.8)), (0.05, "scene", dict(base, visible=2, hscale=1.06)),
-               (0.1, "scene", dict(base, visible=2))]
+    frames += pop_in(0.0, "scene", dict(base, visible=2))
     return frames, 0.35 + len(clips[0]) / SR + 0.1, events, True
 
 
@@ -120,8 +121,7 @@ def _plan_wyr_b(spec, clips, sfx):
         t += 1.0
     reveal = dict(base, header="WHAT YOUR PICK SAYS", choices=[spec["trait_a"], spec["trait_b"]])
     reveal.pop("think")
-    frames += [(t, "scene", dict(reveal, visible=2, hscale=0.85)), (t + 0.05, "scene", dict(reveal, visible=2, hscale=1.05)),
-               (t + 0.1, "scene", dict(reveal, visible=2))]
+    frames += pop_in(t, "scene", dict(reveal, visible=2), start=0.85)
     events += [(t, sfx["bing"], 1.0), (t, sfx["whoosh"], 1.0)]
     t += 0.45
     events.append((t, clips[1], 1.0))
@@ -142,8 +142,7 @@ def _plan_story_a(spec, clips, sfx):
     """The situation is read, then 'Do you A...'; both options are on screen from the first frame."""
     base = _story_base(spec)
     frames, events = [], [(0.35, clips[0], 1.0), (0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0)]
-    frames += [(0.0, "story", dict(base, visible=2, hscale=0.8)), (0.05, "story", dict(base, visible=2, hscale=1.06)),
-               (0.1, "story", dict(base, visible=2))]
+    frames += pop_in(0.0, "story", dict(base, visible=2))
     return frames, 0.35 + len(clips[0]) / SR + 0.1, events, False
 
 
@@ -160,8 +159,7 @@ def _plan_story_b(spec, clips, sfx):
     head = "WHERE EACH PATH LEADS" if not survive else ("TWO WAYS OUT" if trap else "BOTH PATHS ARE SAFE")
     reveal = dict(base, header=head, choices=[spec["out_a"], spec["out_b"]])
     reveal.pop("think")
-    frames += [(t, "story", dict(reveal, visible=2, hscale=0.85)), (t + 0.05, "story", dict(reveal, visible=2, hscale=1.05)),
-               (t + 0.1, "story", dict(reveal, visible=2))]
+    frames += pop_in(t, "story", dict(reveal, visible=2), start=0.85)
     events += [(t, sfx["bing"], 1.0), (t, sfx["whoosh"], 1.0)]
     t += 0.45
     # narration order: the safe path first, the deadly one last (or A then B when nothing is deadly)
@@ -172,7 +170,7 @@ def _plan_story_b(spec, clips, sfx):
         out = spec["out_a"] if trap == "a" else spec["out_b"]
         dead = dict(base, theme="red", header="GAME OVER", choices=[out], letters=trap.upper(), visible=1)
         dead.pop("think")
-        frames += [(t, "story", dict(dead, hscale=0.85)), (t + 0.05, "story", dict(dead, hscale=1.08)), (t + 0.1, "story", dict(dead))]
+        frames += pop_in(t, "story", dead, start=0.85)
         events += [(t, sfx["siren"], 1.0), (t, sfx["whoosh"], 1.0)]
         t += 0.3
     events.append((t, clips[2], 1.0))
@@ -182,21 +180,19 @@ def _plan_story_b(spec, clips, sfx):
 
 
 def _plan_odd(spec, clips, sfx):
-    """Four things pop in while the narrator reads them, a countdown, then only the odd one out is shown, in green."""
+    """The question is asked, the four things pop in one after another (not read out), a countdown, then the odd one out is
+    named and shown in green."""
     cq, cr = clips
     base = dict(theme="purple", header="WHICH ONE DOESN'T BELONG?", label=f"ROUND {spec['i'] + 1}/{spec['total']}",
                 choices=spec["items"], correct_idx=spec["odd"], num_label=str(spec["i"] + 1), think=THINK_WYR)
-    frames = [(0.0, "scene", dict(base, visible=0, hscale=0.8)), (0.05, "scene", dict(base, visible=0, hscale=1.06)),
-              (0.1, "scene", dict(base, visible=0))]
+    frames = pop_in(0.0, "scene", dict(base, visible=0))
     events = [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0), (0.4, cq, 1.0)]
-    text = spec["texts"][0]   # each option pops in just as the narrator says it (placed by where its words fall in the sentence)
-    for k, item in enumerate(spec["items"]):
-        at = text.find(item, text.find("?") + 1)
-        when = 0.4 + (max(0, at) / max(1, len(text))) * len(cq) / SR - 0.12
-        when = max(0.5, when)
+    when = 0.4 + len(cq) / SR + 0.3
+    for k in range(len(spec["items"])):
         _pops(frames, when, "scene", dict(base, visible=k + 1))
         events.append((when, sfx["pop"], 1.0))
-    t = 0.4 + len(cq) / SR + 0.4
+        when += 0.5
+    t = when + 0.1
     for s_left in range(THINK_WYR, 0, -1):
         events.append((t, sfx["tick"], 1.0))
         frames.append((t, "scene", dict(base, visible=4, timer=s_left, smooth=True)))
@@ -214,8 +210,7 @@ def _plan_clip(spec, clips, sfx):
     cq, cr = clips
     base = dict(theme="purple", header="WHAT IS THIS?", label=f"ROUND {spec['i'] + 1}/{spec['total']}", choices=spec["options"],
                 letters="ABCD", num_label=str(spec["i"] + 1), bar_dy=-80, head_y=300, head_size=120, think=THINK_WYR)
-    frames = [(0.0, "story", dict(base, visible=4, hscale=0.8)), (0.05, "story", dict(base, visible=4, hscale=1.06)),
-              (0.1, "story", dict(base, visible=4))]
+    frames = pop_in(0.0, "story", dict(base, visible=4))
     events = [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0), (0.35, cq, 1.0)]
     t = 0.35 + len(cq) / SR + 0.3
     t0 = t
@@ -226,7 +221,7 @@ def _plan_clip(spec, clips, sfx):
     k = spec["correct_idx"]
     rev = dict(base, theme="green", header=f"IT'S {spec['answer'].upper()}!", choices=[spec["options"][k]], letters="ABCD"[k], visible=1)
     rev.pop("think")
-    frames += [(t, "story", dict(rev, hscale=0.85)), (t + 0.05, "story", dict(rev, hscale=1.06)), (t + 0.1, "story", dict(rev))]
+    frames += pop_in(t, "story", rev, start=0.85)
     events += [(t, sfx["bing"], 1.0), (t + 0.05, sfx["sparkle"], 1.0), (t + 0.5, cr, 1.0)]
     # still blocky right up to the reveal so it stays hard to guess; it only becomes clear when the answer shows
     spec["pixel"] = [(0.0, 64), (t0 + 0.1 * THINK_WYR, 48), (t0 + 0.22 * THINK_WYR, 36), (t0 + 0.34 * THINK_WYR, 28),
@@ -243,7 +238,7 @@ def _plan_missing(spec, clips, sfx):
     c_look, c_ask, c_ans = clips
     base = dict(theme="purple", label=f"ROUND {spec['i'] + 1}/{spec['total']}", grid=spec["grid"], num_label=str(spec["i"] + 1))
     look = dict(base, header="MEMORIZE THESE!", think=MEMORIZE_SECONDS)
-    frames = [(0.0, "missing", dict(look, hscale=0.8)), (0.05, "missing", dict(look, hscale=1.06)), (0.1, "missing", dict(look))]
+    frames = pop_in(0.0, "missing", look)
     events = [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0), (0.35, c_look, 1.0)]
     t = 0.35 + len(c_look) / SR + 0.2
     for s_left in range(MEMORIZE_SECONDS, 0, -1):
@@ -251,8 +246,7 @@ def _plan_missing(spec, clips, sfx):
         frames.append((t, "missing", dict(look, timer=s_left, smooth=True)))
         t += 1.0
     ask = dict(base, header="WHAT'S MISSING?", hole=spec["hole"], choices=spec["options"], letters="ABC", think=THINK_WYR)
-    frames += [(t, "missing", dict(ask, visible=0, hscale=0.85)), (t + 0.05, "missing", dict(ask, visible=0, hscale=1.06)),
-               (t + 0.1, "missing", dict(ask, visible=0))]
+    frames += pop_in(t, "missing", dict(ask, visible=0), start=0.85)
     events += [(t, sfx["whoosh"], 1.0), (t + 0.3, c_ask, 1.0)]
     t += 0.3 + len(c_ask) / SR + 0.25
     for k in range(3):
@@ -267,7 +261,7 @@ def _plan_missing(spec, clips, sfx):
     k = spec["correct_idx"]
     rev = dict(base, theme="green", header=f"IT WAS THE {spec['answer'].upper()}!", hi=spec["hole"], choices=[spec["options"][k]],
                letters="ABC"[k], visible=1)
-    frames += [(t, "missing", dict(rev, hscale=0.85)), (t + 0.05, "missing", dict(rev, hscale=1.06)), (t + 0.1, "missing", dict(rev))]
+    frames += pop_in(t, "missing", rev, start=0.85)
     events += [(t, sfx["bing"], 1.0), (t + 0.05, sfx["sparkle"], 1.0), (t + 0.5, c_ans, 1.0)]
     t += 0.5 + len(c_ans) / SR + 1.3
     frames.sort(key=lambda f: f[0])
@@ -338,8 +332,7 @@ def _specs(data: dict) -> list:
             items = r["items"]
             odd = items[r["odd"]]
             specs.append(dict(t="odd", i=i, total=len(rounds), items=items, odd=r["odd"], reason=r["reason"],
-                              texts=[f"Which one doesn't belong? {items[0]}, {items[1]}, {items[2]}, or {items[3]}?",
-                                     f"{odd}! {r['reason']}"], search=r["search"], check=" ".join(items),
+                              texts=["Which one doesn't belong?", f"{odd}!"], search=r["search"], check=" ".join(items),
                               row=(" | ".join(items), f"Odd one: {odd}. {r['reason']}")))
         specs.append(dict(t="end", header="How many did you spot?", label="COMMENT YOUR SCORE", letters="123",
                           choices=["Spotted them all", "Most of them", "Only a few"], search=None,
@@ -349,7 +342,7 @@ def _specs(data: dict) -> list:
         for i, r in enumerate(rounds):
             o = r["options"]
             specs.append(dict(t="clip", i=i, total=len(rounds), options=o, correct_idx=r["correct_idx"], answer=r["answer"],
-                              texts=[f"What is this? {o[0]}, {o[1]}, {o[2]}, or {o[3]}?", f"It's {_lc(r['answer'])}!"],
+                              texts=["What is this?", f"It's {_lc(r['answer'])}!"],
                               search=r["search"], check=r["answer"],
                               row=(" | ".join(o), f"Answer: {LETTERS[r['correct_idx']]}. {r['answer']}")))
         specs.append(dict(t="end", header="How many did you get?", label="COMMENT YOUR SCORE", letters="123",
@@ -419,24 +412,60 @@ def _footage(spec, used):
 
 # ------------------------------------------------------------------ build
 INTRO_BY_KIND = {
-    "personality": ["colorful smoke", "neon lights abstract", "light particles"],
+    "personality": ["neon lights abstract", "light particles", "bokeh lights"],
     "wyr": ["colorful abstract background", "split screen light", "glowing lines"],
     "toplist": ["podium spotlight", "stage lights", "confetti"],
     "facts": ["galaxy stars", "light bulb idea", "space nebula"],
     "story": ["misty forest", "dark cinematic landscape", "foggy mountains"],
     "odd": ["colorful shapes abstract", "geometric patterns", "bokeh lights"],
-    "clip": ["mystery fog", "smoke", "light rays"],
+    "clip": ["mystery fog", "light rays", "fog"],
     "missing": ["colorful shapes abstract", "bokeh lights", "glowing particles"],
 }
 
 
-def _themed_intro(kind, topic, title, used):
+_NOT_A_SUBJECT = {"quiz", "personality", "test", "guess", "trivia", "ultimate", "video", "videos", "fun", "best", "top",
+                  "rather", "versus", "pick", "choose", "chapter", "episode", "story", "game", "facts", "fact", "ranking",
+                  "rankings", "amazing", "mind", "blowing", "five", "ten", "seven", "fastest", "biggest", "greatest"}
+
+
+def topic_words(text):
+    """The words of a title or topic that name something you could film ('Which soccer player are you?' -> soccer, player)."""
+    out = []
+    for w in re.findall(r"[A-Za-z][A-Za-z'\-]+", text or ""):
+        lw = w.lower().strip("'-")
+        if len(lw) < 3 or lw in STOP or lw in EXTRA_STOP or lw in GENERIC or lw in _NOT_A_SUBJECT or lw in out:
+            continue
+        out.append(lw)
+    return out
+
+
+def intro_queries(kind, topic, title, scene_terms=()):
+    """Footage searches for the first scene, best first: the video's own subject as clean keywords (never the whole title as
+    a sentence, which matches stock tags badly), then the footage terms its own scenes use, then the type's mood footage,
+    then an abstract background. The guessing games stay generic so the intro never hints at an answer."""
+    queries = []
+    if kind not in ("clip", "odd", "missing"):
+        words = topic_words(topic) or topic_words(title)
+        if len(words) >= 2:
+            queries.append(" ".join(words[:2]))
+        extra = [t[:40] for t in scene_terms if t]
+        if extra:
+            queries.append(extra.pop(0))   # a specific scene term beats a lone generic word ('animals')
+        if words:
+            queries.append(words[0])
+        queries += extra
+        seen = set()
+        queries = [q for q in queries if not (q.lower() in seen or seen.add(q.lower()))]
+    return queries[:6] + INTRO_BY_KIND.get(kind, []) + ["abstract background"]
+
+
+def _themed_intro(kind, topic, title, used, scene_terms=()):
     """First-scene footage for every type except trivia: matches the theme/story (never the answers of a guessing
     game), falling back to the type's mood footage, then an abstract background."""
-    theme = [] if kind in ("clip", "odd", "missing") else [q for q in (topic, title) if q]
-    queries = [q[:40] for q in theme[:2]] + INTRO_BY_KIND.get(kind, []) + ["abstract background"]
+    queries = intro_queries(kind, topic, title, scene_terms)
+    check = "" if kind in ("clip", "odd", "missing") else f'Opening clip for a video called "{title}" (subject: {topic or title}). It should show that subject.'
     try:
-        return find_background(queries, used)[0]
+        return find_background(queries, used, check)[0]
     except Exception as e:
         print(f"[intro] themed intro failed: {e}", flush=True)
         return _intro_background(used)
@@ -444,6 +473,7 @@ def _themed_intro(kind, topic, title, used):
 
 def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None,
                 watermark: str = "", style: str = looks.DEFAULT, colors=None, custom=None, mode: str = "path") -> dict:
+    t_begin = time.time()
     render.WATERMARK = watermark or ""
     look = looks.with_colors(looks.resolve(style), colors)
     render.apply_skin(look["skin"])
@@ -459,6 +489,7 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
             progress("Writing the script...", 0.03)
             data = content.generate(kind, topic, n, mode)
         specs = _specs(data)
+        t_script = time.time()
 
         # Narration, footage and rendering overlap: narration is recorded while the first footage searches run, and
         # each scene is rendered as soon as its own footage is in (scenes are handled several at a time).
@@ -480,7 +511,8 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
             with gate:
                 if "plans" not in box:
                     box["tts"].result()
-                    box["plans"] = [PLANNERS[s["t"]](s, s["clips"], sfx) for s in specs]
+                    # every scene is a whole number of video frames long, so the audio placed by adding the lengths stays in step
+                    box["plans"] = [(f, render.frame_ceil(d), e, h) for f, d, e, h in (PLANNERS[s["t"]](s, s["clips"], sfx) for s in specs)]
                 return box["plans"]
 
         last = len(specs) - 1
@@ -488,7 +520,11 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
         def scene(si):
             s = specs[si]
             if si == 0:
-                s["bg"] = _intro_background(used) if kind == "trivia" else _themed_intro(kind, topic, s["title"], used)
+                if kind == "trivia":
+                    s["bg"] = _intro_background(used)
+                else:   # the video's real subject (also when the topic was picked for you), plus the footage terms its own scenes use
+                    own = [(x.get("search") or [None])[0] if isinstance(x.get("search"), list) else x.get("search") for x in specs[1:4]]
+                    s["bg"] = _themed_intro(kind, data.get("topic") or topic, s["title"], used, [t for t in own if isinstance(t, str)])
             elif si == last:
                 s["bg"] = find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used)[0]
             elif s["search"]:
@@ -505,6 +541,7 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
                       
                       lambda d, t: progress(f"Finding footage and rendering {d} of {t}...", 0.14 + 0.74 * d / max(1, t)))
         plans = get_plans()
+        t_scenes = time.time()
         total = sum(p[1] for p in plans)
         mixer, seg_paths, offset = Mixer(total), [], 0.0
         for si, (frames, dur, events, has_clip) in enumerate(plans):
@@ -528,6 +565,8 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
                 if s["t"] in ("wyr_a", "story_a"):
                     foot = f"{foot} | then: {specs[si + 1].get('matched', '')}"
                 rows.append({"question": s["row"][0], "answer": s["row"][1], "footage": foot})
+        flog(f"[timing] {kind}: script {t_script - t_begin:.0f}s | narration, footage and scenes {t_scenes - t_script:.0f}s | "
+             f"mixing and finishing {time.time() - t_scenes:.0f}s | total {time.time() - t_begin:.0f}s for a {total:.0f}s video")
         return {"look": look["title"], "file": name, "duration": round(total, 1), "title": data["title"], "questions": rows}
     finally:
         render.reset_skin()
