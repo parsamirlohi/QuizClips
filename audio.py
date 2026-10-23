@@ -11,14 +11,15 @@ CEILING = 0.95      # the loudest moment of a finished video sits here (just und
 TARGET_RMS = 0.25   # the average level every finished video is brought to, whatever its type (was 0.2: a bit over 3 dB louder)
 MAX_BOOST = 5.0     # never lift a mix by more than this
 KNEE = 0.7          # above this a peak is eased down (see finish) instead of cutting off
-VOICE_GAIN = 1.7    # the narrator, relative to the sound effects
+VOICE_GAIN = 1.4    # the narrator, relative to the sound effects
 # How loud the sound effects are, in ONE place so every video type has the same levels. Every effect peaks at the same level
 # as the timer tick, so none of them is louder or quieter than another. A long, steady sound (the siren) is also held to a
 # maximum average level, otherwise being as tall as a click would make it drown the narrator.
 EFFECT_PEAK = 0.68
 EFFECT_MAX_RMS = 0.16
-POP_PEAK = 0.95   # the pop keeps its sound; it is made louder by turning it up, not by changing it
-TICK_TRIM = 0.9   # the timer tick a little lower than the other effects
+POP_PEAK = 0.98   # the pop keeps its sound; it is made louder by turning it up, not by changing it
+BING_GAIN = 1.5   # the ding, turned up well past the other effects
+TICK_TRIM = 0.6   # the timer tick a little lower than the other effects
 
 
 def decode_audio(path) -> np.ndarray:
@@ -256,5 +257,7 @@ def effects() -> dict:
            "sting": challenge_sting()}
     out = {k: _level(v) for k, v in raw.items()}
     out["tick"] = (out["tick"] * TICK_TRIM).astype(np.float32)   # the countdown plays the whole time, so it sits a little under the rest
-    out["pop"] = (out["pop"] / float(np.max(np.abs(out["pop"])) or 1.0) * POP_PEAK).astype(np.float32)   # same sound as ever, just louder
+    pop_ = np.tanh(out["pop"] / float(np.max(np.abs(out["pop"])) or 1.0) * 1.25)   # a touch of saturation: same sound, a bit more body
+    out["pop"] = (pop_ / float(np.max(np.abs(pop_)) or 1.0) * POP_PEAK).astype(np.float32)
+    out["bing"] = np.clip(out["bing"] * BING_GAIN, -0.95, 0.95).astype(np.float32)
     return out

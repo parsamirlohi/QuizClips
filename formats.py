@@ -207,12 +207,12 @@ def _plan_odd(spec, clips, sfx):
 def _plan_clip(spec, clips, sfx):
     """Full-screen footage that starts as big blocks and gets sharper in steps while the options sit below.
     The reveal shows the footage sharp, with the answer."""
-    cq, cr = clips
+    (cr,) = clips   # only the answer is spoken; "What is this?" is on the screen
     base = dict(theme="purple", header="WHAT IS THIS?", label=f"ROUND {spec['i'] + 1}/{spec['total']}", choices=spec["options"],
                 letters="ABCD", num_label=str(spec["i"] + 1), bar_dy=-80, head_y=300, head_size=120, think=THINK_WYR)
     frames = pop_in(0.0, "story", dict(base, visible=4))
-    events = [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0), (0.35, cq, 1.0)]
-    t = 0.35 + len(cq) / SR + 0.3
+    events = [(0.0, sfx["whoosh"], 1.0), (0.05, sfx["pop"], 1.0)]
+    t = 1.2   # a moment to see the blocky picture and the options before the countdown starts
     t0 = t
     for s_left in range(THINK_WYR, 0, -1):
         events.append((t, sfx["tick"], 1.0))
@@ -342,7 +342,7 @@ def _specs(data: dict) -> list:
         for i, r in enumerate(rounds):
             o = r["options"]
             specs.append(dict(t="clip", i=i, total=len(rounds), options=o, correct_idx=r["correct_idx"], answer=r["answer"],
-                              texts=["What is this?", f"It's {_lc(r['answer'])}!"],
+                              texts=[f"It's {_lc(r['answer'])}!"],   # the question is on screen, not read out
                               search=r["search"], check=r["answer"],
                               row=(" | ".join(o), f"Answer: {LETTERS[r['correct_idx']]}. {r['answer']}")))
         specs.append(dict(t="end", header="How many did you get?", label="COMMENT YOUR SCORE", letters="123",
