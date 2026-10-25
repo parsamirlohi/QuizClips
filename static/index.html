@@ -261,7 +261,7 @@
   [hidden] { display:none !important; }
   .drawer.scoped .d-tabs { display:none; }
   .drawer.scoped .d-head { padding-bottom:16px; border-bottom:1px solid var(--line); }
-  .drawer.scoped #p-content .field > label, .drawer.scoped #p-content .field > .lab, .drawer.scoped #f-voice > .lab { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .drawer.scoped #p-content .field > label, .drawer.scoped #p-content .field > .lab, .drawer.scoped #f-voice > .lab, .drawer.scoped #f-timersound > .lab, .drawer.scoped #f-popsound > .lab { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 
   .field { margin-bottom:28px; }
   .field > label, .field > .lab { display:block; font-weight:700; margin-bottom:4px; }
@@ -345,10 +345,12 @@
   .tm-val { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
   .tm-val { color:var(--ink); }
   .tm-val small { color:var(--ink); font-weight:500; font-size:13px; white-space:nowrap; }
-  #tm-range { -webkit-appearance:none; appearance:none; width:100%; height:8px; border-radius:99px; outline-offset:4px;
-    background:linear-gradient(to right,var(--sel) var(--p,50%),var(--line-strong) var(--p,50%)); }
-  #tm-range::-webkit-slider-thumb { -webkit-appearance:none; width:24px; height:24px; border-radius:50%; background:#fff; border:3px solid var(--sel); cursor:pointer; }
-  #tm-range::-moz-range-thumb { width:18px; height:18px; border-radius:50%; background:#fff; border:3px solid var(--sel); cursor:pointer; }
+  #tm-range { position:relative; height:30px; touch-action:none; cursor:pointer; user-select:none; -webkit-user-select:none; outline:none; }
+  #tm-range .bar { position:absolute; left:0; right:0; top:10px; height:8px; border-radius:99px; background:var(--line-strong); overflow:hidden; }
+  #tm-range .fill { position:absolute; left:0; top:0; bottom:0; width:calc(12px + (100% - 24px) * var(--f,.5)); background:var(--sel); }
+  #tm-range .thumb { position:absolute; top:2px; width:24px; height:24px; margin-left:-12px; box-sizing:border-box; border-radius:50%; background:#fff; border:3px solid var(--sel);
+    left:calc(12px + (100% - 24px) * var(--f,.5)); box-shadow:0 1px 4px rgba(0,0,0,.25); }
+  #tm-range:focus-visible .thumb { outline:2px solid var(--sel); outline-offset:3px; }
   .seg button { border:1px solid var(--line-strong); background:var(--surface); border-radius:10px; padding:10px 0; font-weight:600; font-variant-numeric:tabular-nums; }
   .seg button:hover { border-color:var(--muted); }
   .seg button[aria-pressed="true"], .chip[aria-pressed="true"] { background:color-mix(in srgb,var(--sel) 14%,var(--surface)); border-color:var(--sel); color:var(--ink); }
@@ -429,9 +431,9 @@
       </div>
 
       <div class="card" id="story-card" style="margin-bottom:20px" hidden>
-        <div class="card-head"><h2>Story style</h2></div>
+        <div class="card-head"><h2>Quest style</h2></div>
         <div class="topic-body">
-          <div class="tmode" id="smode" role="group" aria-label="Story style">
+          <div class="tmode" id="smode" role="group" aria-label="Quest style">
             <button type="button" class="kind" data-smode="path"><b>Choose your path</b><span>Every decision shows where both options lead.</span></button>
             <button type="button" class="kind" data-smode="survive"><b>Would you survive?</b><span>A few options are deadly traps. Can viewers dodge them?</span></button>
           </div>
@@ -507,6 +509,8 @@
           <div class="row editable"><dt>Look</dt><dd class="v" id="s-look" style="margin:0"></dd><button class="link" data-edit="look" aria-label="Change look"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row editable" id="row-colors"><dt>Colors</dt><dd class="v" id="s-colors" style="margin:0"></dd><button class="link" data-edit="colors" aria-label="Change colors"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row editable"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row editable"><dt>Timer sound</dt><dd class="v" id="s-tsound" style="margin:0"></dd><button class="link" data-edit="timersound" aria-label="Change timer sound"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row editable"><dt>Choice sound</dt><dd class="v" id="s-psound" style="margin:0"></dd><button class="link" data-edit="popsound" aria-label="Change choice sound"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row editable"><dt>Link on video</dt><dd class="v" id="s-link" style="margin:0"></dd><button class="link" data-edit="link" aria-label="Change link on video"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
         </dl>
       </div>
@@ -618,6 +622,16 @@
         <div class="voices" id="voices" role="radiogroup" aria-labelledby="v-lab"></div>
         <p class="vmsg" id="vmsg" role="status"></p>
       </div>
+      <div class="field" id="f-timersound">
+        <span class="lab" id="ts-lab">Timer sound</span>
+        <p class="help">What the countdown sounds like, then the ding on the answer. Press play to hear it.</p>
+        <div class="voices" id="tsounds" role="radiogroup" aria-labelledby="ts-lab"></div>
+      </div>
+      <div class="field" id="f-popsound">
+        <span class="lab" id="ps-lab">Choice sound</span>
+        <p class="help">The sound each answer choice makes as it pops up. Press play to hear four of them.</p>
+        <div class="voices" id="psounds" role="radiogroup" aria-labelledby="ps-lab"></div>
+      </div>
       <div id="f-link">
       <label class="switch" for="wmOn">
         <span><b>Show my link on the video</b><small>Appears at the bottom of every scene.</small></span>
@@ -654,7 +668,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
 
 /* ---------------- settings (remembered in this browser) ---------------- */
-const S = { build: {}, cdata: newCData(), colors: {}, think: {}, kind: "trivia", storyMode: "path", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "" };
+const S = { build: {}, cdata: newCData(), colors: {}, think: {}, kind: "trivia", storyMode: "path", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "", timerSound: "", popSound: "pop", soundsV: 2 };
 function newCData() {
   const rows = (n, f) => Array.from({ length: n }, f);
   return {
@@ -678,7 +692,7 @@ function loadSettings() {
       S.kind = j.kind || "trivia"; S.think = j.think || {}; S.storyMode = j.storyMode === "survive" ? "survive" : "path";
       S.build = j.build && typeof j.build === "object" ? j.build : {};
       if (j.cdata && typeof j.cdata === "object") S.cdata = Object.assign(newCData(), j.cdata);
-      S.colors = j.colors && typeof j.colors === "object" ? j.colors : {}; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.cats = new Set(j.cats || []);
+      S.colors = j.colors && typeof j.colors === "object" ? j.colors : {}; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.timerSound = j.soundsV === 2 ? (j.timerSound || "") : ""; S.soundsV = 2; S.popSound = j.popSound || "pop"; S.cats = new Set(j.cats || []);
       S.look = j.look || S.look; S.wmOn = j.wmOn !== false; S.wmPlat = j.wmPlat || "tiktok"; S.wmHandle = j.wmHandle || "";
     } else {  // older versions of this page
       S.look = localStorage.getItem("lookKey") || S.look;
@@ -716,6 +730,8 @@ function setTab(name) {
 const SECTIONS = {
   questions: { panel: "content", field: "f-questions", title: "Number of questions" },
   voice: { panel: "brand", field: "f-voice", title: "Narrator voice" },
+  timersound: { panel: "brand", field: "f-timersound", title: "Timer sound" },
+  popsound: { panel: "brand", field: "f-popsound", title: "Choice sound" },
   topics: { panel: "content", field: "f-topics", title: "Topics" },
   look: { panel: "look", title: "Look" },
   colors: { panel: "look", title: "Colors" },
@@ -726,7 +742,7 @@ function openDrawer(sect, from) {
   opener = from || document.activeElement;
   const one = SECTIONS[sect];
   $("drawer").classList.toggle("scoped", !!one);
-  ["f-questions", "f-voice", "f-topics"].forEach((id) => {
+  ["f-questions", "f-voice", "f-topics", "f-timersound", "f-popsound"].forEach((id) => {
     $(id).hidden = one ? one.field !== id : ((id === "f-topics" && S.kind !== "trivia") || (id === "f-questions" && building()));
   });
   $("f-link").hidden = !!one && sect !== "link";
@@ -841,7 +857,7 @@ function showLookPreview() {
   }
   else { node = document.createElement("div"); node.className = "rand"; node.textContent = "?"; }
   swapScreen(node); refreshOverlay();
-  $("caption").innerHTML = look && S.kind === "story" ? "Story videos use the footage as the background. The <b>" + esc(look.title) + "</b> look sets the colors."
+  $("caption").innerHTML = look && S.kind === "story" ? "Quest videos use the footage as the background. The <b>" + esc(look.title) + "</b> look sets the colors."
                                 : look && S.kind === "missing" ? "The <b>" + esc(look.title) + "</b> look sets the colors and the moving background."
                                 : look && S.kind === "clip" ? "The footage starts blocky and gets sharper. The <b>" + esc(look.title) + "</b> look sets the colors."
                                 : look ? "Preview of the <b>" + esc(look.title) + "</b> look. Footage is matched to each scene."
@@ -868,20 +884,46 @@ function buildTimer() {
   const f = fmt(), box = $("s-timer");
   $("row-timer").hidden = !f.think_default;
   if (!f.think_default) { box.innerHTML = ""; return; }
-  box.innerHTML = '<input type="range" id="tm-range" min="5" max="15" step="0.05" aria-labelledby="tm-lab"><span class="tm-val"><span><b id="tm-out"></b> <small id="tm-def"></small></span><small id="tm-est"></small></span>';
-  const r = $("tm-range"); let raf = 0, last = -1;
+  box.innerHTML = '<div id="tm-range" role="slider" tabindex="0" aria-labelledby="tm-lab" aria-valuemin="5" aria-valuemax="15"><div class="bar"><div class="fill"></div></div>' +
+    '<div class="thumb"></div></div><span class="tm-val"><span><b id="tm-out"></b> <small id="tm-def"></small></span><small id="tm-est"></small></span>';
+  const r = $("tm-range");
+  let val = thinkFor(f), shown = -1, raf = 0, dragging = false;
+  const clamp = (x) => Math.min(15, Math.max(5, x));
   const paint = () => {
-    raf = 0;
-    const v = +r.value, n = Math.round(v);
-    r.style.setProperty("--p", ((v - 5) / 10 * 100) + "%");   // the fill follows the thumb continuously
-    if (n === last) return; last = n;
+    const n = Math.round(val);
+    r.style.setProperty("--f", (val - 5) / 10);   // thumb and fill share one position, so all eleven seconds are evenly spaced
+    r.setAttribute("aria-valuenow", n); r.setAttribute("aria-valuetext", n + " seconds");
+    if (n === shown) return; shown = n;
     S.think[f.key] = n; saveSettings();
     $("tm-out").textContent = n + " seconds";
     $("tm-def").textContent = n === f.think_default ? "(default)" : "";
     $("tm-est").textContent = "about " + estLength(f);
   };
-  r.value = thinkFor(f); paint();
-  r.oninput = () => { if (!raf) raf = requestAnimationFrame(paint); };
+  paint();
+  const fromPointer = (e) => { const b = r.getBoundingClientRect(); return clamp(5 + 10 * Math.min(1, Math.max(0, (e.clientX - b.left - 12) / (b.width - 24)))); };
+  let snapRaf = 0;
+  const glide = (to) => {   // ease to a whole second and stay there
+    cancelAnimationFrame(snapRaf);
+    const from = val, t0 = performance.now();
+    if (Math.abs(to - from) < 0.001 || matchMedia("(prefers-reduced-motion: reduce)").matches) { val = to; paint(); return; }
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / 160), e = 1 - Math.pow(1 - k, 3);
+      val = k < 1 ? from + (to - from) * e : to; paint();
+      if (k < 1) snapRaf = requestAnimationFrame(step);
+    };
+    snapRaf = requestAnimationFrame(step);
+  };
+  const move = (e) => { val = fromPointer(e); if (!raf) raf = requestAnimationFrame(() => { raf = 0; paint(); }); };
+  r.addEventListener("pointerdown", (e) => { dragging = true; cancelAnimationFrame(snapRaf); try { r.setPointerCapture(e.pointerId); } catch (x) {} move(e); });
+  r.addEventListener("pointermove", (e) => { if (dragging) move(e); });
+  const end = () => { if (!dragging) return; dragging = false; glide(clamp(Math.round(val))); };
+  r.addEventListener("pointerup", end); r.addEventListener("pointercancel", end);
+  r.addEventListener("keydown", (e) => {   // the arrow keys move one whole second; Home and End jump to the ends
+    const d = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+    if (!d && e.key !== "Home" && e.key !== "End") return;
+    e.preventDefault(); cancelAnimationFrame(snapRaf);
+    glide(e.key === "Home" ? 5 : e.key === "End" ? 15 : clamp(Math.round(val) + d));
+  });
 }
 function renderSummary() {
   const f = fmt();
@@ -898,6 +940,8 @@ function renderSummary() {
   paintColors();
   const v = CFG.voices.find((x) => x.id === S.voice);
   $("s-voice").textContent = v ? v.label : "";
+  const ts = (CFG.timer_sounds || []).find((x) => x.id === S.timerSound), ps = (CFG.pop_sounds || []).find((x) => x.id === S.popSound);
+  $("s-tsound").textContent = ts ? ts.name : ""; $("s-psound").textContent = ps ? ps.name : "";
   const names = CFG.categories.filter((c) => S.cats.has(c.id)).map((c) => c.label);
   $("s-topics").textContent = !names.length ? "Mix of all topics" : names.length <= 2 ? names.join(", ") : names.slice(0, 2).join(", ") + " + " + (names.length - 2) + " more";
   const look = CFG.looks.find((l) => l.key === S.look);
@@ -983,7 +1027,7 @@ document.querySelectorAll("#tmode .kind").forEach((b) => b.addEventListener("cli
 $("topic-in").addEventListener("input", (e) => { S.topics[S.kind] = e.target.value; saveSettings(); });
 function buildContent() {
   buildKinds(); buildSeg(); buildTimer(); buildTopicChips();
-  buildVoices();
+  buildVoices(); buildSounds();
 
   const box = $("chips"); box.innerHTML = "";
   const mk = (label, onclick) => {
@@ -1055,6 +1099,49 @@ function buildVoices() {
     picks.push([v.id, pick]);
   });
   paint();
+}
+
+/* ---------------- timer sounds and choice sounds ---------------- */
+const PAGE_LOADED = Date.now();   // previews are fetched fresh after a reload, never from an old cached copy
+function playSound(url, name, btn) {
+  const same = sample && sample.btn === btn;
+  stopSample();
+  if (same) return;
+  const audio = new Audio(url);
+  sample = { audio, btn, label: "Play a sample of " + name };
+  btn.classList.add("loading");
+  btn.setAttribute("aria-label", "Stop the sample of " + name);
+  const mine = () => sample && sample.audio === audio;
+  audio.addEventListener("playing", () => { if (mine()) { btn.classList.remove("loading"); btn.classList.add("on"); } });
+  audio.addEventListener("ended", () => { if (mine()) stopSample(); });
+  audio.addEventListener("error", () => { if (mine()) stopSample(); });
+  audio.play().catch(() => { if (mine()) stopSample(); });
+}
+function buildSoundList(boxId, items, key, kind) {
+  const list = items || [];
+  if (!list.some((x) => x.id === S[key])) S[key] = list.length ? list[0].id : "";
+  const box = $(boxId); box.innerHTML = "";
+  const picks = [];
+  const paint = () => picks.forEach(([id, b]) => b.setAttribute("aria-checked", String(id === S[key])));
+  list.forEach((it) => {
+    const row = document.createElement("div"); row.className = "voice";
+    const play = document.createElement("button");
+    play.type = "button"; play.className = "vplay"; play.setAttribute("aria-label", "Play a sample of " + it.name);
+    play.innerHTML = '<svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5l11 6.5-11 6.5z"/></svg><svg class="i-stop" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg>';
+    play.onclick = () => playSound("/api/sound-preview?kind=" + kind + "&id=" + encodeURIComponent(it.id) + "&v=" + PAGE_LOADED, it.name, play);
+    const pick = document.createElement("button");
+    pick.type = "button"; pick.className = "vpick"; pick.setAttribute("role", "radio");
+    pick.innerHTML = "<span><b>" + esc(it.name) + "</b><small>" + esc(it.desc) + '</small></span><span class="tick"></span>';
+    pick.onclick = () => { S[key] = it.id; paint(); saveSettings(); renderSummary(); };
+    quick(pick, closeDrawer);
+    row.appendChild(play); row.appendChild(pick); box.appendChild(row);
+    picks.push([it.id, pick]);
+  });
+  paint();
+}
+function buildSounds() {
+  buildSoundList("tsounds", CFG.timer_sounds, "timerSound", "timer");
+  buildSoundList("psounds", CFG.pop_sounds, "popSound", "pop");
 }
 
 function buildLooks() {
@@ -1191,7 +1278,7 @@ function paintColors() {
 const building = () => !!S.build[S.kind] && fmt().custom !== false;
 const BK = {
   trivia: { title: "Your questions", noun: "question" }, wyr: { title: "Your rounds", noun: "round" },
-  toplist: { title: "Your list", noun: "item" }, facts: { title: "Your facts", noun: "fact" }, story: { title: "Your story", noun: "decision" }, personality: { title: "Your quiz", noun: "question" },
+  toplist: { title: "Your list", noun: "item" }, facts: { title: "Your facts", noun: "fact" }, story: { title: "Your quest", noun: "decision" }, personality: { title: "Your quiz", noun: "question" },
   odd: { title: "Your rounds", noun: "round" }, clip: { title: "Your rounds", noun: "round" }, missing: { title: "Your rounds", noun: "round" },
 };
 const BLANK = {
@@ -1596,7 +1683,7 @@ $("go").addEventListener("click", async () => {
   try {
     const r = await fetch("/api/generate", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: S.kind, story_mode: S.storyMode, topic: topic(), questions: customData ? Math.min(10, Math.max(3, qCount())) : S.questions, custom: customData, colors: S.colors, voice: S.voice, categories: [...S.cats], style: S.look,
+      body: JSON.stringify({ kind: S.kind, story_mode: S.storyMode, topic: topic(), questions: customData ? Math.min(10, Math.max(3, qCount())) : S.questions, custom: customData, colors: S.colors, voice: S.voice, timer_sound: S.timerSound, pop_sound: S.popSound, categories: [...S.cats], style: S.look,
         think_seconds: fmt().think_default ? thinkFor(fmt()) : null, watermark_on: S.wmOn, watermark_platform: S.wmPlat, watermark_handle: S.wmHandle }),
     });
     if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || "The request failed. Try again."); }

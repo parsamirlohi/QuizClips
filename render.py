@@ -68,7 +68,7 @@ BAR_STYLES = {
 }
 
 # clip window (the stock footage is placed here by ffmpeg, the overlay draws the white frame around it)
-CLIP = (215, 620, 865, 970)
+CLIP = (215, 585, 865, 935)   # centred between the question box and the first answer box
 HEADER = (56, 64, 1024, 500)
 BAR_Y0, BAR_STEP, BAR_H = 1010, 172, 136
 NUM_C = (540, 1745)
@@ -199,10 +199,15 @@ def _header(theme, text, lit=None):   # cached: identical on every frame of a co
     return layer
 
 
+def _bar_w():
+    """Answer bars stop before TikTok's like / comment / share column when the video is made for TikTok."""
+    return 850 if _RING_EXTERNAL else 960
+
+
 @lru_cache(maxsize=256)
-def _bar(text, letter, style):
+def _bar(text, letter, style, w=960):
     s = BAR_STYLES[style]
-    w, h = 960, BAR_H
+    h = BAR_H
     layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     rect = _box(w - 70, 112, 8, s["fill"], s["line"], 7)
     layer.alpha_composite(rect, (70, 12))
@@ -220,6 +225,11 @@ def _bar(text, letter, style):
     c = big.resize((136, 136), Image.LANCZOS)
     _ctext(c, 68, 68, letter, font(84), s["letter"] + (255,))
     layer.alpha_composite(c, (0, 0))
+    k = float(env("BAR_SCALE", "0.891"))   # answer boxes a little smaller, kept centred where the full-size box was
+    if k < 0.999:
+        small = layer.resize((round(w * k), round(h * k)), Image.LANCZOS)
+        layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        layer.alpha_composite(small, ((w - small.width) // 2, (h - small.height) // 2))
     return layer
 
 
@@ -248,7 +258,7 @@ def _circle(label, reveal, urgent, hot):
 
 def _number_circle(img, label, reveal, timer, think, urgent):
     cx, cy = NUM_C
-    _place(img, _circle(label, bool(reveal), bool(urgent), tuple(HOT)), cx, cy)
+    _place(img, _circle(label, bool(reveal), bool(urgent), tuple(HOT)), cx, cy, float(env("NUM_SCALE", "0.8")))   # the number circle, a bit smaller
 
 
 BORDER_RADIUS = 0       # 0 = square corners, always used for real videos
@@ -320,10 +330,13 @@ def _bar_colors(color):
     return color, track
 
 
+_RING_EXTERNAL = False   # True only while render_segment draws the pictures of a real video
+
+
 def _frame_border(img, color, frac=1.0, t=24, track_only=False):
     """The border / countdown bar. track_only draws just the full track: the shrinking bar itself is then drawn
     by ffmpeg on every video frame (see _bar_filters), which is what makes the countdown smooth."""
-    if frac <= 0:
+    if frac <= 0 or _RING_EXTERNAL:   # while a video is rendered in safe mode the border is drawn on the screen itself (see _ring_png)
         return
     color, track = _bar_colors(color)
     if track_only:
@@ -400,10 +413,10 @@ def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choice
     if border:
         _frame_border(img, THEMES[theme]["border"], bfrac, track_only=bool(smooth) and timer is not None)
     hx0, hy0, hx1, hy1 = HEADER
-    _place(img, _header(shown, header, lit), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale)
+    _place(img, _header(shown, header, lit), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale * float(env("HEADER_SCALE", "0.964")))   # question box, same centre
     if clip:
         _clip_frame(img)
-    if label:
+    if label and not str(label).upper().startswith("QUESTION "):   # "QUESTION 1/10" is no longer shown
         _outline_label(img, 540, 566, label, 50)
 
     bar_style = "red" if theme == "red" else "purple"
@@ -411,7 +424,7 @@ def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choice
         if reveal and i != correct_idx:
             continue
         style = "green" if reveal else bar_style
-        layer = _bar(choices[i], letters[i], style)
+        layer = _bar(choices[i], letters[i], style, _bar_w())
         cy = BAR_Y0 + i * BAR_STEP + BAR_H / 2 + bar_dy
         if i == visible - 1 and anim < 1.0 or (i == visible - 1 and anim > 1.0):
             _place(img, layer, 50 + layer.width / 2, cy, anim, min(1.0, max(0.2, (anim - 0.4) * 2.5)))
@@ -469,7 +482,7 @@ def draw_story(theme="purple", header="", hscale=1.0, label="", choices=(), lett
     _place(img, layer, 540, head_y, hscale)
     bar_style = theme if theme in ("red", "green") else "purple"
     for i in range(min(visible, len(choices))):
-        bar = _bar(choices[i], letters[i], bar_style)
+        bar = _bar(choices[i], letters[i], bar_style, _bar_w())
         cy = BAR_Y0 + i * BAR_STEP + BAR_H / 2 + bar_dy
         if i == visible - 1 and anim != 1.0:
             _place(img, bar, 50 + bar.width / 2, cy, anim, min(1.0, max(0.2, (anim - 0.4) * 2.5)))
@@ -519,14 +532,14 @@ def draw_missing(theme="purple", header="", label="", grid=(), hole=None, hi=Non
         bfrac = 1.0 if timer is None else timer / think
         _frame_border(img, THEMES[theme]["border"], bfrac, track_only=bool(smooth) and timer is not None)
     hx0, hy0, hx1, hy1 = HEADER
-    _place(img, _header(theme, header), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale)
+    _place(img, _header(theme, header), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale * float(env("HEADER_SCALE", "0.964")))
     if label:
         _outline_label(img, 540, 566, label, 50)
     if grid:
         img.alpha_composite(_grid_layer(tuple(grid), -1 if hole is None else hole, -1 if hi is None else hi, theme))
     bar_style = theme if theme in ("red", "green") else "purple"
     for i in range(min(visible, len(choices))):
-        bar = _bar(choices[i], letters[i], bar_style)
+        bar = _bar(choices[i], letters[i], bar_style, _bar_w())
         cy = BAR_Y0 + i * BAR_STEP + BAR_H / 2 + bar_dy
         if i == visible - 1 and anim != 1.0:
             _place(img, bar, 50 + bar.width / 2, cy, anim, min(1.0, max(0.2, (anim - 0.4) * 2.5)))
@@ -557,7 +570,7 @@ def draw_card(theme="purple", header="", lit=None, hscale=1.0, label="", caption
     if border:
         _frame_border(img, THEMES[theme]["border"], 1.0)
     hx0, hy0, hx1, hy1 = HEADER
-    _place(img, _header(theme, header, lit), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale)
+    _place(img, _header(theme, header, lit), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale * float(env("HEADER_SCALE", "0.964")))
     if clip:
         _clip_frame(img)
     if label:
@@ -802,6 +815,8 @@ BRAND_POS = (44, 1673)   # bottom left: clear of the answer bars, the number cir
 
 
 def make_overlay(kind, args):
+    if kind == "empty":   # nothing on the screen: only the background shows (the gap between two scenes)
+        return Image.new("RGBA", (W, H), (0, 0, 0, 0))
     if kind == "hook":
         img = draw_hook(**args)
     elif kind == "card":
@@ -846,7 +861,109 @@ def frame_ceil(seconds):
     return frames_for(seconds) / FPS
 
 
-def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=None, pixel=None):
+def _safe_scale() -> float:
+    return float(env("SAFE_SCALE", "1"))
+
+
+def _win() -> tuple:
+    """The part of TikTok's screen that really shows the video (measured on the upload preview): x, y, width, height."""
+    return (int(env("WIN_X", "35")), int(env("WIN_Y", "0")), int(env("WIN_W", "1010")), int(env("WIN_H", "1920")))
+
+
+RING_T = 16   # thickness of the border / countdown ring, in final pixels
+
+
+@lru_cache(maxsize=1)
+def _win_ring_mask() -> Image.Image:
+    """Ring along the edge of the visible area: the top corners are curved like the phone screen, the bottom is square."""
+    x0, y0, w, h = _win()
+    x1, y1 = x0 + w - 1, y0 + h - 1
+    r, S, t = int(env("SAFE_RADIUS", "72")), 3, RING_T
+    big = Image.new("L", (W * S, H * S), 0)
+    d = ImageDraw.Draw(big)
+    d.rounded_rectangle((x0 * S, y0 * S, (x1 + 1) * S - 1, (y1 + 1) * S - 1), radius=r * S, fill=255, corners=(True, True, False, False))
+    d.rounded_rectangle(((x0 + t) * S, (y0 + t) * S, (x1 + 1 - t) * S - 1, (y1 + 1 - t) * S - 1), radius=max(0, r - t) * S, fill=0,
+                        corners=(True, True, False, False))
+    return big.resize((W, H), Image.LANCZOS)
+
+
+@lru_cache(maxsize=1)
+def _win_progress() -> np.ndarray:
+    """For every pixel, how far along the ring it is (0..254), going clockwise from the top centre. The countdown shows
+    the pixels whose number is below the time left, so the bar follows the curved corners."""
+    x0, y0, w, h = _win()
+    x1, y1 = x0 + w - 1, y0 + h - 1
+    R, T = float(env("SAFE_RADIUS", "72")), float(RING_T)
+    cx = (x0 + x1) / 2
+    X, Y = np.meshgrid(np.arange(W, dtype=np.float64), np.arange(H, dtype=np.float64))
+    lh = cx - (x0 + R)
+    arc = R * math.pi / 2
+    side = y1 - (y0 + R)
+    s_tr_end = lh + arc
+    s_side_end = s_tr_end + side
+    s_bot_end = s_side_end + (x1 - x0)
+    s_left_end = s_bot_end + side
+    s_tl_end = s_left_end + arc
+    total = s_tl_end + lh
+    phi_r = np.clip(np.arctan2(X - (x1 - R), (y0 + R) - Y), 0, math.pi / 2)
+    phi_l = np.clip(np.arctan2((y0 + R) - Y, (x0 + R) - X), 0, math.pi / 2)
+    top = Y < y0 + R
+    bottom = Y > y1 - T
+    right = X >= cx
+    conds = [
+        top & (X > x1 - R), top & (X < x0 + R), top & right, top,
+        bottom, (~bottom) & right, (~bottom),
+    ]
+    vals = [
+        lh + R * phi_r, s_left_end + R * phi_l, X - cx, s_tl_end + (X - cx),
+        s_side_end + (x1 - X), s_tr_end + (Y - (y0 + R)), s_bot_end + (y1 - Y),
+    ]
+    sp = np.select(conds, vals, default=0.0)
+    return np.clip(sp / total * 254, 0, 254).astype("uint8")
+
+
+def _ring_files() -> tuple:
+    """(ring mask picture, progress picture) saved once for ffmpeg."""
+    import tempfile, pathlib
+    d = pathlib.Path(tempfile.gettempdir()) / ("qv_ring_%s_%s" % ("_".join(map(str, _win())), env("SAFE_RADIUS", "72")))
+    d.mkdir(exist_ok=True)
+    m, p = d / "mask.png", d / "prog.png"
+    if not m.exists():
+        _win_ring_mask().save(m)
+    if not p.exists():
+        Image.fromarray(_win_progress(), "L").save(p)
+    return m, p
+
+
+def _ring_png(kind, args):
+    """The static border for one picture of the scene, in final (screen) coordinates; None when that picture has none."""
+    if kind not in ("card", "story", "missing", "scene") or not args.get("border", True):
+        return None
+    color, track = _bar_colors(THEMES[args.get("theme", "purple")]["border"])
+    if kind != "card":
+        if args.get("timer") is not None:
+            color = track if args.get("smooth") else color   # the shrinking bar itself is drawn by ffmpeg
+        elif args.get("reveal"):
+            return None
+    img = Image.new("RGBA", (W, H), tuple(color) + (255,))
+    img.putalpha(_win_ring_mask())
+    return img
+
+
+def _safe_fit(src: str, bg: str, dst: str = "v") -> str:
+    """TikTok covers the top, right and bottom of the video with its own buttons and captions, and on a phone it also crops the
+    sides. So the finished picture ([src]) is shrunk to sit inside the part of the screen that really shows the video, and the
+    strip around it is the footage alone ([bg]) blown up, blurred and darkened. SAFE_SCALE=1 turns it off."""
+    sc = _safe_scale()
+    if sc >= 0.999:
+        return f"[{src}]format=yuv420p[{dst}]"
+    x0, y0, w, h = _win()
+    fw, fh, x, y = w // 2 * 2, h // 2 * 2, x0, y0   # the picture fills the visible area exactly, so it meets the ring
+    return ("[%s]scale=270:480:flags=bilinear,gblur=sigma=7,eq=brightness=-0.15:saturation=1.1,scale=1080:1920:flags=bicubic[sfb];" % bg
+            + f"[{src}]scale={fw}:{fh}:flags=bicubic,format=yuv420p[sff];[sfb]format=yuv420p[sfc];[sfc][sff]overlay={x}:{y}[{dst}]")
+
+
+def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=None, pixel=None, hide_clip=False):
     """frame_specs: list of (start_time, kind, args). Each overlay holds until the next one starts.
     clip: path of a stock video shown inside the frame, or None.
     Everything is placed on whole video frames: each overlay picture starts on a frame and lasts a whole number of them, and
@@ -870,12 +987,30 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
         png, kind, args = job
         make_overlay(kind, args).save(png, compress_level=1)
 
+    global _RING_EXTERNAL
+    _RING_EXTERNAL = _safe_scale() < 0.999
     if len(jobs) > 8:   # many pictures (smooth pop-ins): draw several at once, it is about three times quicker
         with ThreadPoolExecutor(max_workers=int(env("OVERLAY_THREADS", "4"))) as ex:
             list(ex.map(draw_one, jobs))
     else:
         for job in jobs:
             draw_one(job)
+    _RING_EXTERNAL = False
+    extra = []
+    if _safe_scale() < 0.999:   # the border / countdown ring, on its own pictures in screen coordinates
+        rl, last = [], None
+        for (png, dur), (_p, kind, args) in zip(items, jobs):
+            ring = _ring_png(kind, args)
+            rpng = png.with_name(png.stem + "_ring.png")
+            (ring if ring is not None else Image.new("RGBA", (W, H), (0, 0, 0, 0))).save(rpng, compress_level=1)
+            rl += [f"file '{_q(rpng)}'", f"duration {dur:.6f}"]
+            last = rpng
+        rl.append(f"file '{_q(last)}'")
+        rlst = tmp / f"{out_path.stem}_ring.txt"
+        rlst.write_text("\n".join(rl) + "\n", encoding="utf-8")
+        mk, pg = _ring_files()
+        extra = ["-f", "concat", "-safe", "0", "-i", rlst, "-loop", "1", "-framerate", "30", "-i", str(mk),
+                 "-loop", "1", "-framerate", "30", "-i", str(pg)]
     lines = []
     for png, dur in items:
         lines += [f"file '{_q(png)}'", f"duration {dur:.6f}"]
@@ -904,8 +1039,8 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
                 inputs += ["-i", str(clip)]  # second copy, not looped, for the slow zoom
                 bsrc, src, ov = "0:v", "1:v", 2
             else:
-                pre = "[0:v]split=2[s1][s2];"
-                bsrc, src, ov = "s1", "s2", 1
+                pre = "" if hide_clip else "[0:v]split=2[s1][s2];"
+                bsrc, src, ov = ("0:v" if hide_clip else "s1"), "s2", 1
             # darken / tint at the small size, then enlarge: same picture, a sixteenth of the pixels to process
             bgf = (f"[{bsrc}]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,setsar=1,framerate=fps=30,"
                    f"gblur=sigma=8,eq=brightness={-blur.get('dark', 0.3):.2f}:saturation={blur.get('sat', 0.9):.2f}")
@@ -923,8 +1058,12 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
                    f"setsar=1[c];")
         else:
             cvf = f"[{src}]scale={cw}:{ch}:force_original_aspect_ratio=increase,crop={cw}:{ch},setsar=1,framerate=fps=30[c];"
-        vf = pre + bgf + cvf + f"[bg][c]overlay={CLIP[0]}:{CLIP[1]}:shortest=0[b2];"
-        base = "b2"
+        if hide_clip:   # the background alone, without the picture in its frame
+            vf = pre + bgf
+            base = "bg"
+        else:
+            vf = pre + bgf + cvf + f"[bg][c]overlay={CLIP[0]}:{CLIP[1]}:shortest=0[b2];"
+            base = "b2"
     else:
         ov = 1
         if full and pixel:   # "guess the clip": the picture is blocky and gets sharper in steps; pixel = [(start second, block size)]
@@ -947,6 +1086,11 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
         else:
             vf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,framerate=fps=30[bg];"
         base = "bg"
+    fitbg = base
+    if _safe_scale() < 0.999:   # one copy of the footage for the picture, one (without graphics) for the blurred strip around it
+        vf += f"[{base}]split=2[bfa][bfb];"
+        base, fitbg = "bfa", "bfb"
+    safe = bool(extra)
     smooth = [(st, a) for st, k, a in frame_specs if k in ("scene", "story", "missing") and a.get("smooth") and a.get("timer") is not None]
     if smooth:   # the countdown bar is drawn by ffmpeg on every video frame, not once per overlay picture
         groups = []   # a scene can hold several countdowns in a row (What's missing: look, then pick); the timer jumps back up between them
@@ -955,17 +1099,44 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
                 groups.append([])
             groups[-1].append((st, a))
         color, _track = _bar_colors(THEMES[smooth[0][1].get("theme", "purple")]["border"])
-        vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto[vo];"
-        cur = "vo"
-        for gi, g in enumerate(groups):
-            last = gi == len(groups) - 1
-            vf += _bar_filters(round(g[0][0] * FPS) / FPS, g[0][1].get("think", 5), color, cur, "vb" if last else f"vg{gi}", tag=f"g{gi}",
-                               only_during=len(groups) > 1)
-            cur = "vb" if last else f"vg{gi}"
-        vf += "[vb]format=yuv420p[v]"
+        if safe:
+            vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto[vo];" + _safe_fit("vo", fitbg, "vs") + ";"
+            rm, pm = ov + 2, ov + 3
+            n = len(groups)
+            vf += f"[{ov + 1}:v]format=rgba[rgi];[vs][rgi]overlay=0:0:format=auto[vr];"
+            vf += f"[{rm}:v]format=gray,split={n}" + "".join(f"[rk{i}]" for i in range(n)) + ";" if n > 1 else f"[{rm}:v]format=gray[rk0];"
+            vf += f"[{pm}:v]format=gray,split={n}" + "".join(f"[pk{i}]" for i in range(n)) + ";" if n > 1 else f"[{pm}:v]format=gray[pk0];"
+            cur = "vr"
+            hexc = "0x%02X%02X%02X" % tuple(color)
+            for gi, g in enumerate(groups):
+                st0 = round(g[0][0] * FPS) / FPS
+                think = g[0][1].get("think", 5)
+                gate = f"*between(T,{st0:.4f},{st0 + think:.4f})" if len(groups) > 1 else ""
+                nxt = f"vk{gi}"
+                vf += (f"color=c=black:s=16x16:r=30,format=gray,geq=lum='255*clip(1-(T-{st0:.4f})/{think},0,1){gate}',"
+                       f"scale=1080:1920:flags=neighbor[th{gi}];"
+                       f"[th{gi}][pk{gi}]blend=all_mode=subtract,lut=y='clip(val*255,0,255)'[bt{gi}];"
+                       f"[bt{gi}][rk{gi}]blend=all_mode=multiply[bm{gi}];"
+                       f"color=c={hexc}:s=1080x1920:r=30,format=rgba[bc{gi}];[bc{gi}][bm{gi}]alphamerge[bb{gi}];"
+                       f"[{cur}][bb{gi}]overlay=0:0:format=auto[{nxt}];")
+                cur = nxt
+            vf += f"[{cur}]format=yuv420p[v];"
+            vf = vf.rstrip(";")
+        else:
+            vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto[vo];"
+            cur = "vo"
+            for gi, g in enumerate(groups):
+                last = gi == len(groups) - 1
+                vf += _bar_filters(round(g[0][0] * FPS) / FPS, g[0][1].get("think", 5), color, cur, "vb" if last else f"vg{gi}", tag=f"g{gi}",
+                                   only_during=len(groups) > 1)
+                cur = "vb" if last else f"vg{gi}"
+            vf += _safe_fit("vb", fitbg)
+    elif safe:
+        vf += (f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto[vo];" + _safe_fit("vo", fitbg, "vs") + ";"
+               + f"[{ov + 1}:v]format=rgba[rgi];[vs][rgi]overlay=0:0:format=auto[vr];[vr]format=yuv420p[v]")
     else:
-        vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto,format=yuv420p[v]"
-    run_ffmpeg(inputs + ["-f", "concat", "-safe", "0", "-i", lst, "-filter_complex", vf, "-map", "[v]",
+        vf += f"[{ov}:v]format=rgba[ov];[{base}][ov]overlay=0:0:format=auto[vo];" + _safe_fit("vo", fitbg)
+    run_ffmpeg(inputs + ["-f", "concat", "-safe", "0", "-i", lst] + extra + ["-filter_complex", vf, "-map", "[v]",
                          "-frames:v", str(n_frames), "-an"]
                + _vcodec_args() + ["-pix_fmt", "yuv420p", "-r", "30", out_path])
 

@@ -6,7 +6,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from audio import Mixer, SR, bing, challenge_sting, effects, pop, siren, sparkle, tick, whoosh
+from audio import Mixer, SR, bing, challenge_sting, count_sfx, effects, pop, siren, sparkle, tick, whoosh
 from chalkboard import ensure_chalkboard
 from config import ASSETS_DIR, CACHE_DIR, OUTPUT_DIR, WORK_DIR, env, flog
 from videos import UsedSet, find_background, find_many
@@ -89,8 +89,19 @@ def _plan_challenge(clip, sfx):
     dur = max(3.4, 1.25 + len(clip) / SR + 0.45)
     times = [round(k / FRAME_RATE, 4) for k in range(int(dur * FRAME_RATE) + 1) if k / FRAME_RATE < dur]
     frames = [(t, "challenge", dict(t=t, dur=dur)) for t in times]
-    events = [(0.0, sfx["sting"], 1.0), (1.25, clip, 1.0)]
+    events = [(0.0, sfx["sting"], 1.0), (0.0, sfx["whoosh"], 1.0), (1.25, clip, 1.0)]
     return frames, dur, events, False
+
+
+GAP = render.frame_ceil(float(env("TRANSITION_SECONDS", "1.6")))   # between two scenes only the background shows for this long
+PAUSE_AFTER = 2.0   # seconds of quiet, with the answer still on screen, between one round and the next
+
+
+def pause_after(frames, events, pause: float = PAUSE_AFTER) -> float:
+    """The scene's length when it must end `pause` seconds after the last sound (never before its last picture has settled)."""
+    audio_end = max((t + len(c) / SR for t, c, _ in events), default=0.0)
+    last_frame = max((f[0] for f in frames), default=0.0)
+    return max(audio_end + pause, last_frame + 0.6)
 
 
 def _plan_question(i, total, q, clips, sfx, challenge=False):
@@ -109,7 +120,7 @@ def _plan_question(i, total, q, clips, sfx, challenge=False):
     t += 0.1
     events.append((t, cp, 1.0))
     for s_left in range(THINK, 0, -1):
-        events.append((t, sfx["tick"], 1.0))
+        events.append((t, count_sfx(sfx, s_left), 1.0))
         frames.append((t, "scene", dict(base, visible=len(q["choices"]), timer=s_left, smooth=True)))   # the bar itself is drawn smoothly by ffmpeg
         t += 1.0
     full = dict(base, visible=len(q["choices"]), reveal=True)
@@ -144,7 +155,8 @@ def cleanup_disk() -> None:
 
 
 def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None,
-               categories=None, watermark: str = "", style: str = looks.DEFAULT, custom=None, colors=None) -> dict:
+               categories=None, watermark: str = "", style: str = looks.DEFAULT, custom=None, colors=None,
+               timer_sound: str = "ticks", pop_sound: str = "pop") -> dict:
     """custom = the person's own questions: [{"question", "choices", "correct_idx"}]. colors = their colour changes."""
     t_begin = time.time()
     render.WATERMARK = watermark or ""
@@ -197,7 +209,7 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
         used = UsedSet()
         gate = threading.Lock()
         box = {}
-        sfx = effects()
+        sfx = effects(timer_sound, pop_sound)
         # one entry per scene, in order: what its background is
         kinds = [("intro", None)]
         for i in range(n):
@@ -216,7 +228,8 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
                         if is_ch:
                             plans.append(_plan_challenge(clips[ci], sfx))
                             ci += 1
-                        plans.append(_plan_question(i, n, q, clips[ci:ci + 3], sfx, is_ch))
+                        qf, qd, qe, qh = _plan_question(i, n, q, clips[ci:ci + 3], sfx, is_ch)
+                        plans.append((qf, pause_after(qf, qe), qe, qh))
                         ci += 3
                     plans.append(_plan_outro(clips[ci], sfx))
                     # every scene is a whole number of video frames long, so the audio placed by adding the lengths stays in step
@@ -233,8 +246,12 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
             elif kind == "outro":
                 bg = find_background(random.sample(INTRO_QUERIES, 2) + ["abstract background"], used)[0]
             frames, dur, events, has_clip = get_plans()[si]
+            full_bg = bg if frames[0][1] == "hook" else None
             render_segment(bg if has_clip else None, frames, dur, job_dir / f"seg_{si:02d}.mp4", job_dir,
-                           full=bg if frames[0][1] == "hook" else None, look=look_info)
+                           full=full_bg, look=look_info)
+            if si < len(kinds) - 1:   # everything leaves the screen for a moment: just the background, while the whoosh plays
+                render_segment(bg if has_clip else None, [(0.0, "empty", {})], GAP, job_dir / f"gap_{si:02d}.mp4", job_dir,
+                               full=None, look=look_info, hide_clip=True)   # a full-screen video (the intro) goes away with its text
 
         with ThreadPoolExecutor(max_workers=1) as tts_pool:
             box["tts"] = tts_pool.submit(synthesize_all, texts, voice)
@@ -249,13 +266,19 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
 
         plans = get_plans()
         t_scenes = time.time()
-        total = sum(p[1] for p in plans)
+        total = sum(p[1] for p in plans) + GAP * (len(plans) - 1)
         mixer, seg_paths, offset = Mixer(total), [], 0.0
         for si, (frames, dur, events, has_clip) in enumerate(plans):
             seg_paths.append(job_dir / f"seg_{si:02d}.mp4")
             for t, clip, gain in events:
+                if clip is sfx["whoosh"] and t == 0.0:   # the scene-change whoosh plays in the gap instead (below)
+                    continue
                 mixer.add(offset + t, clip, gain)
             offset += dur
+            if si < len(plans) - 1:
+                seg_paths.append(job_dir / f"gap_{si:02d}.mp4")
+                mixer.add(offset, sfx["whoosh"], 1.0)   # starts the moment the scene clears away
+                offset += GAP
 
         progress("Mixing audio and finishing...", 0.92)
         audio_wav = job_dir / "audio.wav"

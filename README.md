@@ -40,7 +40,7 @@ Pick a type at the top of the Create page. Everything except Trivia needs a free
 - **Trivia quiz**: multiple-choice questions with a reveal (Open Trivia DB).
 - **Personality quiz**: "Which season are you?" Questions whose choices each lead to one of four results, shown as "Mostly A, B, C, D" at the end.
 - **Would you rather**: two options, a countdown, then what each pick says about you.
-- **Story**: you are the hero. "Choose your path" shows where both options lead; "Would you survive?" hides a few deadly traps among the decisions.
+- **Quest**: you are the hero. "Choose your path" shows where both options lead; "Would you survive?" hides a few deadly traps among the decisions.
 - **Rankings**: a countdown from the last place to number one, one clip per item.
 - **Fun facts**: short surprising facts, one clip per fact.
 - **Odd one out**: four things, three belong together, viewers spot the one that doesn't.

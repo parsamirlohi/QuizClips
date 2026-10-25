@@ -14,9 +14,10 @@ Gemini (free tier) does the writing. MOCK=1 returns fixed offline content so the
 """
 import json
 import random
+import threading
 
 import gemini
-from config import env, flog, is_mock
+from config import DATA_DIR, env, flog, is_mock
 
 KINDS = {
     "personality": {"title": "Personality quiz", "noun": "questions", "min": 3, "max": 8, "default": 5,
@@ -27,7 +28,7 @@ KINDS = {
              "hint": "Zoo animals"},
     "missing": {"title": "What's missing", "noun": "rounds", "min": 3, "max": 8, "default": 5,
                 "hint": "Animals, food, travel"},
-    "story": {"title": "Story", "noun": "decisions", "min": 3, "max": 8, "default": 5,
+    "story": {"title": "Quest", "noun": "decisions", "min": 3, "max": 8, "default": 5,
               "hint": "Lost in a haunted mansion"},
     "wyr": {"title": "Would you rather", "noun": "rounds", "min": 3, "max": 10, "default": 5,
             "hint": "Superpowers and food"},
@@ -66,7 +67,78 @@ SEARCH_RULES = (
 )
 
 
+# ---------------------------------------------------------------- variety: the same topic must not give the same video twice
+RECENT_CONTENT_FILE = DATA_DIR / "recent_content.json"   # what the last videos on each topic said, per video type and topic
+RECENT_CONTENT_KEEP = 60
+_ctx = threading.local()   # the variety note for the script being written right now (added to every request in _ask)
+_ANGLES = [
+    "lesser-known and surprising picks rather than the obvious ones", "everyday, relatable situations", "a funny, playful tone",
+    "extremes and records (the biggest, oldest, strangest)", "things from different countries and cultures",
+    "a mix of old and modern examples", "unusual details most people never notice", "a clever, tricky twist on the topic",
+    "things a kid and a grown-up would both enjoy", "dramatic, high-stakes moments",
+]
+
+
+def _rc_load() -> dict:
+    try:
+        d = json.loads(RECENT_CONTENT_FILE.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def _rc_key(kind: str, topic: str) -> str:
+    return f"{kind}|{' '.join((topic or '').lower().split())}"
+
+
+def variety_note(kind: str, topic: str) -> str:
+    """Text added to the request so the AI writes something different from the earlier videos on this topic."""
+    old = _rc_load().get(_rc_key(kind, topic), [])[-30:]
+    note = (f"\nVARIETY (important): people make many videos on the same topic, so this one must feel fresh. Lean towards "
+            f"{random.choice(_ANGLES)}. Do not just list the most famous examples. Variety seed: {random.randint(1000, 9999)}.")
+    if old:
+        note += "\nThese were already used in earlier videos on this topic. Do NOT repeat them or close variations:\n" + \
+                "\n".join(f"- {x}" for x in old)
+    return note
+
+
+def remember_content(kind: str, topic: str, texts: list) -> None:
+    texts = [_s(t, 90) for t in texts if t]
+    if not texts:
+        return
+    d = _rc_load()
+    k = _rc_key(kind, topic)
+    d[k] = (d.get(k, []) + texts)[-RECENT_CONTENT_KEEP:]
+    if len(d) > 200:   # keep the file small: drop the oldest topics
+        for old_key in list(d)[:len(d) - 200]:
+            d.pop(old_key, None)
+    try:
+        RECENT_CONTENT_FILE.write_text(json.dumps(d), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _identity_texts(kind: str, data: dict) -> list:
+    """One short line per round of a finished script, used to recognise a repeat later."""
+    out = []
+    try:
+        if kind == "personality":
+            out = [q.get("q") for q in data.get("questions", [])]
+        elif kind == "wyr":
+            out = [f"{r.get('a')} / {r.get('b')}" for r in data.get("rounds", [])]
+        elif kind == "story":
+            out = [st.get("situation") for st in data.get("steps", [])]
+        elif kind == "odd":
+            out = [", ".join(map(str, r.get("items", []))) for r in data.get("rounds", [])]
+        elif kind in ("toplist", "facts"):
+            out = [i.get("name") for i in data.get("items", [])]
+    except Exception:
+        out = []
+    return [str(x) for x in out if x]
+
+
 def _ask(prompt: str) -> dict:
+    prompt += getattr(_ctx, "note", "")
     if not gemini.available():
         raise RuntimeError("These formats need a Gemini key. Add GEMINI_API_KEY to the .env file (free at aistudio.google.com).")
     last = None
@@ -219,9 +291,30 @@ def _odd(topic: str, n: int) -> dict:
     return {"title": _s(d.get("title"), 50) or "Odd one out", "rounds": rounds}
 
 
+CLIP_RECENT_FILE = DATA_DIR / "recent_clip_answers.json"   # answers the last "guess the clip" videos used
+CLIP_RECENT_KEEP = 80
+
+
+def _recent_clip_answers() -> list:
+    try:
+        return [str(x) for x in json.loads(CLIP_RECENT_FILE.read_text(encoding="utf-8"))]
+    except Exception:
+        return []
+
+
+def _norm(a: str) -> str:
+    a = a.lower().strip()
+    for art in ("a ", "an ", "the "):
+        if a.startswith(art):
+            a = a[len(art):]
+    return a
+
+
 def _clip(topic: str, n: int) -> dict:
+    recent = _recent_clip_answers()
+    avoid = ", ".join(recent[-40:])
     p = (
-        f"Write {n} rounds of a 'guess what this video shows' game for a short vertical video. Theme: \"{topic}\".\n"
+        f"Write {n + 4} rounds of a 'guess what this video shows' game for a short vertical video. Theme: \"{topic}\".\n"
         "Return ONLY a JSON object: {\"title\": ..., \"rounds\": [...]}\n"
         "- title: max 6 words, about the theme only; it must NEVER name or hint at any answer.\n"
         "- rounds: each {\"answer\": ..., \"wrong\": [3 strings], \"search\": [...]}. The answer is one clearly recognizable "
@@ -229,19 +322,30 @@ def _clip(topic: str, n: int) -> dict:
         "characters. wrong has 3 believable but different things from the same theme, max 22 characters each, so the "
         "choices are hard to tell apart when the picture is blurry. search: 3 short stock-footage search terms (1-3 words "
         "each) that find that exact thing, most specific first, no brand or real people's names.\n"
-        "Keep everything family friendly."
+        "Keep everything family friendly.\n"
+        "VARIETY: every answer must be a different thing, and do not just pick the most famous examples of the theme; mix "
+        f"famous and lesser-known ones, and from different parts of the world. Variety seed: {random.randint(1000, 9999)}."
+        + (f"\nThese were used in recent videos, so do NOT use any of them as an answer: {avoid}." if avoid else "")
     )
     d = _ask(p)
-    rounds = []
-    for r in (d.get("rounds") or [])[:n]:
+    rounds, seen = [], {_norm(x) for x in recent}
+    fresh_rounds, stale_rounds = [], []
+    for r in (d.get("rounds") or []):
         ans = _s(r.get("answer"), 24)
         wrong = [_s(x, 24) for x in (r.get("wrong") or [])][:3]
         if ans and len(wrong) == 3 and all(wrong) and len({x.lower() for x in wrong + [ans]}) == 4:
             opts = wrong[:]
             idx = random.randrange(4)
             opts.insert(idx, ans)
-            rounds.append({"answer": ans, "options": opts, "correct_idx": idx, "search": _search(r, ans)})
+            item = {"answer": ans, "options": opts, "correct_idx": idx, "search": _search(r, ans)}
+            (stale_rounds if _norm(ans) in seen else fresh_rounds).append(item)
+    random.shuffle(fresh_rounds)
+    rounds = (fresh_rounds + stale_rounds)[:n]   # never-used answers first; reused ones only if there are not enough
     _need(len(rounds) >= 3)
+    try:
+        CLIP_RECENT_FILE.write_text(json.dumps((recent + [r["answer"] for r in rounds])[-CLIP_RECENT_KEEP:]), encoding="utf-8")
+    except OSError:
+        pass
     return {"title": "Can you guess the clip?", "rounds": rounds}   # fixed: a model-written title can give an answer away
 
 
@@ -261,8 +365,10 @@ def _story(topic: str, n: int, mode: str) -> dict:
         rule = ("This is a survival game: the viewer is eliminated if they pick a deadly option. These decisions have a "
                 "deadly option (the others have none, so both options there are survivable, either one works):\n" +
                 "\n".join(f"  decision {i + 1}: option {side.upper()} is a deadly trap" for i, side in sorted(traps.items())) +
-                "\nA deadly option must look tempting, and its outcome says clearly how the hero's run ends (family friendly, "
-                "for example 'The floor gives way. Game over.'). Every other outcome says how the hero gets through, with a small twist.")
+                "\nA deadly option must look tempting. For EVERY option, out_a and out_b only say what the hero does or finds "
+                "next, as a tense teaser: never say whether it is safe or deadly and never use words like dead, die or game over, "
+                "so the viewer cannot guess. For each deadly option also add a field \"fate\": one short sentence, max 60 characters, "
+                "saying how the hero's run ends (family friendly, for example 'The floor gives way.').")
     else:
         rule = ("Both options of every decision are fine and lead to different, surprising outcomes. Nothing is a wrong "
                 "answer; each outcome is a fun consequence that makes people want to try the other path.")
@@ -289,6 +395,7 @@ def _story(topic: str, n: int, mode: str) -> dict:
         oa, ob = _s(r.get("out_a"), 80), _s(r.get("out_b"), 80)
         if sit and a and b and oa and ob:
             steps.append({"situation": sit, "a": a, "b": b, "out_a": oa, "out_b": ob, "trap": traps.get(i, ""),
+                          "fate": _s(r.get("fate"), 70) if traps.get(i) else "",
                           "search": _search(r, sit), "search_out": _search({"search": r.get("search_out")}, sit)})
     _need(len(steps) >= 3)
     if mode == "survive":   # the script may have come back shorter than asked: keep at least one trap, never first
@@ -354,8 +461,8 @@ def _mock(kind: str, topic: str, n: int) -> dict:
         traps = trap_plan(n)
         return {"title": f"Would you survive {t}?", "steps": [
             {"situation": f"Mock situation {i + 1}: something happens", "a": "Run away", "b": "Hide and wait",
-             "out_a": "The floor gives way. Game over." if traps.get(i) == "a" else "You sprint off and find a safe path.",
-             "out_b": "The floor gives way. Game over." if traps.get(i) == "b" else "You wait it out and stay unseen.",
+             "out_a": "You sprint ahead into the dark.", "out_b": "You wait it out and stay unseen.",
+             "fate": "The floor gives way." if traps.get(i) else "",
              "trap": traps.get(i, ""), "search": ["forest"], "search_out": ["night"]} for i in range(n)]}
     items = [{"name": f"Item {i + 1}", "line": f"A short mock line about item {i + 1} of the list.", "search": ["abstract"]}
              for i in range(n)]
@@ -422,10 +529,24 @@ def trivia_questions(topic: str, n: int) -> list:
         f"Write {n} multiple-choice trivia questions for a short vertical video. Topic: \"{topic}\".\n"
         "Return ONLY a JSON object: {\"questions\": [...]}\n"
         "- each question: {\"question\": max 110 characters, \"choices\": [4 short strings, max 28 characters each], "
-        "\"correct_idx\": 0-3}. Exactly one choice is right, the other three are plausible but clearly wrong. Vary which "
-        "position is right. Questions are fun, accurate, easy to picture and get gradually harder. Every fact must be true.\n"
+        "\"correct_idx\": 0-3}. Exactly one choice is right. Vary which position is right. Every fact must be true.\n"
+        "- Make them CHALLENGING: the sort that roughly 3 in 10 adults would get right, specific and surprising rather than "
+        "'everyone knows that'. Start moderately hard and get harder.\n"
+        "- The three wrong choices must be believable: the same kind of thing as the right one (people with people, years with "
+        "years, places with places) and close to the truth, so a smart person could genuinely hesitate. Never use jokes, puns, "
+        "silly names, fictional characters or words that merely sound like the question. If three choices can be ruled out "
+        "without knowing the topic, rewrite the question.\n"
         "Keep everything family friendly."
     )
+    _ctx.note = variety_note("trivia", topic)
+    try:
+        return _trivia_try(p, n, topic)
+    finally:
+        _ctx.note = ""
+
+
+def _trivia_try(p: str, n: int, topic: str) -> list:
+    import safety
     for attempt in range(2):
         d = _ask(p)
         out = []
@@ -439,6 +560,7 @@ def trivia_questions(topic: str, n: int) -> list:
         if len(out) >= min(n, 3):
             try:
                 safety.check_output(out)
+                remember_content("trivia", topic, [q["question"] for q in out])
                 return out
             except safety.Blocked:
                 flog("[content] trivia rejected, writing again")
@@ -461,6 +583,7 @@ def generate(kind: str, topic: str, n: int, mode: str = "path") -> dict:
         return {"title": "What's missing?", "rounds": [emojis.make_round(topic) for _ in range(n)], "kind": kind,
                 "topic": topic, "mode": "path"}
     import safety
+    _ctx.note = "" if (kind == "clip" or is_mock()) else variety_note(kind, topic)   # (clips keep their own, answer-based memory)
     for attempt in range(2):   # what the AI wrote goes through the safety rules; if it slipped, write it once more
         data = _mock(kind, topic, n) if is_mock() else (
             _personality(topic, n) if kind == "personality" else _wyr(topic, n) if kind == "wyr"
@@ -474,6 +597,9 @@ def generate(kind: str, topic: str, n: int, mode: str = "path") -> dict:
             if attempt:
                 raise RuntimeError("We couldn't write a script for that topic that fits our family friendly rules. "
                                    "Please try a different topic.")
+    _ctx.note = ""
+    if not is_mock():
+        remember_content(kind, topic, _identity_texts(kind, data))
     data["kind"], data["topic"], data["mode"] = kind, topic, mode
     return data
 
@@ -540,12 +666,13 @@ def clean_custom(kind: str, c, mode: str = "path") -> object:
             steps.append({"situation": _text(r.get("situation"), 70, f"Decision {i}, what happens"),
                           "a": _text(r.get("a"), 38, f"Decision {i}, option A"), "b": _text(r.get("b"), 38, f"Decision {i}, option B"),
                           "out_a": _text(r.get("out_a"), 80, f"Decision {i}, what A leads to"),
-                          "out_b": _text(r.get("out_b"), 80, f"Decision {i}, what B leads to"), "trap": trap})
+                          "out_b": _text(r.get("out_b"), 80, f"Decision {i}, what B leads to"), "trap": trap,
+                          "fate": _text(r.get("fate"), 70, f"Decision {i}, how the trap ends", False) if trap else ""})
         if mode == "survive" and not any(s["trap"] for s in steps):
             raise ValueError("Mark at least one option as a trap, or switch to Choose your path.")
         if mode == "survive" and steps[0]["trap"]:
             raise ValueError("The first decision can't be a trap, everyone needs a chance to play.")
-        return {"title": _text(c.get("title"), 60, "The title", False) or "Your story", "steps": steps}
+        return {"title": _text(c.get("title"), 60, "The title", False) or "Your quest", "steps": steps}
     if kind in ("toplist", "facts"):
         items = []
         word = "Item" if kind == "toplist" else "Fact"

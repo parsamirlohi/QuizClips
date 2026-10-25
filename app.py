@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from config import BASE, ENV_STATUS, OUTPUT_DIR, env, is_mock
 from videos import has_video_key
 from pipeline import build_quiz
+import audio
 import content
 import emojis
 import formats
@@ -54,6 +55,8 @@ class GenerateRequest(BaseModel):
     topic: str = Field(default="", max_length=80)  # for every type except trivia
     questions: int = Field(default=5, ge=3, le=10)
     voice: str = Field(default="en-US-AriaNeural", max_length=60)
+    timer_sound: str = Field(default="ticks", max_length=20)   # one of the ids in /api/config "timer_sounds"
+    pop_sound: str = Field(default="pop", max_length=20)         # one of the ids in /api/config "pop_sounds"
     categories: list[int] = Field(default_factory=list, max_length=24)  # empty = mix of all
     style: str = Field(default=looks.DEFAULT, max_length=40)  # a look key from /api/config, or "random"
     watermark_on: bool = True
@@ -158,10 +161,11 @@ def run_job(job_id: str, req: GenerateRequest):
             custom = content.trivia_questions(req.topic, req.questions)
         colors = req.colors   # the person's own colours apply to every video
         if req.kind == "trivia":
-            result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style, custom, colors)
+            result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style, custom, colors,
+                                req.timer_sound, req.pop_sound)
         else:
             result = formats.build_video(req.kind, req.topic, req.questions, req.voice, progress, watermark_text(req),
-                                         req.style, colors, custom, req.story_mode)
+                                         req.style, colors, custom, req.story_mode, req.timer_sound, req.pop_sound)
         timing_report()
         job.update(status="done", progress=1.0, message="Done!", video_url=f"/output/{result['file']}",
                    questions=result["questions"], duration=result["duration"])
@@ -213,7 +217,9 @@ def config():
         "gemini": gemini.available(),
         "formats": FORMATS,
         "voices": tts.available_voices(),
-        "default_voice": tts.DEFAULT_VOICE,
+        "default_voice": tts.default_voice(),
+        "timer_sounds": [{"id": t[0], "name": t[1], "desc": t[2]} for t in audio.TIMER_SOUNDS],
+        "pop_sounds": [{"id": p[0], "name": p[1], "desc": p[2]} for p in audio.POP_SOUNDS],
         "categories": [{"id": i, "label": label} for i, label in CATEGORY_LABELS.items()],
         "looks": looks.listing(),
         "groups": looks.GROUPS,
@@ -225,13 +231,23 @@ def config():
 @app.get("/api/voice-preview")
 def voice_preview(voice: str):
     """A short audio sample of one narrator voice, for the Preview buttons."""
-    if not re.fullmatch(r"[A-Za-z]{2,3}-[A-Za-z]{2,4}-[A-Za-z0-9\-]{2,60}", voice):
+    if not re.fullmatch(r"[A-Za-z]{2,3}-[A-Za-z]{2,4}-[A-Za-z0-9\-]{2,60}|gemini:[A-Za-z]{3,20}", voice):
         raise HTTPException(400, "Unknown voice.")
     try:
         path, media = tts.preview_file(voice)
     except Exception as e:
         raise HTTPException(502, f"Could not make a sample ({str(e)[:100]}). Check your internet connection.")
     return FileResponse(path, media_type=media, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/sound-preview")
+def sound_preview(kind: str, id: str):
+    """A short sample of a timer sound or an answer-choice sound, for the Preview buttons."""
+    try:
+        path = audio.sound_preview(kind, id)
+    except ValueError:
+        raise HTTPException(400, "Unknown sound.")
+    return FileResponse(path, media_type="audio/wav", headers={"Cache-Control": "no-cache"})
 
 
 KEEP_VIDEOS = int(env("MAX_KEEP_VIDEOS", "10") or 0)   # how many of the newest videos stay in the output folder; 0 keeps them all (all video types)
@@ -319,4 +335,5 @@ if __name__ == "__main__":
     print("Settings file:", ENV_STATUS["loaded_from"] or f"NOT FOUND (expected at {ENV_STATUS['path']})")
     print("Video API key:", "found" if has_video_key() else "MISSING")
     threading.Timer(1.5, lambda: webbrowser.open("http://localhost:8000")).start()
+    threading.Thread(target=tts.prewarm_previews, daemon=True).start()
     uvicorn.run(app, host="127.0.0.1", port=8000)

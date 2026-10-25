@@ -22,3 +22,8 @@ bg_options/
 waitlist.jsonl
 waitlist.csv
 logs/
+
+recent_content.json
+recent_clip_answers.json
+recent_footage.json
+*_preview.wav

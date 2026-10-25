@@ -250,7 +250,7 @@ def _fetch_category(cid: int, amount: int = 20):
     """Easy questions for one category. Small categories (Mythology, Art...) have fewer than `amount` easy
     questions and Open Trivia DB then returns nothing at all, so ask for less, then allow any difficulty."""
     base = f"https://opentdb.com/api.php?category={cid}&type=multiple&encode=url3986"
-    attempts = [(amount, "easy"), (10, "easy"), (5, "easy"), (amount, None), (10, None), (5, None)]
+    attempts = [(amount, "medium"), (10, "medium"), (5, "medium"), (amount, "hard"), (10, "hard"), (amount, None), (10, None), (5, None)]
     seen = set()
     for amt, diff in attempts:
         if (amt, diff) in seen:
@@ -301,40 +301,49 @@ def _from_opentdb(categories=None, avoid=()) -> list:
     return out
 
 
-def _from_claude(n: int, avoid: list, categories=None, hard: bool = False) -> list:
+LEVELS = {
+    "challenging": ("- CHALLENGING questions that make people stop scrolling: the sort that roughly 3 in 10 adults get right. "
+                    "Not school-level or 'everyone knows that' facts. Use surprising, specific, satisfying facts that a curious "
+                    "person might know but would have to think about. Still fair and checkable: one clearly correct answer, "
+                    "no trick wording, nothing that depends on opinion or a recent date."),
+    "hard": ("- HARD questions: the kind only a well-read, curious person gets right, with three tempting wrong answers. Still fair "
+             "and checkable: one clearly correct answer, no trick wording, nothing that depends on opinion or a recent date."),
+    "easy": ("- EASY, widely known questions that most people could answer (school-level or everyday general knowledge). "
+             "No obscure trivia, niche fandoms, or specific dates/statistics."),
+}
+
+
+def _quiz_prompt(n: int, avoid: list, categories=None, hard: bool = False) -> str:
     avoid_text = "\n".join(f"- {a}" for a in avoid) or "(none)"
     chosen = [CATEGORY_LABELS[c] for c in (categories or []) if c in CATEGORY_LABELS]
     topics = ("Use ONLY these topics: " + ", ".join(chosen) + ".") if chosen else \
         "Mix topics: science, history, geography, pop culture, animals, food, sports, space, etc."
-    level = ("- HARD questions: the kind only a well-read, curious person gets right, with three tempting wrong answers. Still fair "
-             "and checkable: one clearly correct answer, no trick wording, nothing that depends on opinion or a recent date."
-             if hard else
-             "- EASY, widely known questions that most people could answer (school-level or everyday general knowledge). No obscure trivia, niche fandoms, or specific dates/statistics.")
-    prompt = f"""Create {n + 4} diverse, fun trivia questions for a short TikTok quiz video.
+    level = LEVELS[env("QUESTION_LEVEL", "challenging") if not hard else "hard"] if (hard or env("QUESTION_LEVEL", "challenging") in LEVELS) else LEVELS["challenging"]
+    return f"""Create {n + 4} diverse trivia questions for a short TikTok quiz video that people argue about in the comments.
 
 Rules:
 - {topics}
 {level}
 - Exactly one clearly correct answer.
+- WRONG ANSWERS MUST BE GOOD: all four answers are the same kind of thing (people with people, places with places, years with years,
+  numbers with numbers) and each wrong answer must be a believable answer that a smart person could genuinely hesitate over.
+  Use real people, places, things or figures that are close to the truth (the same era, field, size or sound). Never use jokes,
+  puns, silly names, fictional characters, or words that only sound like the question (for example never "Curious George" for a
+  question about Curium). If someone could eliminate three answers without knowing the topic, rewrite the question.
+- Do not put the answer in the question, and do not let the question's own wording point to one answer.
 - Question under 110 characters. Each answer under 28 characters.
 - No "all of the above" / "none of the above" and nothing that needs an image.
 - "video_query": 2-3 words describing real stock footage that visually fits the question's topic
   WITHOUT revealing the answer (for "Which planet has the most moons?" use "night sky stars").
+- Variety: pick different sub-topics and angles each time (variety seed {random.randint(1000, 9999)}).
 - Do not repeat these earlier questions:
 {avoid_text}
 
 Return ONLY a JSON array of objects with keys:
 "question", "correct_answer", "wrong_answers" (exactly 3 strings), "category", "video_query"."""
-    r = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={"x-api-key": env("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01",
-                 "content-type": "application/json"},
-        json={"model": env("CLAUDE_MODEL", "claude-sonnet-5-5"), "max_tokens": 4000,
-              "messages": [{"role": "user", "content": prompt}]},
-        timeout=90,
-    )
-    r.raise_for_status()
-    text = "".join(b.get("text", "") for b in r.json().get("content", []))
+
+
+def _parse_items(text: str) -> list:
     m = re.search(r"\[.*\]", text, re.S)
     items = json.loads(m.group(0))
     out = []
@@ -348,6 +357,41 @@ Return ONLY a JSON array of objects with keys:
         out.append({"question": q, "correct": correct, "wrong": wrong, "category": cat,
                     "video_queries": [x for x in queries if x]})
     return out
+
+
+def _from_claude(n: int, avoid: list, categories=None, hard: bool = False) -> list:
+    r = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={"x-api-key": env("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01",
+                 "content-type": "application/json"},
+        json={"model": env("CLAUDE_MODEL", "claude-sonnet-5-5"), "max_tokens": 4000,
+              "messages": [{"role": "user", "content": _quiz_prompt(n, avoid, categories, hard)}]},
+        timeout=90,
+    )
+    r.raise_for_status()
+    return _parse_items("".join(b.get("text", "") for b in r.json().get("content", [])))
+
+
+def _from_gemini(n: int, avoid: list, categories=None, hard: bool = False) -> list:
+    import gemini
+    text = gemini.generate([{"text": _quiz_prompt(n, avoid, categories, hard)}], timeout=90, temperature=0.9)
+    return _parse_items(text)
+
+
+def _default_source() -> str:
+    import gemini
+    return (env("QUESTION_SOURCE") or ("claude" if env("ANTHROPIC_API_KEY") else "gemini" if gemini.available() else "opentdb")).lower()
+
+
+def _generated(source: str, n: int, avoid: list, categories, hard: bool) -> list:
+    """Questions written by an AI model (empty list if the source is the Open Trivia DB or it fails)."""
+    if source not in ("claude", "gemini"):
+        return []
+    try:
+        return (_from_claude if source == "claude" else _from_gemini)(n, avoid, categories, hard)
+    except Exception as e:
+        print(f"[questions] {source} questions failed ({str(e)[:120]}); falling back to Open Trivia DB", flush=True)
+        return []
 
 
 _MOCK_BANK = [
@@ -417,13 +461,7 @@ def get_hard_question(categories=None, avoid=()):
     if is_mock():
         return None
     try:
-        source = (env("QUESTION_SOURCE") or ("claude" if env("ANTHROPIC_API_KEY") else "opentdb")).lower()
-        pool = []
-        if source == "claude":
-            try:
-                pool = _from_claude(1, list(avoid), categories, hard=True)
-            except Exception as e:
-                print(f"[questions] hard question from Claude failed ({e})")
+        pool = _generated(_default_source(), 1, list(avoid), categories, True)
         if not pool:
             pool = _hard_from_opentdb(categories)
         history = _load_history()
@@ -441,13 +479,7 @@ def get_questions(n: int, categories=None) -> list:
     if is_mock():
         pool = _mock_pool()
     else:
-        source = (env("QUESTION_SOURCE") or ("claude" if env("ANTHROPIC_API_KEY") else "opentdb")).lower()
-        pool = None
-        if source == "claude":
-            try:
-                pool = _from_claude(n, list(history.values())[-40:], categories)
-            except Exception as e:
-                print(f"[questions] Claude failed ({e}); falling back to Open Trivia DB")
+        pool = _generated(_default_source(), n, list(history.values())[-40:], categories, False)
         if not pool:
             pool = _from_opentdb(categories)
     fresh = [q for q in pool if _qid(q["question"]) not in history]
