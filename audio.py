@@ -12,14 +12,15 @@ TARGET_RMS = 0.25   # the average level every finished video is brought to, what
 MAX_BOOST = 5.0     # never lift a mix by more than this
 KNEE = 0.7          # above this a peak is eased down (see finish) instead of cutting off
 MASTER_VOLUME = float(env("MASTER_VOLUME", "0.72"))   # the whole mix, after everything else (0.72 = 28% quieter than the raw mix)
-VOICE_GAIN = 1.65   # the narrator, relative to the sound effects
+VOICE_GAIN = 1.275   # the narrator, relative to the sound effects
 # How loud the sound effects are, in ONE place so every video type has the same levels. Every effect peaks at the same level
 # as the timer tick, so none of them is louder or quieter than another. A long, steady sound (the siren) is also held to a
 # maximum average level, otherwise being as tall as a click would make it drown the narrator.
 EFFECT_PEAK = 0.68
 EFFECT_MAX_RMS = 0.16
-POP_PEAK = 0.85   # the pop keeps its sound; it is made louder by turning it up, not by changing it
-BING_GAIN = 0.8   # the ding, turned up well past the other effects
+POP_PEAK = 0.7   # the classic pop, at a comfortable level (the Mix lever turns it up or down)
+OTHER_POP_TRIM = 0.55   # the other choice sounds are brighter, so they sit lower than the classic pop
+BING_GAIN = 0.5   # the ding, turned up well past the other effects
 WHOOSH_GAIN = 1.0   # the scene-change whoosh, turned up so it is clearly heard
 BEEP_TRIM = 0.9  # the last-three-seconds notes, a little above the ticks so the end is noticed
 TIMER_BOOST = 2.2    # the ticks, louder
@@ -35,6 +36,21 @@ def decode_audio(path) -> np.ndarray:
         raise RuntimeError("Could not decode audio: " + p.stderr.decode(errors="ignore")[-500:])
     return np.frombuffer(p.stdout, dtype=np.int16).astype(np.float32) / 32768.0
 
+VOICE_FILTER = ("highpass=f=75,equalizer=f=3400:t=q:w=1.2:g=2,treble=g=2.5:f=8000,"
+                "alimiter=limit=0.95:attack=2:release=40,aresample=resampler=soxr:precision=28")
+
+
+def decode_voice(path) -> np.ndarray:
+    """Narration -> mono float32 at 44.1 kHz, with a little clarity added. The Microsoft voices arrive as a 24 kHz, 48 kbit/s mp3,
+    which sounds a bit dull and boxy; this lifts the speech presence and the top end gently, removes rumble, and resamples with the
+    high-quality (soxr) resampler. Falls back to plain decoding if the filter can't run."""
+    cmd = [ffmpeg_exe(), "-v", "error", "-i", str(path), "-af", VOICE_FILTER, "-f", "s16le", "-ac", "1", "-ar", str(SR), "-"]
+    p = subprocess.run(cmd, capture_output=True)
+    if p.returncode != 0 or not p.stdout:
+        return decode_audio(path)
+    return np.frombuffer(p.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+
+
 
 def trim_silence(a: np.ndarray, thr: float = 0.012, pad: float = 0.04) -> np.ndarray:
     idx = np.where(np.abs(a) > thr)[0]
@@ -45,20 +61,43 @@ def trim_silence(a: np.ndarray, thr: float = 0.012, pad: float = 0.04) -> np.nda
     return a[s:e]
 
 
+class Tagged(np.ndarray):
+    """A sound that knows which Mix lever it belongs to (narrator, pop, ding, whoosh, timer), so the Mixer can keep the levers apart."""
+    group = None
+
+    def __array_finalize__(self, obj):
+        self.group = getattr(obj, "group", None)
+
+
+def tag(a: np.ndarray, group: str) -> np.ndarray:
+    t = np.asarray(a, dtype=np.float32).view(Tagged)
+    t.group = group
+    return t
+
+
 class Mixer:
+    """Collects every sound of a video, one track per Mix lever, then mixes them down in one go (see mix_down)."""
+
     def __init__(self, seconds: float):
-        self.buf = np.zeros(int(seconds * SR) + SR, dtype=np.float32)
+        self.n = int(seconds * SR) + SR
+        self.tracks: dict = {}
 
     def add(self, at: float, clip: np.ndarray, gain: float = 1.0) -> None:
         s = int(at * SR)
-        if s < 0 or s >= len(self.buf):
+        if s < 0 or s >= self.n:
             return
-        e = min(len(self.buf), s + len(clip))
-        self.buf[s:e] += clip[: e - s] * gain
+        g = getattr(clip, "group", None) or "other"
+        buf = self.tracks.get(g)
+        if buf is None:
+            buf = self.tracks[g] = np.zeros(self.n, dtype=np.float32)
+        e = min(self.n, s + len(clip))
+        buf[s:e] += np.asarray(clip[: e - s]) * gain
 
-    def save(self, path, seconds: float) -> None:
-        a = self.buf[: int(seconds * SR)].copy()
-        a = finish(a)
+    def mix_down(self, seconds: float, mix=None) -> np.ndarray:
+        return mix_down({k: v[: int(seconds * SR)] for k, v in self.tracks.items()}, mix)
+
+    def save(self, path, seconds: float, mix=None) -> None:
+        a = self.mix_down(seconds, mix)
         pcm = (np.clip(a, -1, 1) * 32767).astype(np.int16)
         stereo = np.repeat(pcm[:, None], 2, axis=1)
         with wave.open(str(path), "wb") as w:
@@ -68,7 +107,39 @@ class Mixer:
             w.writeframes(stereo.tobytes())
 
 
-def finish(a: np.ndarray) -> np.ndarray:
+FIT_PEAK = float(env("FIT_PEAK", "0.55"))   # the loudest ordinary peak of a finished video (rare, sharper peaks go past it and are limited)
+
+
+def mix_down(tracks: dict, mix=None) -> np.ndarray:
+    """The final mix. Every Mix lever really moves its own sound: the sounds are scaled by the levers, and then the whole video is
+    fitted to the loudness ceiling with ONE gain, so a lever never fights an automatic leveler or a limiter that flattens the loud
+    parts. The loudness of a video comes from its recommended mix, so at the recommended levers it sounds like it always has. Raising
+    a lever past the ceiling turns the other sounds down by the same amount (the balance still moves exactly as shown); the Overall
+    lever moves the whole mix; a clean limiter catches only the rare sharpest peaks."""
+    if not tracks:
+        return np.zeros(0, dtype=np.float32)
+    n = max(len(v) for v in tracks.values())
+    lv = mix_levels(mix)
+    rec = mix_levels(None)
+    ref = np.zeros(n, dtype=np.float32)
+    for k, v in tracks.items():
+        ref[: len(v)] += v * rec.get(k, 1.0)
+    peak = float(np.max(np.abs(ref)))
+    if peak <= 0:
+        return ref
+    active = ref[np.abs(ref) > 0.01]
+    rms = float(np.sqrt(np.mean(active ** 2))) if len(active) else 0.0
+    gain = min(TARGET_RMS / rms if rms > 0 else CEILING / peak, MAX_BOOST)
+    lev = np.zeros(n, dtype=np.float32)
+    for k, v in tracks.items():
+        lev[: len(v)] += v * lv.get(k, 1.0) * gain
+    hi = float(np.percentile(np.abs(lev), 99.95))   # the ordinary loudest level, not the one sharpest click
+    fit = min(1.0, FIT_PEAK / hi) if hi > 0 else 1.0
+    out = lev * fit * lv["master"]
+    return _limit(out).astype(np.float32)
+
+
+def finish(a: np.ndarray, master: float = 1.0) -> np.ndarray:
     """Final loudness: ONE volume change applied to the whole mix, so the balance between the narrator, the ticking, the
     pops and the ding is exactly what EFFECT_PEAK and VOICE_GAIN say, in every video type. The mix is brought up toward a
     target average level but never past the point where its loudest moment would clip, so nothing is distorted."""
@@ -80,10 +151,34 @@ def finish(a: np.ndarray) -> np.ndarray:
     # The volume follows the average level, not the single loudest sound: a short pop used to set the limit and hold the whole
     # video down. Peaks above the knee are eased down smoothly (a soft limiter) so they never clip.
     gain = TARGET_RMS / rms if rms > 0 else CEILING / peak
-    x = np.abs(a * min(gain, MAX_BOOST))
-    over = x > KNEE
-    x[over] = KNEE + (CEILING - KNEE) * np.tanh((x[over] - KNEE) / (CEILING - KNEE))
-    return (np.sign(a) * x * MASTER_VOLUME).astype(np.float32)
+    y = (a * min(gain, MAX_BOOST) * master).astype(np.float32)   # `master` = the person's Overall slider, applied before the limiter
+    y = _limit(y)
+    return (y * MASTER_VOLUME).astype(np.float32)
+
+
+def _limit(y: np.ndarray, ceiling: float = CEILING, radius: int = 1100) -> np.ndarray:
+    """A clean peak limiter. Instead of bending the waveform (which sounds like static on a loud moment), it turns the whole mix
+    down smoothly around any peak that would pass the ceiling, then lets it back up, so the sound itself stays undistorted."""
+    ay = np.abs(y)
+    if not len(y) or float(ay.max()) <= ceiling:
+        return y
+    need = np.ones(len(y), dtype=np.float32)
+    hot = ay > ceiling
+    need[hot] = ceiling / ay[hot]
+    m = need
+    span = 1
+    while span < 2 * radius + 1:   # hold the lowest gain over a window (running minimum, in log steps)
+        step = min(span, 2 * radius + 1 - span)
+        sh = np.concatenate([m[step:], np.ones(step, dtype=np.float32)])
+        m = np.minimum(m, sh)
+        span += step
+    m = np.concatenate([np.ones(radius, dtype=np.float32), m])[: len(y)]   # centre the window
+    # smooth the gain with a moving average, so there are no clicks
+    n = 2 * radius + 1
+    pad = np.concatenate([np.ones(radius, dtype=np.float32), m, np.ones(radius, dtype=np.float32)])
+    c = np.cumsum(np.concatenate([[0.0], pad]), dtype=np.float64)
+    g = ((c[n:] - c[:-n]) / n).astype(np.float32)[: len(y)]
+    return (y * np.minimum(g, 1.0)).astype(np.float32)
 
 
 def _tones(parts, dur, decay, attack=0.002) -> np.ndarray:
@@ -108,9 +203,30 @@ def bing() -> np.ndarray:
     custom = _override("bing")
     if custom is not None:
         return custom
-    f = 1567.98  # G6, bell-like with a few overtones
-    a = _tones([(f, 1.0), (2 * f, 0.3), (3 * f, 0.1)], 1.6, 3.2)
-    return a / float(np.max(np.abs(a))) * 0.8
+    # a soft glass-bell chime: a lower, rounder pitch (E6) with real bell partials, each decaying at its own rate,
+    # a gentle attack (no click) and a short airy tail, then a light low-pass so nothing is shrill
+    f = 1318.51
+    dur = 2.0
+    t = np.arange(int(SR * dur)) / SR
+    partials = [(1.0, 1.0, 2.6), (2.0, 0.42, 3.6), (2.76, 0.22, 5.0), (4.07, 0.10, 7.5), (5.4, 0.05, 10.0)]
+    y = sum(amp * np.sin(2 * np.pi * f * r * t + 0.3 * r) * np.exp(-dec * t) for r, amp, dec in partials)
+    y = y * np.minimum(1.0, t / 0.006)
+    # a soft octave shimmer underneath makes it sound full instead of thin
+    y = y + 0.28 * np.sin(2 * np.pi * (f / 2) * t) * np.exp(-3.2 * t) * np.minimum(1.0, t / 0.01)
+    tail = np.zeros_like(y)
+    for d, g in ((0.045, 0.30), (0.097, 0.20), (0.161, 0.12), (0.233, 0.07)):
+        k = int(SR * d)
+        tail[k:] += g * y[:-k]
+    y = (y + tail).astype(np.float32)
+    alpha = 0.55   # one-pole low-pass, takes the edge off the top
+    out = np.empty_like(y)
+    acc = 0.0
+    for i in range(len(y)):
+        acc += alpha * (y[i] - acc)
+        out[i] = acc
+    fade = np.minimum(1.0, (dur - t) / 0.15)
+    out = out * fade
+    return (out / float(np.max(np.abs(out))) * 0.8).astype(np.float32)
 
 
 def _click(rng, modes, ring, body=0.0, body_f=190.0, dur=0.09) -> np.ndarray:
@@ -588,6 +704,42 @@ def challenge_sting() -> np.ndarray:
     return out / peak * 0.62
 
 
+def _lowpass(a: np.ndarray, fc: float, passes: int = 4) -> np.ndarray:
+    """A gentle low-pass (one-pole, run `passes` times for a softer slope) that takes the hiss and edge off a bright sound."""
+    alpha = 1.0 - float(np.exp(-2 * np.pi * fc / SR))
+    y = a.astype(np.float64)
+    for _ in range(passes):
+        out = np.empty_like(y)
+        acc = 0.0
+        for i in range(len(y)):
+            acc += alpha * (y[i] - acc)
+            out[i] = acc
+        y = out
+    return y.astype(np.float32)
+
+
+def _polish(a: np.ndarray, cutoff: float = 0.0, attack: float = 0.0015, release: float = 0.006) -> np.ndarray:
+    """The finishing touch every pop and timer sound gets, the same ones that made the ding and the pop sound clean: no DC offset,
+    an optional low-pass for bright sounds, a tiny fade-in (no click at the start) and a short fade-out (no click when it is cut off)."""
+    if not len(a) or float(np.max(np.abs(a))) == 0.0:
+        return a
+    a = a - float(np.mean(a))
+    if cutoff:
+        a = _lowpass(a, cutoff)
+    n = len(a)
+    ai, ri = min(int(attack * SR), n // 4), min(int(release * SR), n // 4)
+    if ai:
+        a[:ai] *= np.linspace(0.0, 1.0, ai, dtype=np.float32)
+    if ri:
+        a[-ri:] *= np.linspace(1.0, 0.0, ri, dtype=np.float32)
+    return a.astype(np.float32)
+
+
+# how much each bright sound is softened (cut-off in Hz; 0 = leave the top end alone)
+POP_SOFTEN = {"pop": 0, "drop": 6000, "chime": 5000, "blip": 3800, "wood": 6500, "snap": 5500}
+TIMER_SOFTEN = {"ticks": 0, "classic": 8000, "hihat": 6500, "bubbles": 0, "beat": 8000, "heartbeat": 0}
+
+
 def _level(a: np.ndarray) -> np.ndarray:
     """One sound effect brought to the common level (see EFFECT_PEAK)."""
     peak = float(np.max(np.abs(a))) or 1.0
@@ -607,7 +759,31 @@ def _match_rms(a: np.ndarray, rms: float) -> np.ndarray:
     return np.clip(a, -0.95, 0.95).astype(np.float32)
 
 
-def effects(timer: str = "ticks", pop_id: str = "pop") -> dict:
+MIX_RANGE_DB = 6.0   # each Mix slider moves its sound this far up or down (decibels)
+
+
+# The recommended mix (decibels): what the Sound mix levers show out of the box. A video made without any Mix settings uses it too.
+# The Overall lever reads 0 at the recommended mix; this much fixed gain sits behind it so the whole video keeps the loudness it was tuned to.
+MASTER_TRIM_DB = 3.0
+RECOMMENDED_DB = {"narrator": 3.5, "pop": 1.0, "ding": 0.0, "whoosh": 6.0, "timer": 5.0, "master": 0.0}
+
+
+def mix_levels(mix=None) -> dict:
+    """The person's Mix sliders (decibels, any junk ignored; anything missing uses the recommended level) -> linear gains for narrator,
+    pop (the answer-choice sound), ding (the right-answer chime, sparkle, siren, sting), whoosh, timer and master."""
+    out = {}
+    for k, rec in RECOMMENDED_DB.items():
+        try:
+            db = float((mix or {}).get(k, rec))
+        except (TypeError, ValueError):
+            db = rec
+        if not np.isfinite(db):
+            db = rec
+        out[k] = 10 ** ((max(-MIX_RANGE_DB, min(MIX_RANGE_DB, db)) + (MASTER_TRIM_DB if k == "master" else 0.0)) / 20.0)
+    return out
+
+
+def effects(timer: str = "ticks", pop_id: str = "pop", mix=None) -> dict:
     """Every sound effect already set to its level (see EFFECT_PEAK). All video types use this, so they all sound the same.
     `timer` and `pop_id` are the person's choice of countdown sound and of answer-choice sound."""
     timer = timer if timer in TIMER_IDS else "ticks"
@@ -618,19 +794,30 @@ def effects(timer: str = "ticks", pop_id: str = "pop") -> dict:
     for k, f in BEEPS.items():   # each of the last three seconds: just the rising bell note
         out["beep%d" % k] = (_level(beep(f)) * beep_trim).astype(np.float32)
     for k in range(4, 13):
-        out["tick%d" % k] = np.clip(_level(tick_at(k, timer)) * tick_trim, -0.97, 0.97).astype(np.float32) if tick_trim else np.zeros(SR, dtype=np.float32)
+        out["tick%d" % k] = np.clip(_level(_polish(tick_at(k, timer), TIMER_SOFTEN.get(timer, 0))) * tick_trim, -0.97, 0.97).astype(np.float32) if tick_trim else np.zeros(SR, dtype=np.float32)
     out["tick"] = out["tick8"]
     out["whoosh"] = np.clip(out["whoosh"] * WHOOSH_GAIN, -0.95, 0.95).astype(np.float32)
-    p = _level(pop_fn())
-    if pop_fn is pop:   # the classic pop: a touch of saturation, same sound with a bit more body
+    if pop_fn is pop:   # the original classic pop, exactly as it was: untouched sound, a touch of saturation for body
+        p = _level(pop_fn())
         p = np.tanh(p / float(np.max(np.abs(p)) or 1.0) * 1.25)
-    out["pop"] = (p / float(np.max(np.abs(p)) or 1.0) * (POP_PEAK if pop_fn is pop else POP_PEAK * 0.8)).astype(np.float32)
+    else:
+        p = _level(_polish(pop_fn(), POP_SOFTEN.get(pop_id, 0)))
+    out["pop"] = (p / float(np.max(np.abs(p)) or 1.0) * (POP_PEAK if pop_fn is pop else POP_PEAK * OTHER_POP_TRIM)).astype(np.float32)
     out["bing"] = np.clip(out["bing"] * BING_GAIN, -0.95, 0.95).astype(np.float32)
+    for k in list(out):   # which Mix lever each sound belongs to (the levels are applied when the video is mixed down)
+        if k.startswith("tick") or k.startswith("beep"):
+            out[k] = tag(out[k], "timer")
+        elif k == "whoosh":
+            out[k] = tag(out[k], "whoosh")
+        elif k == "pop":
+            out[k] = tag(out[k], "pop")
+        else:   # bing, sparkle, siren, sting
+            out[k] = tag(out[k], "ding")
     return out
 
 
-PREVIEW_VERSION = 2
-PREVIEW_GAIN = 1.3   # previews keep the real balance between the sounds (no per-sound normalising); this only sets how loud they play
+PREVIEW_VERSION = 19
+PREVIEW_GAIN = 0.92   # previews keep the real balance between the sounds (no per-sound normalising); this only sets how loud they play
 
 
 def sound_preview(kind: str, sid: str):
@@ -656,15 +843,69 @@ def sound_preview(kind: str, sid: str):
     if path.exists() and path.stat().st_size > 2000:
         return path
     mix = np.zeros(int(total * SR), dtype=np.float32)
+    rec = mix_levels(None)   # the sounds play at the recommended mix, like in a video
     for t, clip in parts:
         st = int(t * SR)
-        mix[st:st + len(clip)] += clip[:len(mix) - st]
-    mix = np.tanh(mix * PREVIEW_GAIN * MASTER_VOLUME)   # the real levels, with a gentle limiter so nothing clips
+        mix[st:st + len(clip)] += np.asarray(clip[:len(mix) - st]) * rec.get(getattr(clip, "group", None) or "other", 1.0)
+    mix = _limit(mix * PREVIEW_GAIN * MASTER_VOLUME, 0.95)   # the real levels, through the same clean limiter as the videos
     tmp = path.with_suffix(".part")
     with wave.open(str(tmp), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(SR)
         w.writeframes((np.clip(mix, -1, 1) * 32767).astype("<i2").tobytes())
+    tmp.replace(path)
+    return path
+
+
+def mix_preview(mix, timer_id: str, pop_id: str, voice_clip=None, master_only_cache: str = ""):
+    """A short sample of a whole video's sound at the person's Mix settings: a scene change, the narrator reading, the answer choices
+    popping up, a few seconds of countdown, then the ding. It goes through the same mixing and limiter as a real video, so what you
+    hear is what the video will sound like. Returns a wav path (kept on disk by content hash)."""
+    import hashlib
+    g = mix_levels(mix)
+    timer_id = timer_id if timer_id in TIMER_IDS else "ticks"
+    pop_id = pop_id if pop_id in POP_IDS else "pop"
+    sfx = effects(timer_id, pop_id, mix)
+    voice = None
+    if voice_clip is not None and len(voice_clip):
+        voice = tag(trim_silence(voice_clip)[: int(4.5 * SR)] * VOICE_GAIN, "narrator")
+    parts = [(0.0, sfx["whoosh"]), (0.06, sfx["pop"])]
+    t = 0.5
+    if voice is not None:
+        parts.append((t, voice))
+        t += len(voice) / SR + 0.25
+    for k in range(3):
+        parts.append((t + 0.45 * k, sfx["pop"]))
+    t += 1.6
+    for s_left in (5, 4, 3):
+        parts.append((t, count_sfx(sfx, s_left)))
+        t += 1.0
+    parts.append((t + 0.1, sfx["bing"]))
+    parts.append((t + 0.15, sfx["sparkle"]))
+    total = t + 1.7
+    d = CACHE_DIR / "mix_previews"
+    d.mkdir(parents=True, exist_ok=True)
+    key = hashlib.sha1(repr((PREVIEW_VERSION, MASTER_VOLUME, timer_id, pop_id, round(g["narrator"], 4), round(g["pop"], 4), round(g["ding"], 4), round(g["whoosh"], 4),
+                             round(g["timer"], 4), round(g["master"], 4), None if voice is None else int(len(voice)),
+                             master_only_cache, POP_PEAK, BING_GAIN, VOICE_GAIN)).encode()).hexdigest()[:16]
+    path = d / f"{key}.wav"
+    if path.exists() and path.stat().st_size > 2000:
+        return path
+    for old in sorted(d.glob("*.wav"), key=lambda p: p.stat().st_mtime)[:-40]:   # keep the folder small
+        try:
+            old.unlink()
+        except OSError:
+            pass
+    m = Mixer(total)
+    for at, clip in parts:
+        m.add(at, clip)
+    y = m.mix_down(total, mix)
+    tmp = path.with_suffix(".part")
+    with wave.open(str(tmp), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes((np.clip(y, -1, 1) * 32767).astype("<i2").tobytes())
     tmp.replace(path)
     return path

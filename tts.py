@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import requests
 
-from audio import SR, VOICE_GAIN, decode_audio, trim_silence
+from audio import SR, VOICE_GAIN, decode_audio, decode_voice, tag, trim_silence
 import gemini
 from config import CACHE_DIR, WORK_DIR, env, flog, is_mock
 
@@ -268,7 +268,12 @@ def _mock_voice(text: str) -> np.ndarray:
 
 
 def synthesize_all(texts: list, voice: str, rate: str = "+8%") -> list:
-    """Return one mono float32 array per text, in order."""
+    """Return one mono float32 array per text, in order, each tagged as narration."""
+    clips = _synthesize_all(texts, voice, rate)
+    return [tag(c, "narrator") for c in clips]   # the Mix levers are applied when the video is mixed down
+
+
+def _synthesize_all(texts: list, voice: str, rate: str = "+8%") -> list:
     if is_mock():
         return [_mock_voice(t) for t in texts]
     if _is_gemini(voice) and not gemini_enabled():
@@ -301,7 +306,7 @@ def synthesize_all(texts: list, voice: str, rate: str = "+8%") -> list:
                         if attempt == 2:
                             raise
                         await asyncio.sleep(1.5)
-            return trim_silence(decode_audio(path)) * VOICE_GAIN
+            return trim_silence(decode_voice(path)) * VOICE_GAIN
 
         return await asyncio.gather(*[one(t) for t in texts])
 

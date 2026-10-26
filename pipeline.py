@@ -156,7 +156,7 @@ def cleanup_disk() -> None:
 
 def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None,
                categories=None, watermark: str = "", style: str = looks.DEFAULT, custom=None, colors=None,
-               timer_sound: str = "ticks", pop_sound: str = "pop") -> dict:
+               timer_sound: str = "ticks", pop_sound: str = "pop", mix=None) -> dict:
     """custom = the person's own questions: [{"question", "choices", "correct_idx"}]. colors = their colour changes."""
     t_begin = time.time()
     render.WATERMARK = watermark or ""
@@ -282,7 +282,7 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
 
         progress("Mixing audio and finishing...", 0.92)
         audio_wav = job_dir / "audio.wav"
-        mixer.save(audio_wav, total)
+        mixer.save(audio_wav, total, mix)
         video_only = job_dir / "video.mp4"
         concat_videos(seg_paths, video_only, job_dir)
         name = f"quiz_{time.strftime('%Y%m%d_%H%M%S')}.mp4"

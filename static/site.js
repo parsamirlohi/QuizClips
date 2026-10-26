@@ -93,7 +93,7 @@
         var start = order.findIndex(function (l) { return l.key === d.default; });
         if (start > 0) order = order.slice(start).concat(order.slice(0, start));
         order.forEach(function (l, k) {
-          var img = new Image(); img.dataset.src = "/static/looks/hd/" + l.key + ".webp"; img.alt = l.title + " look"; img.decoding = "async";
+          var img = new Image(); img.dataset.src = "/static/looks/hd/" + l.key + ".webp?v=4"; img.alt = l.title + " look"; img.decoding = "async";
           if (k < 2) img.src = img.dataset.src;   // the full-size pictures load a couple ahead of the one showing, not all at once
           if (k === 0) img.className = "on";
           screen.appendChild(img);
@@ -101,8 +101,8 @@
         var imgs = screen.querySelectorAll("img"), n = 0;
         /* the animated look showing now: its moving background and clip as a video, with the question graphics laid over it as a separate sharp picture (so the text and edges stay crisp at any video quality). Both fade over the still together. */
         var stages = [], cur = 0;
-        var clipSrc = function (i) { return "/static/looks/loops/hd/" + order[i % order.length].key + ".mp4?v=4"; };
-        var ovlSrc = function (i) { return "/static/looks/overlay/" + order[i % order.length].key + ".webp?v=5"; };
+        var clipSrc = function (i) { return "/static/looks/loops/hd/" + order[i % order.length].key + ".mp4?v=7"; };
+        var ovlSrc = function (i) { return "/static/looks/overlay/" + order[i % order.length].key + ".webp?v=8"; };
         var okPlay = function (v) { var pr = v.play(); if (pr && pr.catch) pr.catch(function () {}); };
         var load = function (st, i) { st.v.src = clipSrc(i); st.o.src = ovlSrc(i); st.idx = i % order.length; };
         if (!reduce) {
@@ -146,7 +146,7 @@
         var html = list.concat(list).map(function (l, k) {
           var dup = k >= list.length;   // the second copy only exists to make the loop seamless
           return '<a class="look-tile" href="/app?look=' + l.key + '" title="Make a video in the ' + l.title + ' look"' + (dup ? ' tabindex="-1" aria-hidden="true"' : "") + '>' +
-            '<img src="/static/looks/strip/' + l.key + '.webp?v=2" alt="' + (dup ? "" : l.title + " look") + '"></a>';
+            '<img src="/static/looks/strip/' + l.key + '.webp?v=5" alt="' + (dup ? "" : l.title + " look") + '"></a>';
         }).join("");
         strip.innerHTML = html;
         /* the strip scrolls as plain pictures (smooth). Pointing at a tile plays that look's short loop in it (moving background, picture and question); moving away stops it. The strip keeps scrolling the whole time. */
@@ -160,7 +160,7 @@
                 v.className = "tloop"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.disablePictureInPicture = true; v.setAttribute("aria-hidden", "true");
                 v.addEventListener("playing", function () { v.classList.add("show"); });
                 v.addEventListener("error", function () { v.classList.remove("show"); });
-                v.src = "/static/looks/loops/strip/" + key + ".mp4?v=2";
+                v.src = "/static/looks/loops/strip/" + key + ".mp4?v=5";
                 t.appendChild(v);
               }
               var pr = v.play(); if (pr && pr.catch) pr.catch(function () {});

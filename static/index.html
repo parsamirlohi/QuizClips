@@ -151,6 +151,13 @@
   .screen .lookprev img.povl { opacity:0; transition:opacity .3s ease; pointer-events:none; }
   .screen .lookprev img.povl.show { opacity:1; }
   .screen .rand { display:grid; place-items:center; font-size:64px; font-weight:800; color:#fff; background:linear-gradient(160deg,#2b2160,#6b2352); }
+  /* the phone glows once the video is finished, then the video takes the screen */
+  .phone { transition:box-shadow .5s ease; }
+  .phone.glow { animation:phoneGlow 2.5s ease-in-out infinite; }
+  @keyframes phoneGlow {
+    0%,100% { box-shadow:var(--shadow-float), 0 0 26px 4px rgba(255,78,178,.45), 0 0 70px 12px rgba(255,226,40,.18); }
+    50% { box-shadow:var(--shadow-float), 0 0 54px 14px rgba(255,78,178,.80), 0 0 120px 30px rgba(255,226,40,.40); } }
+  @media (prefers-reduced-motion: reduce) { .phone.glow { animation:none; } }
   .caption { text-align:center; color:var(--muted); font-size:13px; margin:14px auto 0; max-width:30ch; }
   .caption b { color:var(--ink); }
 
@@ -261,7 +268,100 @@
   [hidden] { display:none !important; }
   .drawer.scoped .d-tabs { display:none; }
   .drawer.scoped .d-head { padding-bottom:16px; border-bottom:1px solid var(--line); }
-  .drawer.scoped #p-content .field > label, .drawer.scoped #p-content .field > .lab, .drawer.scoped #f-voice > .lab, .drawer.scoped #f-timersound > .lab, .drawer.scoped #f-popsound > .lab { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+  .drawer.scoped #p-content .field > label, .drawer.scoped #p-content .field > .lab, .drawer.scoped #f-voice > .lab, .drawer.scoped #f-timersound > .lab, .drawer.scoped #f-popsound > .lab, .drawer.scoped #f-mix > .lab { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+
+  /* ---------- the sound mix: a small mixing desk ---------- */
+  .mixer { position:relative; border-radius:18px; padding:16px 14px 14px; color:#fff; border:4px solid var(--pink);
+    background:radial-gradient(120% 90% at 50% 0%, #2d2566 0%, #1a1440 55%, #120d30 100%); box-shadow:0 10px 30px rgba(20,10,60,.35), inset 0 0 0 2px rgba(255,255,255,.06); overflow:hidden; }
+  .mixer::before, .mixer::after { content:""; position:absolute; top:9px; width:7px; height:7px; border-radius:50%; background:radial-gradient(circle at 35% 30%, #fff, #8d7fd0 60%, #3b3278); }
+  .mixer::before { left:9px; } .mixer::after { right:9px; }
+  .mx-top { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:2px 0 14px; }
+  .mx-air { display:inline-flex; align-items:center; gap:7px; font:400 15px/1 var(--display, "Lilita One", sans-serif); letter-spacing:.06em; color:rgba(255,255,255,.55); transition:color .2s; }
+  .mx-air i { width:10px; height:10px; border-radius:50%; background:#5b4d9e; transition:background .2s, box-shadow .2s; }
+  .mixer.playing .mx-air { color:#ffe228; }
+  .mixer.playing .mx-air i { background:#ff3d81; box-shadow:0 0 10px 3px rgba(255,61,129,.8); animation:onair 1s ease-in-out infinite; }
+  @keyframes onair { 50% { opacity:.45; } }
+  .mx-play { display:inline-flex; align-items:center; gap:8px; border:3px solid #ff4eb2; background:#8d77ff; color:#fff; border-radius:12px; padding:8px 14px; font:700 14px/1 inherit; cursor:pointer; box-shadow:0 3px 0 #14161f; transition:transform .08s, box-shadow .08s; }
+  .mx-play:hover { background:#9b87ff; }
+  .mx-play:active { transform:translateY(2px); box-shadow:0 1px 0 #14161f; }
+  .mx-play svg { width:14px; height:14px; fill:currentColor; }
+  .mx-play .i-stop { display:none; }
+  .mixer.playing .mx-play .i-play { display:none; } .mixer.playing .mx-play .i-stop { display:block; }
+  .mixer.loading .mx-play { opacity:.7; }
+  .mx-board { display:grid; grid-template-columns:repeat(5,1fr) 1px 1fr; gap:6px; align-items:start; }
+  .mx-div { align-self:stretch; background:linear-gradient(transparent, rgba(255,255,255,.22), transparent); margin:6px 4px 0; }
+  .ch { display:flex; flex-direction:column; align-items:center; gap:8px; min-width:0; }
+  .ch-db { font:700 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding:5px 8px; border-radius:7px; background:#0c0824; color:#ffe228; box-shadow:inset 0 0 0 1px rgba(255,255,255,.12); min-width:62px; text-align:center; }
+  .ch-body { display:flex; gap:8px; align-items:stretch; height:210px; }
+  .leds { display:flex; flex-direction:column-reverse; gap:3px; padding:6px 0; }
+  .leds span { width:9px; flex:1; border-radius:2px; background:#2a2260; transition:background .08s, box-shadow .08s; }
+  .leds span.on { background:#ff4eb2; box-shadow:0 0 6px rgba(255,78,178,.85); }
+  .leds span.on.hi { background:#ffe228; box-shadow:0 0 7px rgba(255,226,40,.9); }
+  .leds span.idle { background:#4a3d92; }
+  .rail { position:relative; width:54px; touch-action:none; cursor:grab; outline:none; }
+  .rail:active { cursor:grabbing; }
+  .rail .slot { position:absolute; left:50%; top:10px; bottom:10px; width:8px; margin-left:-4px; border-radius:5px; background:#080520; box-shadow:inset 0 1px 3px #000, 0 0 0 1px rgba(255,255,255,.1); }
+  .rail .tk { position:absolute; left:0; right:0; height:0; border-top:1px solid rgba(255,255,255,.22); }
+  .rail .tk.z { border-top:2px solid #ffe228; }
+  .rail .tk b { position:absolute; left:-1px; top:-6px; font:600 9px/1 ui-monospace, Menlo, monospace; color:rgba(255,255,255,.4); }
+  .rail .cap { position:absolute; left:50%; width:46px; height:30px; margin:-15px 0 0 -23px; border-radius:7px; background:linear-gradient(#fff, #e9e5ff); border:3px solid #14161f; box-shadow:0 3px 0 #14161f, 0 6px 10px rgba(0,0,0,.4); display:grid; place-items:center; will-change:top; }
+  .rail .cap::after { content:""; width:28px; height:4px; border-radius:2px; background:#ff4eb2; }
+  .rail:focus-visible .cap { box-shadow:0 3px 0 #14161f, 0 0 0 3px #ffe228; }
+  .rail.drag .cap { background:linear-gradient(#fff, #ffe9f4); transform:scale(1.06); }
+  .rail .cap.spring { transition:top .35s cubic-bezier(.3,1.6,.5,1); }
+  .ch-name { font-weight:700; font-size:13px; text-align:center; line-height:1.15; color:#fff; }
+  .ch-name small { display:block; font-weight:500; font-size:10px; line-height:1.25; color:rgba(255,255,255,.6); margin-top:3px; text-wrap:balance; }
+  .mx-foot { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-top:14px; font-size:12px; color:rgba(255,255,255,.6); }
+  .mx-hint { order:3; flex:1 1 100%; }
+  .mx-presets { display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-start; flex:1 1 auto; min-width:0; }
+  .mx-reset { margin-left:auto; }
+  .mx-preset { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.28); color:#fff; border-radius:999px; padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; transition:background .15s, border-color .15s, transform .08s; }
+  .mx-preset:hover { background:rgba(255,255,255,.18); border-color:#fff; }
+  .mx-preset:active { transform:translateY(1px); }
+  .mx-preset[aria-pressed="true"] { background:#ff4eb2; border-color:#ff4eb2; box-shadow:0 0 12px rgba(255,78,178,.6); }
+  .mx-reset { background:none; border:1px solid rgba(255,255,255,.3); color:#fff; border-radius:8px; padding:6px 10px; font-size:12px; font-weight:600; cursor:pointer; }
+  .mx-reset:hover:not(:disabled) { border-color:#fff; } .mx-reset:disabled { opacity:.4; cursor:default; }
+  @media (max-width:420px) { .ch-db { min-width:0; padding:5px 5px; font-size:12px; } .rail { width:44px; } .rail .cap { width:38px; margin-left:-19px; } .leds span { width:7px; } .mx-board { gap:2px; } }
+  @media (prefers-reduced-motion: reduce) { .mixer.playing .mx-air i { animation:none; } .rail .cap.spring { transition:none; } }
+
+  /* the Sound mix opens as a whole screen with the desk in the middle */
+  .drawer.mixscreen { left:0; right:0; width:100vw; transform:translateY(28px); opacity:0; transition:transform .28s ease, opacity .28s ease, visibility 0s .28s; }
+  .drawer.mixscreen.open { transform:none; opacity:1; transition:transform .28s ease, opacity .28s ease; }
+  .drawer.mixscreen .d-head { padding:20px 28px 16px; }
+  .drawer.mixscreen .d-body { display:flex; flex-direction:column; align-items:center; padding:12px 20px 24px; }
+  .drawer.mixscreen .d-body > .panel { width:100%; display:flex; flex-direction:column; align-items:center; margin:auto 0; }   /* centred when there is room, scrolls from the top when there is not */
+  .drawer.mixscreen #f-mix { width:min(1040px,100%); margin:0; }
+  .drawer.mixscreen #f-mix .help { text-align:center; max-width:60ch; margin:0 auto 14px; font-size:14px; }
+  .drawer.mixscreen .mixer { padding:22px 30px 18px; border-radius:24px; }
+  .drawer.mixscreen .mx-top { margin-bottom:14px; }
+  .drawer.mixscreen .mx-air { font-size:20px; }
+  .drawer.mixscreen .mx-play { font-size:16px; padding:12px 20px; border-radius:14px; }
+  .drawer.mixscreen .mx-board { gap:14px; }
+  .drawer.mixscreen .ch { gap:12px; }
+  .drawer.mixscreen .ch-db { font-size:17px; min-width:92px; padding:8px 10px; border-radius:9px; }
+  .drawer.mixscreen .ch-body { height:clamp(190px,34vh,360px); gap:12px; }
+  .drawer.mixscreen .leds { gap:4px; }
+  .drawer.mixscreen .leds span { width:14px; }
+  .drawer.mixscreen .rail { width:84px; }
+  .drawer.mixscreen .rail .cap { width:68px; height:42px; margin:-21px 0 0 -34px; border-radius:10px; }
+  .drawer.mixscreen .rail .cap::after { width:42px; height:5px; }
+  .drawer.mixscreen .rail .slot { width:11px; margin-left:-5.5px; }
+  .drawer.mixscreen .rail .tk b { font-size:11px; }
+  .drawer.mixscreen .ch-name { font-size:17px; }
+  .drawer.mixscreen .ch-name small { font-size:11px; }
+  .drawer.mixscreen .mx-foot { font-size:12px; margin-top:14px; }
+  .drawer.mixscreen .mx-reset { font-size:14px; padding:8px 14px; }
+  .drawer.mixscreen .mx-preset { font-size:14px; padding:8px 16px; }
+  .drawer.mixscreen .mx-presets { gap:8px; }
+  @media (max-width:760px) {
+    .drawer.mixscreen .mixer { padding:18px 10px 16px; }
+    .drawer.mixscreen .mx-board { gap:4px; }
+    .drawer.mixscreen .ch-db { min-width:0; font-size:12px; padding:6px 4px; }
+    .drawer.mixscreen .rail { width:50px; } .drawer.mixscreen .rail .cap { width:44px; height:34px; margin:-17px 0 0 -22px; }
+    .drawer.mixscreen .leds span { width:8px; } .drawer.mixscreen .ch-name { font-size:12px; } .drawer.mixscreen .ch-name small { font-size:9px; }
+    .drawer.mixscreen .ch-body { height:clamp(200px,38vh,320px); gap:6px; }
+  }
 
   .field { margin-bottom:28px; }
   .field > label, .field > .lab { display:block; font-weight:700; margin-bottom:4px; }
@@ -511,6 +611,7 @@
           <div class="row editable"><dt>Voice</dt><dd class="v" id="s-voice" style="margin:0"></dd><button class="link" data-edit="voice" aria-label="Change narrator voice"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row editable"><dt>Timer sound</dt><dd class="v" id="s-tsound" style="margin:0"></dd><button class="link" data-edit="timersound" aria-label="Change timer sound"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row editable"><dt>Choice sound</dt><dd class="v" id="s-psound" style="margin:0"></dd><button class="link" data-edit="popsound" aria-label="Change choice sound"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
+          <div class="row editable"><dt>Sound mix</dt><dd class="v" id="s-mix" style="margin:0"></dd><button class="link" data-edit="mix" aria-label="Change sound mix"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
           <div class="row editable"><dt>Link on video</dt><dd class="v" id="s-link" style="margin:0"></dd><button class="link" data-edit="link" aria-label="Change link on video"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div>
         </dl>
       </div>
@@ -632,6 +733,11 @@
         <p class="help">The sound each answer choice makes as it pops up. Press play to hear four of them.</p>
         <div class="voices" id="psounds" role="radiogroup" aria-labelledby="ps-lab"></div>
       </div>
+      <div class="field" id="f-mix">
+        <span class="lab" id="mx-lab">Sound mix</span>
+        <p class="help">Balance the voice, the choice sound, the ding, the whoosh and the timer, then play the whole thing together. Drag a lever; double-click it to reset.</p>
+        <div class="mixer" id="mixer"></div>
+      </div>
       <div id="f-link">
       <label class="switch" for="wmOn">
         <span><b>Show my link on the video</b><small>Appears at the bottom of every scene.</small></span>
@@ -668,7 +774,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
 
 /* ---------------- settings (remembered in this browser) ---------------- */
-const S = { build: {}, cdata: newCData(), colors: {}, think: {}, kind: "trivia", storyMode: "path", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "", timerSound: "", popSound: "pop", soundsV: 2 };
+const S = { build: {}, cdata: newCData(), colors: {}, think: {}, kind: "trivia", storyMode: "path", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "", timerSound: "", popSound: "pop", soundsV: 2, mixV: 4, mix: { narrator: 3.5, pop: 1, ding: 0, whoosh: 6, timer: 5, master: 0 } };
 function newCData() {
   const rows = (n, f) => Array.from({ length: n }, f);
   return {
@@ -692,7 +798,7 @@ function loadSettings() {
       S.kind = j.kind || "trivia"; S.think = j.think || {}; S.storyMode = j.storyMode === "survive" ? "survive" : "path";
       S.build = j.build && typeof j.build === "object" ? j.build : {};
       if (j.cdata && typeof j.cdata === "object") S.cdata = Object.assign(newCData(), j.cdata);
-      S.colors = j.colors && typeof j.colors === "object" ? j.colors : {}; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.timerSound = j.soundsV === 2 ? (j.timerSound || "") : ""; S.soundsV = 2; S.popSound = j.popSound || "pop"; S.cats = new Set(j.cats || []);
+      S.colors = j.colors && typeof j.colors === "object" ? j.colors : {}; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.timerSound = j.soundsV === 2 ? (j.timerSound || "") : ""; S.soundsV = 2; S.popSound = j.popSound || "pop"; if ((j.mixV === 3 || j.mixV === 4) && j.mix && typeof j.mix === "object") { if (j.mix.fx !== undefined && j.mix.pop === undefined) { j.mix.pop = j.mix.fx; j.mix.ding = j.mix.fx; } for (const k of ["narrator", "pop", "ding", "whoosh", "timer", "master"]) { const n = Number(j.mix[k]); S.mix[k] = isFinite(n) ? Math.max(-6, Math.min(6, n)) : 0; } } if (j.mixV === 3) S.mix.master = Math.max(-6, Math.min(6, S.mix.master - 3)); S.cats = new Set(j.cats || []);
       S.look = j.look || S.look; S.wmOn = j.wmOn !== false; S.wmPlat = j.wmPlat || "tiktok"; S.wmHandle = j.wmHandle || "";
     } else {  // older versions of this page
       S.look = localStorage.getItem("lookKey") || S.look;
@@ -732,6 +838,7 @@ const SECTIONS = {
   voice: { panel: "brand", field: "f-voice", title: "Narrator voice" },
   timersound: { panel: "brand", field: "f-timersound", title: "Timer sound" },
   popsound: { panel: "brand", field: "f-popsound", title: "Choice sound" },
+  mix: { panel: "brand", field: "f-mix", title: "Sound mix" },
   topics: { panel: "content", field: "f-topics", title: "Topics" },
   look: { panel: "look", title: "Look" },
   colors: { panel: "look", title: "Colors" },
@@ -741,8 +848,8 @@ const SECTIONS = {
 function openDrawer(sect, from) {
   opener = from || document.activeElement;
   const one = SECTIONS[sect];
-  $("drawer").classList.toggle("scoped", !!one);
-  ["f-questions", "f-voice", "f-topics", "f-timersound", "f-popsound"].forEach((id) => {
+  $("drawer").classList.toggle("scoped", !!one); $("drawer").classList.toggle("mixscreen", sect === "mix");
+  ["f-questions", "f-voice", "f-topics", "f-timersound", "f-popsound", "f-mix"].forEach((id) => {
     $(id).hidden = one ? one.field !== id : ((id === "f-topics" && S.kind !== "trivia") || (id === "f-questions" && building()));
   });
   $("f-link").hidden = !!one && sect !== "link";
@@ -750,7 +857,7 @@ function openDrawer(sect, from) {
   $("look-help").hidden = sect === "colors"; $("c-lab").hidden = sect === "colors"; $("l-lab").hidden = sect === "look";
   $("d-title").textContent = !one ? "Customize" : sect === "questions" ? "Number of " + fmt().noun : one.title;
   $("d-close").setAttribute("aria-label", one ? "Close" : "Close customize panel");
-  stopSample(); $("vmsg").textContent = "";
+  stopSample(); stopMix(); $("vmsg").textContent = "";
   setTab(one ? one.panel : "content");
   $("drawer").classList.add("open"); $("scrim").classList.add("open"); document.body.classList.add("drawer-open");
   document.body.style.overflow = "hidden";
@@ -765,7 +872,7 @@ function quick(el, fn) {
   });
 }
 function closeDrawer() {
-  stopSample();
+  stopSample(); stopMix();
   $("drawer").classList.remove("open"); $("scrim").classList.remove("open"); document.body.classList.remove("drawer-open");
   document.body.style.overflow = "";
   if (opener && opener.focus) opener.focus();
@@ -803,10 +910,10 @@ function swapScreen(node) {
 /* the files of a preview: [picture shown while the video loads, looping video, graphics laid over it]. Keep in step with tools/make_type_previews.py */
 function previewFiles(kind, key) {
   const L = "/static/looks/";
-  if (kind === "story") return [L + "story/clip.jpg?v=2", L + "story/clip.mp4?v=2", L + "story/" + key + ".webp?v=3"];
-  if (kind === "clip") return [L + "story/pixel.jpg?v=1", L + "story/pixel.mp4?v=1", L + "overlay/clip/" + key + ".webp?v=2"];
-  if (kind === "missing") return [L + "bgstill/" + key + ".jpg?v=1", L + "loops/bg/" + key + ".mp4?v=1", L + "overlay/missing/" + key + ".webp?v=1"];
-  return [L + "hdbg/" + key + ".jpg?v=1", L + "loops/hd/" + key + ".mp4?v=4", L + "overlay/" + kind + "/" + key + ".webp?v=5"];
+  if (kind === "story") return [L + "story/clip.jpg?v=5", L + "story/clip.mp4?v=5", L + "story/" + key + ".webp?v=6"];
+  if (kind === "clip") return [L + "story/pixel.jpg?v=4", L + "story/pixel.mp4?v=4", L + "overlay/clip/" + key + ".webp?v=5"];
+  if (kind === "missing") return [L + "bgstill/" + key + ".jpg?v=5", L + "loops/bg/" + key + ".mp4?v=5", L + "overlay/missing/" + key + ".webp?v=5"];
+  return [L + "hdbg/" + key + ".jpg?v=4", L + "loops/hd/" + key + ".mp4?v=7", L + "overlay/" + kind + "/" + key + ".webp?v=8"];
 }
 /* The graphics laid over the phone's video. With the person's own colors they are drawn by the app (/api/preview) so changes show
    straight away; without any, the ready-made pictures are used. */
@@ -841,16 +948,16 @@ function showLookPreview() {
     node.appendChild(ov);
   } else if (look) {
     node = document.createElement("div"); node.className = "lookprev";
-    const img = new Image(); img.alt = "Preview of the " + look.title + " look"; img.src = "/static/looks/hd/" + look.key + ".webp";
+    const img = new Image(); img.alt = "Preview of the " + look.title + " look"; img.src = "/static/looks/hd/" + look.key + ".webp?v=4";
     node.appendChild(img);
     if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {   // the look's moving background and clip as a video, with the question graphics laid over it as a separate sharp picture; the home page phone does the same (static/site.js): change both together
       const v = document.createElement("video");
       v.className = "pclip"; v.muted = true; v.loop = true; v.playsInline = true; v.preload = "auto"; v.setAttribute("aria-hidden", "true");
-      const ov = new Image(); ov.className = "povl"; ov.alt = ""; ov.decoding = "async"; ov.src = "/static/looks/overlay/" + look.key + ".webp?v=5";
+      const ov = new Image(); ov.className = "povl"; ov.alt = ""; ov.decoding = "async"; ov.src = "/static/looks/overlay/" + look.key + ".webp?v=8";
       ov.dataset.base = ov.getAttribute("src"); ovEl = ov;
       v.addEventListener("playing", () => { v.classList.add("show"); ov.classList.add("show"); });
       v.addEventListener("error", () => { v.classList.remove("show"); ov.classList.remove("show"); });
-      v.src = "/static/looks/loops/hd/" + look.key + ".mp4?v=4";
+      v.src = "/static/looks/loops/hd/" + look.key + ".mp4?v=7";
       node.appendChild(v); node.appendChild(ov);
       v.play().catch(() => {});
     }
@@ -942,10 +1049,11 @@ function renderSummary() {
   $("s-voice").textContent = v ? v.label : "";
   const ts = (CFG.timer_sounds || []).find((x) => x.id === S.timerSound), ps = (CFG.pop_sounds || []).find((x) => x.id === S.popSound);
   $("s-tsound").textContent = ts ? ts.name : ""; $("s-psound").textContent = ps ? ps.name : "";
+  { const hit = MIX_PRESETS.find(mixMatches); $("s-mix").textContent = hit ? hit.name : "Custom"; }
   const names = CFG.categories.filter((c) => S.cats.has(c.id)).map((c) => c.label);
   $("s-topics").textContent = !names.length ? "Mix of all topics" : names.length <= 2 ? names.join(", ") : names.slice(0, 2).join(", ") + " + " + (names.length - 2) + " more";
   const look = CFG.looks.find((l) => l.key === S.look);
-  $("s-look").innerHTML = look ? '<img alt="" src="/static/looks/' + look.key + '.jpg"><span>' + esc(look.title) + "</span>" : "<span>Surprise me</span>";
+  $("s-look").innerHTML = look ? '<img alt="" src="/static/looks/' + look.key + '.jpg?v=4"><span>' + esc(look.title) + "</span>" : "<span>Surprise me</span>";
   const t = wmText();
   $("s-link").textContent = !S.wmOn ? "Off" : t || "Not set";
   $("wmPrev").innerHTML = !S.wmOn ? "No link will be shown." : t ? "Shown as <b>" + esc(t) + "</b>" : "Enter your handle to show a link.";
@@ -1027,7 +1135,7 @@ document.querySelectorAll("#tmode .kind").forEach((b) => b.addEventListener("cli
 $("topic-in").addEventListener("input", (e) => { S.topics[S.kind] = e.target.value; saveSettings(); });
 function buildContent() {
   buildKinds(); buildSeg(); buildTimer(); buildTopicChips();
-  buildVoices(); buildSounds();
+  buildVoices(); buildSounds(); buildMixer();
 
   const box = $("chips"); box.innerHTML = "";
   const mk = (label, onclick) => {
@@ -1101,6 +1209,142 @@ function buildVoices() {
   paint();
 }
 
+
+/* ---------------- sound mix (the mixing desk) ---------------- */
+const MIX_CH = [["narrator", "Voice", "the narrator reading aloud"], ["pop", "Choice", "each answer popping up"], ["ding", "Ding", "the right-answer chime"], ["whoosh", "Whoosh", "between scenes"], ["timer", "Timer", "the countdown ticks"], ["master", "Overall", "everything together"]];
+const MIX_STEPS = 14;
+/* Mix presets: decibels around the built-in mix (the first one IS the built-in mix, where every lever sits at 0) */
+const MIX_PRESETS = [
+  { name: "Recommended", desc: "The mix every video starts with", v: { narrator: 3.5, pop: 1, ding: 0, whoosh: 6, timer: 5, master: 0 } },
+  { name: "Balanced", desc: "Everything sits evenly: the voice leads, the effects stay polite", v: { narrator: 2, pop: 0, ding: 0, whoosh: 2, timer: 1.5, master: 0 } },
+  { name: "Voice first", desc: "For wordy videos: the narrator stands well above the effects", v: { narrator: 6, pop: -1, ding: -1, whoosh: 3, timer: 2, master: 0 } },
+  { name: "Punchy", desc: "Snappy and bright for short clips: the pops, ding and whoosh come forward", v: { narrator: 2.5, pop: 3, ding: 2, whoosh: 6, timer: 5, master: 0 } },
+  { name: "Suspense", desc: "A loud ticking countdown and a big ding when the answer lands", v: { narrator: 3, pop: 0, ding: 3, whoosh: 4, timer: 6, master: 0 } },
+  { name: "Soft", desc: "Gentle on the ears: everything lower, with no sharp edges", v: { narrator: 3, pop: -1.5, ding: -2, whoosh: 2, timer: 2.5, master: -3 } },
+];
+const mixMatches = (p) => Object.keys(p.v).every((k) => Math.abs((S.mix[k] || 0) - p.v[k]) < 0.01);
+function applyPreset(p) {
+  for (const k of Object.keys(p.v)) S.mix[k] = p.v[k];
+  document.querySelectorAll("#mixer .cap").forEach((c) => { c.classList.add("spring"); setTimeout(() => c.classList.remove("spring"), 400); });
+  paintMixer(); mixChanged(true);
+}
+let mixEl = null, mixAudio = null, mixCtx = null, mixAn = null, mixRaf = 0, mixTimer = 0;
+const fmtDb = (v) => (v > 0.04 ? "+" : v < -0.04 ? "−" : "") + Math.abs(v).toFixed(1) + " dB";
+function buildMixer() {
+  const box = $("mixer"); if (!box) return;
+  box.innerHTML = '<div class="mx-top"><span class="mx-air"><i></i>ON AIR</span><button type="button" class="mx-play" id="mx-play" aria-label="Play the mix">' +
+    '<svg class="i-play" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5l11 6.5-11 6.5z"/></svg><svg class="i-stop" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="1.5"/></svg><span>Play the mix</span></button></div>' +
+    '<div class="mx-board" id="mx-board"></div>' +
+    '<div class="mx-foot"><div class="mx-presets" id="mx-presets" role="group" aria-label="Mix presets"></div><button type="button" class="mx-reset" id="mx-reset">Reset all</button><span class="mx-hint">Changes apply when you press play.</span></div>';
+  const board = $("mx-board"); mixEl = box;
+  MIX_CH.forEach(([k, name, sub], i) => {
+    if (i === 5) { const d = document.createElement("div"); d.className = "mx-div"; board.appendChild(d); }
+    const ch = document.createElement("div"); ch.className = "ch"; ch.dataset.k = k;
+    ch.innerHTML = '<div class="ch-db"></div><div class="ch-body"><div class="leds">' + '<span></span>'.repeat(MIX_STEPS) + '</div>' +
+      '<div class="rail" role="slider" tabindex="0" aria-label="' + name + '" aria-valuemin="-6" aria-valuemax="6" aria-valuestep="0.5"><div class="slot"></div>' +
+      [6, 3, 0, -3, -6].map((v) => '<div class="tk' + (v === 0 ? " z" : "") + '" style="top:' + mixY(v) + '"><b>' + (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v) + '</b></div>').join("") +
+      '<div class="cap"></div></div></div><div class="ch-name">' + name + '<small>' + sub + '</small></div>';
+    board.appendChild(ch);
+    wireFader(ch, k);
+  });
+  $("mx-play").onclick = () => (mixAudio ? stopMix() : playMix());
+  const pb = $("mx-presets");
+  MIX_PRESETS.forEach((p, i) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "mx-preset"; b.dataset.i = i; b.textContent = p.name; b.title = p.desc; b.setAttribute("aria-pressed", "false");
+    b.onclick = () => applyPreset(p); pb.appendChild(b);
+  });
+  $("mx-reset").onclick = () => applyPreset(MIX_PRESETS[0]);
+  paintMixer();
+}
+const mixY = (db) => "calc(10px + (100% - 20px) * " + ((6 - db) / 12).toFixed(4) + ")";
+function paintMixer() {
+  document.querySelectorAll("#mixer .ch").forEach((ch) => {
+    const k = ch.dataset.k, v = S.mix[k] || 0;
+    ch.querySelector(".cap").style.top = mixY(v);
+    ch.querySelector(".ch-db").textContent = fmtDb(v);
+    const r = ch.querySelector(".rail"); r.setAttribute("aria-valuenow", String(v)); r.setAttribute("aria-valuetext", fmtDb(v));
+    paintLeds(ch, (v + 6) / 12);
+  });
+  const any = Object.values(S.mix).some((x) => Math.abs(x) > 0.01); const rs = $("mx-reset"); if (rs) rs.disabled = !any;
+  document.querySelectorAll("#mx-presets .mx-preset").forEach((b) => b.setAttribute("aria-pressed", String(mixMatches(MIX_PRESETS[+b.dataset.i]))));
+}
+function paintLeds(ch, frac, live) {
+  const n = Math.round(frac * MIX_STEPS);
+  ch.querySelectorAll(".leds span").forEach((s, i) => {
+    s.className = i < n ? (live ? "on" + (i >= MIX_STEPS - 4 ? " hi" : "") : "idle") : "";
+  });
+}
+function wireFader(ch, k) {
+  const rail = ch.querySelector(".rail"), cap = ch.querySelector(".cap");
+  const setFrom = (clientY) => {
+    const r = rail.getBoundingClientRect(), pad = 10;
+    const f = Math.min(1, Math.max(0, (clientY - r.top - pad) / (r.height - 2 * pad)));
+    let db = Math.round((6 - f * 12) * 2) / 2;
+    if (Math.abs(db) <= 0.5 && Math.abs(6 - f * 12) < 0.45) db = 0;   // the lever clicks into the middle
+    if (db !== S.mix[k]) { S.mix[k] = db; paintMixer(); }
+  };
+  rail.addEventListener("pointerdown", (e) => { rail.setPointerCapture(e.pointerId); rail.classList.add("drag"); setFrom(e.clientY); e.preventDefault(); });
+  rail.addEventListener("pointermove", (e) => { if (rail.classList.contains("drag")) setFrom(e.clientY); });
+  const end = () => { if (rail.classList.contains("drag")) { rail.classList.remove("drag"); mixChanged(true); } };
+  rail.addEventListener("pointerup", end); rail.addEventListener("pointercancel", end);
+  rail.addEventListener("dblclick", () => { S.mix[k] = 0; cap.classList.add("spring"); setTimeout(() => cap.classList.remove("spring"), 400); paintMixer(); mixChanged(true); });
+  rail.addEventListener("keydown", (e) => {
+    const step = { ArrowUp: 0.5, ArrowRight: 0.5, ArrowDown: -0.5, ArrowLeft: -0.5, PageUp: 2, PageDown: -2 }[e.key];
+    if (step !== undefined) S.mix[k] = Math.max(-6, Math.min(6, (S.mix[k] || 0) + step));
+    else if (e.key === "Home" || e.key === "0") S.mix[k] = 0;
+    else if (e.key === "End") S.mix[k] = -6;
+    else return;
+    e.preventDefault(); paintMixer(); mixChanged(false);
+  });
+}
+function mixChanged(settled) {
+  saveSettings(); renderSummary();
+  if (settled) { clearTimeout(mixTimer); if (mixAudio) mixTimer = setTimeout(playMix, 250); }   // while it plays, letting go of a lever replays the mix with the new levels
+}
+function stopMix() {
+  clearTimeout(mixTimer);
+  if (mixAudio) { try { mixAudio.pause(); } catch (e) {} mixAudio = null; }
+  cancelAnimationFrame(mixRaf); mixRaf = 0;
+  if (mixEl) { mixEl.classList.remove("playing", "loading"); $("mx-play").querySelector("span").textContent = "Play the mix"; $("mx-play").setAttribute("aria-label", "Play the mix"); paintMixer(); }
+}
+function playMix() {
+  stopSample(); stopMix();
+  const q = new URLSearchParams({ narrator: S.mix.narrator, pop: S.mix.pop, ding: S.mix.ding, whoosh: S.mix.whoosh, timer: S.mix.timer, master: S.mix.master, timer_sound: S.timerSound || "ticks", pop_sound: S.popSound || "pop", voice: S.voice || "", t: String(Date.now()) });
+  const a = new Audio("/api/mix-preview?" + q.toString()); a.crossOrigin = "anonymous";
+  mixAudio = a; mixEl.classList.add("loading"); $("mx-play").querySelector("span").textContent = "Loading";
+  const mine = () => mixAudio === a;
+  a.addEventListener("playing", () => {
+    if (!mine()) return;
+    mixEl.classList.remove("loading"); mixEl.classList.add("playing"); $("mx-play").querySelector("span").textContent = "Stop"; $("mx-play").setAttribute("aria-label", "Stop the mix");
+    meterStart(a, mine);
+  });
+  a.addEventListener("ended", () => { if (mine()) stopMix(); });
+  a.addEventListener("error", () => { if (mine()) stopMix(); });
+  a.play().catch(() => { if (mine()) stopMix(); });
+}
+function meterStart(a, mine) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  try {
+    mixCtx = mixCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (mixCtx.state === "suspended") mixCtx.resume();
+    const src = mixCtx.createMediaElementSource(a), an = mixCtx.createAnalyser(); an.fftSize = 512;
+    src.connect(an); an.connect(mixCtx.destination); mixAn = an;
+  } catch (e) { mixAn = null; return; }
+  const buf = new Uint8Array(mixAn.fftSize); let smooth = 0;
+  const loop = () => {
+    if (!mine()) return;
+    mixAn.getByteTimeDomainData(buf);
+    let sum = 0; for (let i = 0; i < buf.length; i++) { const x = (buf[i] - 128) / 128; sum += x * x; }
+    const lvl = Math.min(1, Math.sqrt(sum / buf.length) * 4.2); smooth = Math.max(lvl, smooth * 0.82);
+    document.querySelectorAll("#mixer .ch").forEach((ch, i) => {
+      const k = ch.dataset.k, g = Math.pow(10, (S.mix[k] || 0) / 20), wob = 0.85 + 0.15 * Math.sin(performance.now() / (170 + i * 55) + i);
+      paintLeds(ch, Math.min(1, smooth * g * wob), true);
+    });
+    mixRaf = requestAnimationFrame(loop);
+  };
+  mixRaf = requestAnimationFrame(loop);
+}
+
 /* ---------------- timer sounds and choice sounds ---------------- */
 const PAGE_LOADED = Date.now();   // previews are fetched fresh after a reload, never from an old cached copy
 function playSound(url, name, btn) {
@@ -1165,7 +1409,7 @@ function buildLooks() {
   };
   CFG.groups.forEach((gname) => {
     const items = CFG.looks.filter((l) => l.group === gname);
-    if (items.length) group(gname, (g) => items.forEach((l) => add(g, l.key, l.title, '<img loading="lazy" alt="" src="/static/looks/' + l.key + '.jpg">')));
+    if (items.length) group(gname, (g) => items.forEach((l) => add(g, l.key, l.title, '<img loading="lazy" alt="" src="/static/looks/' + l.key + '.jpg?v=4">')));
   });
   group("Let it choose", (g) => add(g, "random", "Surprise me", '<div class="rbox">?</div>'));
   paint();
@@ -1210,14 +1454,19 @@ function buildSite() {
     '<g class="part part-header"><rect class="shape" x="18" y="22" width="234" height="92" rx="6"/><g class="inside"><rect x="40" y="42" width="190" height="9" rx="4.5" fill="#fff"/><rect x="58" y="62" width="154" height="9" rx="4.5" fill="#fff"/><rect x="80" y="82" width="110" height="9" rx="4.5" fill="#ff4eb2"/></g></g>' +
     '<g class="part part-clip"><rect class="shape" x="48" y="134" width="174" height="92" rx="10"/><g class="inside"><circle cx="170" cy="164" r="11" fill="#ffeebd"/><path d="M48 214q40-34 80-8t94-12v24q0 6-6 6H54q-6 0-6-6z" fill="#4a3c7e"/></g></g>' +
     bars + '<g class="part part-circle"><circle class="shape" cx="135" cy="452" r="17"/><g class="inside"><text x="135" y="460" text-anchor="middle" font-family="sans-serif" font-weight="800" font-size="22" fill="#ff4eb2">1</text></g></g>' +
-    '<image class="paint" href="' + (look ? "/static/looks/hd/" + look.key + ".webp" : "") + '" width="270" height="480" preserveAspectRatio="xMidYMid slice"/>' +
     builder(0, 34, 132) + builder(1, 52, 474) + builder(2, 236, 244) + builder(3, 244, 330) + builder(4, 200, 474) + "</svg>";
   return el;
 }
 const STAGE_CAPS = ["Writing your script", "Recording the narration", "Finding footage for each question", "Building the scenes", "Mixing the sound and finishing"];
 let site = null;
 function stageOf(f) { return f < 0.07 ? 0 : f < 0.14 ? 1 : f < 0.40 ? 2 : f < 0.90 ? 3 : 4; }
+function buildFx(_unused, glow) {   // the phone's glow comes in after the video is finished, just before it appears
+  const ph = document.querySelector(".phone");
+  if (ph) ph.classList.toggle("glow", glow);
+}
+const glowOn = (on) => buildFx(on, false);
 function startBuild() {
+  glowOn(true);
   site = buildSite();
   swapScreen(site);
   updateBuild(0.02, "");
@@ -1235,7 +1484,6 @@ function updateBuild(frac, msg) {
   part(".part-header", st >= 1); part(".part-circle", st >= 2); part(".part-clip", st >= 3);
   const barsDone = st > 3 ? 4 : st === 3 ? Math.min(3, Math.floor(((frac - 0.40) / 0.50) * 4)) : 0;
   site.querySelectorAll(".part-bar").forEach((b, i) => b.classList.toggle("done", i < barsDone || st > 3));
-  site.querySelector(".paint").style.opacity = st === 4 ? "0.92" : "0";
 }
 
 
@@ -1683,7 +1931,7 @@ $("go").addEventListener("click", async () => {
   try {
     const r = await fetch("/api/generate", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: S.kind, story_mode: S.storyMode, topic: topic(), questions: customData ? Math.min(10, Math.max(3, qCount())) : S.questions, custom: customData, colors: S.colors, voice: S.voice, timer_sound: S.timerSound, pop_sound: S.popSound, categories: [...S.cats], style: S.look,
+      body: JSON.stringify({ kind: S.kind, story_mode: S.storyMode, topic: topic(), questions: customData ? Math.min(10, Math.max(3, qCount())) : S.questions, custom: customData, colors: S.colors, voice: S.voice, timer_sound: S.timerSound, pop_sound: S.popSound, mix: S.mix, categories: [...S.cats], style: S.look,
         think_seconds: fmt().think_default ? thinkFor(fmt()) : null, watermark_on: S.wmOn, watermark_platform: S.wmPlat, watermark_handle: S.wmHandle }),
     });
     if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || "The request failed. Try again."); }
@@ -1694,7 +1942,7 @@ $("go").addEventListener("click", async () => {
     $("err").textContent = e.message;
     stopClock();
     $("progress").style.display = "none";
-    site = null; showLookPreview();
+    site = null; glowOn(false); showLookPreview();
   } finally {
     setBusy(false);
   }
@@ -1722,16 +1970,25 @@ async function resumeJob() {
   if (job.status === "error") { forgetJob(); $("err").textContent = job.error || "The video failed."; return; }
   setBusy(true); $("progress").style.display = "block"; startBuild(); startClock(saved.t0); setProgress(job.progress || 0.02, job.message);
   try { await poll(saved.id); }
-  catch (e) { $("err").textContent = e.message; stopClock(); $("progress").style.display = "none"; site = null; showLookPreview(); }
+  catch (e) { $("err").textContent = e.message; stopClock(); $("progress").style.display = "none"; site = null; glowOn(false); showLookPreview(); }
   finally { setBusy(false); }
 }
-function finish(job) {
+async function finish(job) {
   stopClock();
   $("progress").style.display = "none";
-  site = null;
   const v = document.createElement("video");
-  v.src = job.video_url; v.controls = true; v.playsInline = true; v.autoplay = true;
-  swapScreen(v); v.play().catch(() => {});
+  v.src = job.video_url; v.controls = true; v.playsInline = true; v.preload = "auto";
+  buildFx(true, true);   // finished: the glow starts now
+  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  await Promise.all([
+    new Promise((res) => { v.addEventListener("loadeddata", res, { once: true }); v.addEventListener("error", res, { once: true }); setTimeout(res, 6000); }),   // the builders stay until the video can play
+    new Promise((res) => setTimeout(res, calm ? 0 : 5000)),   // and the glow always runs for 5 seconds
+  ]);
+  site = null;
+  const scr = $("screen");
+  [...scr.children].forEach((c) => { if (c !== v) c.remove(); });   // the finished video simply takes the screen's place
+  scr.appendChild(v); v.play().catch(() => {});
+  buildFx(false, false);
   $("caption").textContent = "Your video";
   $("dl-icon").href = job.video_url; $("dl-icon").hidden = false;
   $("qlist").innerHTML = job.questions.map((q) => "<li>" + esc(q.question) + " <b>" + esc(q.answer) + "</b> <i>(footage search: " + esc(q.footage || "?") + ")</i></li>").join("");

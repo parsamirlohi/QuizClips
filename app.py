@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from config import BASE, ENV_STATUS, OUTPUT_DIR, env, is_mock
+from config import BASE, ENV_STATUS, OUTPUT_DIR, env, flog, is_mock
 from videos import has_video_key
 from pipeline import build_quiz
 import audio
@@ -57,6 +57,7 @@ class GenerateRequest(BaseModel):
     voice: str = Field(default="en-US-AriaNeural", max_length=60)
     timer_sound: str = Field(default="ticks", max_length=20)   # one of the ids in /api/config "timer_sounds"
     pop_sound: str = Field(default="pop", max_length=20)         # one of the ids in /api/config "pop_sounds"
+    mix: dict[str, float] = Field(default_factory=dict, max_length=8)   # Mix sliders in dB: narrator, pop, ding, whoosh, timer, master (clamped to +-6)
     categories: list[int] = Field(default_factory=list, max_length=24)  # empty = mix of all
     style: str = Field(default=looks.DEFAULT, max_length=40)  # a look key from /api/config, or "random"
     watermark_on: bool = True
@@ -162,10 +163,10 @@ def run_job(job_id: str, req: GenerateRequest):
         colors = req.colors   # the person's own colours apply to every video
         if req.kind == "trivia":
             result = build_quiz(req.questions, req.voice, progress, cats, watermark_text(req), req.style, custom, colors,
-                                req.timer_sound, req.pop_sound)
+                                req.timer_sound, req.pop_sound, req.mix)
         else:
             result = formats.build_video(req.kind, req.topic, req.questions, req.voice, progress, watermark_text(req),
-                                         req.style, colors, custom, req.story_mode, req.timer_sound, req.pop_sound)
+                                         req.style, colors, custom, req.story_mode, req.timer_sound, req.pop_sound, req.mix)
         timing_report()
         job.update(status="done", progress=1.0, message="Done!", video_url=f"/output/{result['file']}",
                    questions=result["questions"], duration=result["duration"])
@@ -248,6 +249,24 @@ def sound_preview(kind: str, id: str):
     except ValueError:
         raise HTTPException(400, "Unknown sound.")
     return FileResponse(path, media_type="audio/wav", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/mix-preview")
+def mix_preview(narrator: float = 0.0, pop: float = 0.0, ding: float = 0.0, whoosh: float = 0.0, timer: float = 0.0, master: float = 0.0,
+                timer_sound: str = "ticks", pop_sound: str = "pop", voice: str = ""):
+    """A whole-video sound sample at the person's Mix settings (decibels), for the Mix panel's Play button."""
+    clip = None
+    try:
+        vid = voice or env("TTS_VOICE", "en-US-AriaNeural")
+        path, _ = tts.preview_file(vid)
+        clip = audio.decode_voice(path)
+    except Exception as e:   # no network or an unknown voice: the sample just plays without the narrator
+        flog(f"[mix] preview without narration: {str(e)[:120]}")
+    try:
+        p = audio.mix_preview({"narrator": narrator, "pop": pop, "ding": ding, "whoosh": whoosh, "timer": timer, "master": master}, timer_sound, pop_sound, clip, voice or "")
+    except ValueError:
+        raise HTTPException(400, "Unknown sound.")
+    return FileResponse(p, media_type="audio/wav", headers={"Cache-Control": "no-cache"})
 
 
 KEEP_VIDEOS = int(env("MAX_KEEP_VIDEOS", "10") or 0)   # how many of the newest videos stay in the output folder; 0 keeps them all (all video types)

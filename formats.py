@@ -486,7 +486,7 @@ def _themed_intro(kind, topic, title, used, scene_terms=()):
 
 def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", progress=lambda msg, frac: None,
                 watermark: str = "", style: str = looks.DEFAULT, colors=None, custom=None, mode: str = "path",
-                timer_sound: str = "ticks", pop_sound: str = "pop") -> dict:
+                timer_sound: str = "ticks", pop_sound: str = "pop", mix=None) -> dict:
     t_begin = time.time()
     render.WATERMARK = watermark or ""
     look = looks.with_colors(looks.resolve(style), colors)
@@ -590,7 +590,7 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
 
         progress("Mixing audio and finishing...", 0.92)
         audio_wav = job_dir / "audio.wav"
-        mixer.save(audio_wav, total)
+        mixer.save(audio_wav, total, mix)
         video_only = job_dir / "video.mp4"
         concat_videos(seg_paths, video_only, job_dir)
         name = f"quiz_{time.strftime('%Y%m%d_%H%M%S')}.mp4"

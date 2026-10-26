@@ -3,6 +3,7 @@
 Layers per scene:  animated marble background  ->  framed stock clip  ->  Pillow overlay (header, bars, circle ...).
 """
 import math
+import re
 import random
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -71,7 +72,7 @@ BAR_STYLES = {
 CLIP = (215, 585, 865, 935)   # centred between the question box and the first answer box
 HEADER = (56, 64, 1024, 500)
 BAR_Y0, BAR_STEP, BAR_H = 1010, 172, 136
-NUM_C = (540, 1745)
+NUM_C = (540, 1780)   # centred between the last answer box and the bottom of the screen
 
 _FONTS = [
     str(ASSETS_DIR / "fonts" / "LilitaOne-Regular.ttf"),
@@ -256,8 +257,18 @@ def _circle(label, reveal, urgent, hot):
     return c
 
 
-def _number_circle(img, label, reveal, timer, think, urgent):
-    cx, cy = NUM_C
+def _num_cy(n_choices, bar_dy):
+    """Where the number circle goes: halfway between the bottom of the last answer box and the bottom of the screen, whatever the
+    video type and however many answers it has."""
+    k = float(env("BAR_SCALE", "0.891"))
+    last_bottom = BAR_Y0 + (max(1, n_choices) - 1) * BAR_STEP + BAR_H / 2 + bar_dy + 68 * min(1.0, k)
+    name = WATERMARK if WATERMARK is not None else env("CHANNEL_NAME")
+    limit = 1826 if (name and name.lower() != "none") else H - 14   # with an account name shown, stop above it (previews have none)
+    return (last_bottom + limit) / 2
+
+
+def _number_circle(img, label, reveal, timer, think, urgent, n_choices=4, bar_dy=0):
+    cx, cy = NUM_C[0], _num_cy(n_choices, bar_dy)
     _place(img, _circle(label, bool(reveal), bool(urgent), tuple(HOT)), cx, cy, float(env("NUM_SCALE", "0.8")))   # the number circle, a bit smaller
 
 
@@ -398,6 +409,8 @@ def _clip_frame(img):
 
 
 def _outline_label(img, cx, cy, text, size, fill=(255, 255, 255)):
+    if re.search(r"\d+\s*/\s*\d+", str(text)):   # no x/x counter is ever shown (QUESTION 2/10, ROUND 2/5, STAGE 3/6, ...)
+        return
     _ctext(img, cx, cy, text, font(size), fill + (255,), stroke=7)
 
 
@@ -416,7 +429,7 @@ def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choice
     _place(img, _header(shown, header, lit), (hx0 + hx1) / 2, (hy0 + hy1) / 2, hscale * float(env("HEADER_SCALE", "0.964")))   # question box, same centre
     if clip:
         _clip_frame(img)
-    if label and not str(label).upper().startswith("QUESTION "):   # "QUESTION 1/10" is no longer shown
+    if label:
         _outline_label(img, 540, 566, label, 50)
 
     bar_style = "red" if theme == "red" else "purple"
@@ -440,7 +453,7 @@ def draw_scene(theme="purple", header="", lit=None, hscale=1.0, label="", choice
 
     if num_label is not False:
         _number_circle(img, str(num_label if num_label is not None else q_num), reveal, timer, think,
-                       timer is not None and timer <= 2.0)
+                       timer is not None and timer <= 2.0, len(choices), bar_dy)
 
     name = WATERMARK if WATERMARK is not None else env("CHANNEL_NAME")
     if name and name.lower() != "none":
@@ -490,7 +503,7 @@ def draw_story(theme="purple", header="", hscale=1.0, label="", choices=(), lett
             _place(img, bar, 50 + bar.width / 2, cy)
     if num_label is not False:
         _number_circle(img, str(num_label if num_label is not None else 1), False, timer, think,
-                       timer is not None and timer <= 2.0)
+                       timer is not None and timer <= 2.0, max(2, len(choices)), bar_dy)
     name = WATERMARK if WATERMARK is not None else env("CHANNEL_NAME")
     if name and name.lower() != "none":
         _ctext(img, 540, 1850, name, font(36), (255, 255, 255, 255), stroke=5)
@@ -502,7 +515,7 @@ def _emoji(code, size):
     return Image.open(ASSETS_DIR / "emoji" / f"{code}.png").convert("RGBA").resize((size, size), Image.LANCZOS)
 
 
-GRID_PITCH, GRID_TILE, GRID_Y0 = 195, 172, 700   # the 3 x 3 picture grid of the "What's missing" video
+GRID_PITCH, GRID_TILE, GRID_Y0 = 195, 172, 652   # the 3 x 3 picture grid of the "What's missing" video
 
 
 @lru_cache(maxsize=64)
@@ -546,7 +559,7 @@ def draw_missing(theme="purple", header="", label="", grid=(), hole=None, hi=Non
         else:
             _place(img, bar, 50 + bar.width / 2, cy)
     if num_label is not False:
-        _number_circle(img, str(num_label if num_label is not None else 1), False, timer, think, timer is not None and timer <= 2.0)
+        _number_circle(img, str(num_label if num_label is not None else 1), False, timer, think, timer is not None and timer <= 2.0, len(choices), bar_dy)
     name = WATERMARK if WATERMARK is not None else env("CHANNEL_NAME")
     if name and name.lower() != "none":
         _ctext(img, 540, 1850, name, font(36), (255, 255, 255, 255), stroke=5)

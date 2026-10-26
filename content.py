@@ -310,6 +310,38 @@ def _norm(a: str) -> str:
     return a
 
 
+def _plain_last(terms: list, answer: str) -> list:
+    """The searches the model wrote, then the plain thing itself ('sponge') as a last resort: a search like 'kitchen sponge
+    microscopic' can find nothing while 'sponge' finds plenty."""
+    out = list(terms)
+    plain = _norm(answer)
+    for q in (plain, plain.split()[-1] if plain.split() else ""):
+        q = q.strip()
+        if len(q) >= 3 and q.lower() not in {t.lower() for t in out}:
+            out.append(q)
+    return out[:5]
+
+
+def _with_footage(rounds: list) -> list:
+    """Put the rounds that have real footage first (at least 3 matching videos for one of their searches), then the thin ones,
+    then the ones with none: a Guess the clip round without its clip would show an abstract background instead."""
+    try:
+        import videos
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            counts = list(ex.map(lambda r: videos.availability(list(r["search"])), rounds))
+    except Exception as e:
+        flog(f"[content] could not check footage for the rounds ({str(e)[:80]})")
+        return rounds
+    if all(c < 0 for c in counts):
+        return rounds
+    for r, c in zip(rounds, counts):
+        flog(f"[content] clip round '{r['answer']}': {c} matching videos")
+    rank = lambda c: 0 if c >= 3 else 1 if c >= 1 else 2 if c == 0 else 1
+    order = sorted(range(len(rounds)), key=lambda i: (rank(counts[i]), i))   # stable: the earlier order is kept inside each group
+    return [rounds[i] for i in order]
+
+
 def _clip(topic: str, n: int) -> dict:
     recent = _recent_clip_answers()
     avoid = ", ".join(recent[-40:])
@@ -322,6 +354,8 @@ def _clip(topic: str, n: int) -> dict:
         "characters. wrong has 3 believable but different things from the same theme, max 22 characters each, so the "
         "choices are hard to tell apart when the picture is blurry. search: 3 short stock-footage search terms (1-3 words "
         "each) that find that exact thing, most specific first, no brand or real people's names.\n"
+        "Every answer must be something stock-video sites have plenty of clips of: animals, vehicles, food, places, sports, "
+        "tools, nature, buildings. Never microscopic, invisible, abstract, purely digital or very rare things.\n"
         "Keep everything family friendly.\n"
         "VARIETY: every answer must be a different thing, and do not just pick the most famous examples of the theme; mix "
         f"famous and lesser-known ones, and from different parts of the world. Variety seed: {random.randint(1000, 9999)}."
@@ -337,10 +371,12 @@ def _clip(topic: str, n: int) -> dict:
             opts = wrong[:]
             idx = random.randrange(4)
             opts.insert(idx, ans)
-            item = {"answer": ans, "options": opts, "correct_idx": idx, "search": _search(r, ans)}
+            item = {"answer": ans, "options": opts, "correct_idx": idx, "search": _plain_last(_search(r, ans), ans)}
             (stale_rounds if _norm(ans) in seen else fresh_rounds).append(item)
     random.shuffle(fresh_rounds)
-    rounds = (fresh_rounds + stale_rounds)[:n]   # never-used answers first; reused ones only if there are not enough
+    pool = fresh_rounds + stale_rounds   # never-used answers first; reused ones only if there are not enough
+    pool = _with_footage(pool)           # and rounds whose thing actually has stock footage before ones that do not
+    rounds = pool[:n]
     _need(len(rounds) >= 3)
     try:
         CLIP_RECENT_FILE.write_text(json.dumps((recent + [r["answer"] for r in rounds])[-CLIP_RECENT_KEEP:]), encoding="utf-8")
@@ -502,7 +538,8 @@ def random_topic(kind: str) -> str:
     p = (f"Invent ONE fresh, fun, specific topic for {_WHAT[kind]}. Take loose inspiration from \"{area}\" but make it "
          "something a little unexpected, not the first idea that comes to mind. It must be about real, recognisable things "
          "that a camera can film and stock-video sites have plenty of clips for (places, animals, food, sports, hobbies, "
-         "jobs, nature, technology, travel, music). No made-up scenarios, absurd mashups or invented creatures "
+         "jobs, nature, technology, travel, music). Big, ordinary, visible things only: nothing microscopic, invisible or abstract. "
+         "No made-up scenarios, absurd mashups or invented creatures "
          "(not 'a narwhal symphony flash mob'; yes 'Life as a lighthouse keeper'). Family friendly. Max 8 words. "
          "Reply with ONLY a JSON object: {\"topic\": \"...\"}")
     try:

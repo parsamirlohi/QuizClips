@@ -247,6 +247,26 @@ PIXABAY_PHOTO_API = "https://pixabay.com/api/"
 _PHOTO_CACHE: dict = {}
 
 
+def availability(queries: list) -> int:
+    """How many usable videos the best of these searches would find (the same matching the real search uses), so a round whose
+    thing has no footage can be swapped for one that does. -1 when it cannot be checked."""
+    key = env("PIXABAY_API_KEY")
+    if not key or is_mock():
+        return -1
+    best = 0
+    for q in queries:
+        try:
+            hits = [h for h in _pixabay_hits(q, key) if h.get("duration", 0) >= 4 and not _is_junk(h)]
+        except Exception:
+            return -1
+        need = need_score(q)
+        n = sum(1 for h in hits if tag_score(h, q) >= need)
+        best = max(best, n)
+        if best >= 3:
+            break
+    return best
+
+
 def _pixabay_photo_hits(q: str, key: str) -> list:
     cached = _PHOTO_CACHE.get(q)
     if cached and time.time() - cached[0] < 86400:
