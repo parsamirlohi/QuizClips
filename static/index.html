@@ -774,7 +774,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; };
 
 /* ---------------- settings (remembered in this browser) ---------------- */
-const S = { build: {}, cdata: newCData(), colors: {}, think: {}, kind: "trivia", storyMode: "path", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "", timerSound: "", popSound: "pop", soundsV: 2, mixV: 4, mix: { narrator: 3.5, pop: 1, ding: 0, whoosh: 6, timer: 5, master: 0 } };
+const S = { build: {}, cdata: newCData(), colors: {}, think: {}, kind: "trivia", storyMode: "path", topics: {}, modes: {}, questions: 5, voice: "", cats: new Set(), look: "bubblegum", wmOn: true, wmPlat: "tiktok", wmHandle: "", timerSound: "", popSound: "pop", soundsV: 2, mixV: 4, mix: { narrator: 3.5, pop: 1, ding: 0, whoosh: 6, timer: 3.5, master: 0 } };
 function newCData() {
   const rows = (n, f) => Array.from({ length: n }, f);
   return {
@@ -798,7 +798,7 @@ function loadSettings() {
       S.kind = j.kind || "trivia"; S.think = j.think || {}; S.storyMode = j.storyMode === "survive" ? "survive" : "path";
       S.build = j.build && typeof j.build === "object" ? j.build : {};
       if (j.cdata && typeof j.cdata === "object") S.cdata = Object.assign(newCData(), j.cdata);
-      S.colors = j.colors && typeof j.colors === "object" ? j.colors : {}; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.timerSound = j.soundsV === 2 ? (j.timerSound || "") : ""; S.soundsV = 2; S.popSound = j.popSound || "pop"; if ((j.mixV === 3 || j.mixV === 4) && j.mix && typeof j.mix === "object") { if (j.mix.fx !== undefined && j.mix.pop === undefined) { j.mix.pop = j.mix.fx; j.mix.ding = j.mix.fx; } for (const k of ["narrator", "pop", "ding", "whoosh", "timer", "master"]) { const n = Number(j.mix[k]); S.mix[k] = isFinite(n) ? Math.max(-6, Math.min(6, n)) : 0; } } if (j.mixV === 3) S.mix.master = Math.max(-6, Math.min(6, S.mix.master - 3)); S.cats = new Set(j.cats || []);
+      S.colors = j.colors && typeof j.colors === "object" ? j.colors : {}; S.topics = j.topics || {}; S.modes = j.modes || {}; S.questions = j.questions || 5; S.voice = j.voice || ""; S.timerSound = j.soundsV === 2 ? (j.timerSound || "") : ""; S.soundsV = 2; S.popSound = j.popSound || "pop"; if ((j.mixV === 3 || j.mixV === 4) && j.mix && typeof j.mix === "object") { if (j.mix.fx !== undefined && j.mix.pop === undefined) { j.mix.pop = j.mix.fx; j.mix.ding = j.mix.fx; } for (const k of ["narrator", "pop", "ding", "whoosh", "timer", "master"]) { const n = Number(j.mix[k]); S.mix[k] = isFinite(n) ? Math.max(-6, Math.min(6, n)) : 0; } } if (S.mix.narrator === 3.5 && S.mix.pop === 1 && S.mix.ding === 0 && S.mix.whoosh === 6 && S.mix.timer === 5 && S.mix.master === 0) S.mix.timer = 3.5; if (j.mixV === 3) S.mix.master = Math.max(-6, Math.min(6, S.mix.master - 3)); S.cats = new Set(j.cats || []);
       S.look = j.look || S.look; S.wmOn = j.wmOn !== false; S.wmPlat = j.wmPlat || "tiktok"; S.wmHandle = j.wmHandle || "";
     } else {  // older versions of this page
       S.look = localStorage.getItem("lookKey") || S.look;
@@ -1215,7 +1215,7 @@ const MIX_CH = [["narrator", "Voice", "the narrator reading aloud"], ["pop", "Ch
 const MIX_STEPS = 14;
 /* Mix presets: decibels around the built-in mix (the first one IS the built-in mix, where every lever sits at 0) */
 const MIX_PRESETS = [
-  { name: "Recommended", desc: "The mix every video starts with", v: { narrator: 3.5, pop: 1, ding: 0, whoosh: 6, timer: 5, master: 0 } },
+  { name: "Recommended", desc: "The mix every video starts with", v: { narrator: 3.5, pop: 1, ding: 0, whoosh: 6, timer: 3.5, master: 0 } },
   { name: "Balanced", desc: "Everything sits evenly: the voice leads, the effects stay polite", v: { narrator: 2, pop: 0, ding: 0, whoosh: 2, timer: 1.5, master: 0 } },
   { name: "Voice first", desc: "For wordy videos: the narrator stands well above the effects", v: { narrator: 6, pop: -1, ding: -1, whoosh: 3, timer: 2, master: 0 } },
   { name: "Punchy", desc: "Snappy and bright for short clips: the pops, ding and whoosh come forward", v: { narrator: 2.5, pop: 3, ding: 2, whoosh: 6, timer: 5, master: 0 } },

@@ -765,7 +765,7 @@ MIX_RANGE_DB = 6.0   # each Mix slider moves its sound this far up or down (deci
 # The recommended mix (decibels): what the Sound mix levers show out of the box. A video made without any Mix settings uses it too.
 # The Overall lever reads 0 at the recommended mix; this much fixed gain sits behind it so the whole video keeps the loudness it was tuned to.
 MASTER_TRIM_DB = 3.0
-RECOMMENDED_DB = {"narrator": 3.5, "pop": 1.0, "ding": 0.0, "whoosh": 6.0, "timer": 5.0, "master": 0.0}
+RECOMMENDED_DB = {"narrator": 3.5, "pop": 1.0, "ding": 0.0, "whoosh": 6.0, "timer": 3.5, "master": 0.0}
 
 
 def mix_levels(mix=None) -> dict:
@@ -816,7 +816,7 @@ def effects(timer: str = "ticks", pop_id: str = "pop", mix=None) -> dict:
     return out
 
 
-PREVIEW_VERSION = 19
+PREVIEW_VERSION = 20
 PREVIEW_GAIN = 0.92   # previews keep the real balance between the sounds (no per-sound normalising); this only sets how loud they play
 
 
