@@ -319,6 +319,7 @@ def _find_pixabay(queries: list, used: set, question: str = ""):
     key = env("PIXABAY_API_KEY")
     if not key:
         raise RuntimeError("PIXABAY_API_KEY is missing. Get a free key at pixabay.com/api/docs and put it in .env")
+    rescue = None   # a one-word search (the plain thing, 'truck') the picture check turned down: better than an abstract background
     for q in queries:
         blocked = _blocked()
         hits = [h for h in _pixabay_hits(q, key)
@@ -346,6 +347,8 @@ def _find_pixabay(queries: list, used: set, question: str = ""):
         else:
             verdict, h = _vision_check(hits, q, question, "video")
             if verdict == "reject":
+                if rescue is None and len(_words(q)) == 1:
+                    rescue = (q, _pick_best(hits, q))
                 continue
             h = h or _pick_best(hits, q)
         if not _claim(used, h["id"]):   # another scene took it a moment ago
@@ -362,6 +365,17 @@ def _find_pixabay(queries: list, used: set, question: str = ""):
         _remember(h["id"])
         flog(f"[footage]   -> picked video tagged: {h.get('tags', '')}")
         return dest, f"{q}  ->  video tags: {h.get('tags', '')[:60]}"
+    if rescue and rescue[1] and _claim(used, rescue[1]["id"]):
+        q, h = rescue
+        sizes = h.get("videos", {})
+        f = next((sizes[k] for k in ("medium", "large", "small") if sizes.get(k, {}).get("url")), None)
+        if f:
+            dest = CACHE_DIR / f"pixabay_{h['id']}.mp4"
+            if not dest.exists():
+                _download(f["url"], dest)
+            _remember(h["id"])
+            flog(f"[footage]   -> no exact match; using the closest plain '{q}' clip: {h.get('tags', '')}")
+            return dest, f"{q}  ->  video tags: {h.get('tags', '')[:60]}"
     raise RuntimeError(f"No Pixabay videos found for any of: {queries}")
 
 

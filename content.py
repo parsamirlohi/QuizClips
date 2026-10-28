@@ -322,6 +322,14 @@ def _plain_last(terms: list, answer: str) -> list:
     return out[:5]
 
 
+def _specific_searches(r: dict) -> list:
+    """The round's searches without the bare last word of a multi-word answer ('truck' for 'a de-icing truck'): that matches any
+    truck clip, so it must not count as footage for the answer itself."""
+    words = _norm(r["answer"]).split()
+    bare = words[-1].lower() if len(words) > 1 else ""
+    return [q for q in r["search"] if q.strip().lower() != bare] or list(r["search"])
+
+
 def _with_footage(rounds: list) -> list:
     """Put the rounds that have real footage first (at least 3 matching videos for one of their searches), then the thin ones,
     then the ones with none: a Guess the clip round without its clip would show an abstract background instead."""
@@ -329,7 +337,7 @@ def _with_footage(rounds: list) -> list:
         import videos
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=4) as ex:
-            counts = list(ex.map(lambda r: videos.availability(list(r["search"])), rounds))
+            counts = list(ex.map(lambda r: videos.availability(_specific_searches(r)), rounds))
     except Exception as e:
         flog(f"[content] could not check footage for the rounds ({str(e)[:80]})")
         return rounds
@@ -339,7 +347,14 @@ def _with_footage(rounds: list) -> list:
         flog(f"[content] clip round '{r['answer']}': {c} matching videos")
     rank = lambda c: 0 if c >= 3 else 1 if c >= 1 else 2 if c == 0 else 1
     order = sorted(range(len(rounds)), key=lambda i: (rank(counts[i]), i))   # stable: the earlier order is kept inside each group
-    return [rounds[i] for i in order]
+    ordered = [rounds[i] for i in order]
+    have = [rounds[i] for i in order if counts[i] != 0]
+    if len(have) >= 6:   # rounds with no matching footage are dropped when there are enough others (they would show a random background)
+        for i in order:
+            if counts[i] == 0:
+                flog(f"[content] dropped clip round '{rounds[i]['answer']}': no matching footage")
+        return have
+    return ordered
 
 
 def _clip(topic: str, n: int) -> dict:
