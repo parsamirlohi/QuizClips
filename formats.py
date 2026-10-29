@@ -563,8 +563,9 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
             render_segment(bg if has_clip else None, frames, dur, job_dir / f"seg_{si:02d}.mp4", job_dir,
                            full=full_bg, look=look_info, pixel=s.get("pixel"))
             if has_gap(si):   # everything leaves the screen for a moment: just the background, while the whoosh plays
+                keep = bg if s["t"] == "clip" else None   # Guess the clip: the footage IS the background, so it stays (sharp) while the text leaves
                 render_segment(bg if has_clip else None, [(0.0, "empty", {})], GAP, job_dir / f"gap_{si:02d}.mp4", job_dir,
-                               full=None, look=look_info, hide_clip=True)   # a full-screen video (the intro) goes away with its text
+                               full=keep, look=look_info, hide_clip=True)   # a full-screen video (the intro) goes away with its text
 
         progress("Finding footage and rendering...", 0.14)
         with ThreadPoolExecutor(max_workers=1) as tts_pool:
