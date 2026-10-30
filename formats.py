@@ -235,7 +235,7 @@ def _plan_clip(spec, clips, sfx):
     # still blocky right up to the reveal so it stays hard to guess; it only becomes clear when the answer shows
     spec["pixel"] = [(0.0, 64), (t0 + 0.1 * THINK_WYR, 48), (t0 + 0.22 * THINK_WYR, 36), (t0 + 0.34 * THINK_WYR, 28),
                      (t0 + 0.46 * THINK_WYR, 22), (t, 1)]   # 22 stays for the last half of the thinking time
-    t += 0.5 + len(cr) / SR + 1.2
+    t += 0.5 + len(cr) / SR + 1.2   # (the real end of a round is set by pause_after in formats.py / pipeline.py)
     return frames, t, events, False
 
 
@@ -291,7 +291,7 @@ def _plan_end(spec, clips, sfx):
 
 
 # Scenes that finish a round (the first half of a would-you-rather or a story step flows straight into the second half)
-GAP = render.frame_ceil(float(env("TRANSITION_SECONDS", "1.6")))   # between two scenes only the background shows for this long
+from pipeline import GAP   # the same transition length as every other video type
 ROUND_ENDS = {"pq", "card", "wyr_b", "story_b", "odd", "clip", "missing"}
 
 PLANNERS = {"title": _plan_title, "pq": _plan_personality_q, "card": _plan_card, "wyr_a": _plan_wyr_a,
@@ -563,9 +563,9 @@ def build_video(kind: str, topic: str, n: int, voice: str = "en-US-AriaNeural", 
             render_segment(bg if has_clip else None, frames, dur, job_dir / f"seg_{si:02d}.mp4", job_dir,
                            full=full_bg, look=look_info, pixel=s.get("pixel"))
             if has_gap(si):   # everything leaves the screen for a moment: just the background, while the whoosh plays
-                keep = bg if s["t"] == "clip" else None   # Guess the clip: the footage IS the background, so it stays (sharp) while the text leaves
+                # a full-screen footage scene (the intro, Guess the clip): the footage stays and carries on playing while only the text leaves
                 render_segment(bg if has_clip else None, [(0.0, "empty", {})], GAP, job_dir / f"gap_{si:02d}.mp4", job_dir,
-                               full=keep, look=look_info, hide_clip=True)   # a full-screen video (the intro) goes away with its text
+                               full=full_bg, look=look_info, hide_clip=True, skip=render.frames_for(dur) / render.FPS)   # a full-screen video (the intro) goes away with its text
 
         progress("Finding footage and rendering...", 0.14)
         with ThreadPoolExecutor(max_workers=1) as tts_pool:

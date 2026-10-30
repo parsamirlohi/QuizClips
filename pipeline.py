@@ -93,8 +93,8 @@ def _plan_challenge(clip, sfx):
     return frames, dur, events, False
 
 
-GAP = render.frame_ceil(float(env("TRANSITION_SECONDS", "1.6")))   # between two scenes only the background shows for this long
-PAUSE_AFTER = 2.0   # seconds of quiet, with the answer still on screen, between one round and the next
+GAP = render.frame_ceil(float(env("TRANSITION_SECONDS", "1.0")))   # between two scenes only the text is gone for this long (the whoosh starts it); the same for every video type
+PAUSE_AFTER = float(env("PAUSE_AFTER_SECONDS", "1.5"))   # seconds from the narrator finishing the answer until the whoosh; the same for every video type
 
 
 def pause_after(frames, events, pause: float = PAUSE_AFTER) -> float:
@@ -251,7 +251,8 @@ def build_quiz(n_questions: int = 5, voice: str = "en-US-AriaNeural", progress=l
                            full=full_bg, look=look_info)
             if si < len(kinds) - 1:   # everything leaves the screen for a moment: just the background, while the whoosh plays
                 render_segment(bg if has_clip else None, [(0.0, "empty", {})], GAP, job_dir / f"gap_{si:02d}.mp4", job_dir,
-                               full=None, look=look_info, hide_clip=True)   # a full-screen video (the intro) goes away with its text
+                               full=full_bg, look=look_info, hide_clip=True,   # the full-screen intro video stays and carries on; only its text leaves
+                               skip=render.frames_for(dur) / render.FPS)
 
         with ThreadPoolExecutor(max_workers=1) as tts_pool:
             box["tts"] = tts_pool.submit(synthesize_all, texts, voice)
