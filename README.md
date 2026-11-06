@@ -1,12 +1,32 @@
 # Quizclips
 
-Click **Generate** and get a new vertical (1080x1920) trivia quiz video for TikTok:
+Turn a topic into a finished vertical (1080x1920) quiz video for TikTok, Reels and Shorts. Pick a video type, type a topic (or leave it blank for a surprise) and click **Generate**. Quizclips writes the script, finds matching stock footage, records the narration, mixes the sound and renders the video.
 
-- Fresh questions every time (it remembers past ones and avoids repeats)
-- The correct answer lands on a different letter each time (A-D, never the same twice in a row)
-- A Pixabay stock video behind each question, searched from the question's topic
-- AI narration reads the question and each choice, then announces the answer
-- A "bing" sound on the reveal, with a countdown tick before it
+**Live site:** _coming soon_ (link goes here)
+**Demo video:** _coming soon_ (drag an `.mp4` into this file on GitHub to embed it here)
+
+## What it does
+
+- **Nine video types**: trivia, personality quiz, would you rather, quest ("choose your path" and "would you survive?"), rankings, fun facts, odd one out, guess the clip, and what's missing (see [Video types](#video-types)).
+- **Footage that fits the question**: an AI writes the footage searches, candidate clips are scored on their tags, and a vision model can reject clips that don't show the subject.
+- **Narration** with Microsoft's free neural voices, cleaned up and levelled.
+- **A sound mix desk** in the Studio page: separate levels for the narrator, choice sounds, correct-answer ding, whoosh and countdown timer, with presets and a live preview.
+- **24 looks** (backgrounds with matching header and answer-bar colours), with a phone preview that redraws as you change colours.
+- **Safety built in** for a public site: content rules, AI review of typed text, output checks, and per-visitor and per-site limits.
+- **Your own content**: every type has an editor, so you can write the questions yourself.
+
+## How it works
+
+1. **Script.** `content.py` asks a language model for the questions and the footage search terms, or uses Open Trivia DB for plain trivia.
+2. **Footage.** `videos.py` searches Pixabay (or Pexels), scores each clip's tags against the search, optionally asks a vision model to check candidates, and downloads the winner. Rounds with no good footage are swapped for ones that have it.
+3. **Voice.** `tts.py` synthesizes every line, and `audio.py` filters and levels it.
+4. **Scenes.** `render.py` draws each overlay with Pillow (question, answer bars, countdown, sticker) and uses ffmpeg to put it on the footage. Every scene is a whole number of frames, so the audio stays exactly in step.
+5. **Mix.** `audio.py` places every sound on its own track, applies the Mix levels, and limits the result.
+6. **Finish.** Scenes and transitions are joined, the audio is added, and the file is saved to `output/`.
+
+## Tech
+
+Python, FastAPI and Uvicorn, ffmpeg (through `imageio-ffmpeg`), Pillow and NumPy for the graphics and audio, Edge TTS for the voices, Pixabay for footage, and Gemini or Claude for scripts and footage searches. The web pages are plain HTML, CSS and JavaScript with no build step.
 
 ## Quick start
 
@@ -100,6 +120,14 @@ The page has a **Look** section with 24 styles (background + matching header/ans
 - Downloaded clips are cached in `cache` so repeats don't re-download.
 - Only your newest 10 finished videos are kept in `output`; older ones are deleted after each new video. Change it with `MAX_KEEP_VIDEOS=` in `.env` (0 keeps everything). Download the ones you want to keep.
 - Keep your `.env` private. Don't share it or zip it.
+
+## Deploying
+
+Run it on any small Linux server (2 vCPUs and 4 GB of RAM is comfortable):
+
+1. Install `python3-venv`, `git`, `ffmpeg` and `caddy`, clone the repo, and run `python3 -m venv venv && ./venv/bin/pip install -r requirements.txt`.
+2. Copy `.env.example` to `.env` and fill in the keys. For a public demo set the limits (`LIMIT_BURST`, `LIMIT_DAILY`, `LIMIT_SITE_DAILY`) and `TRUST_PROXY=1`. To keep a site private instead, set `QC_PASSWORD` and visitors get a login box.
+3. Run `python app.py` as a service, with `QC_HOST=127.0.0.1` and `QC_PORT=8000`, and put Caddy in front: `your-domain.example { reverse_proxy 127.0.0.1:8000 }`. Caddy gets the HTTPS certificate by itself.
 
 ## Files
 

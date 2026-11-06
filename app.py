@@ -1,6 +1,9 @@
 """Local web app: open http://localhost:8000 and click Generate."""
+import base64
 import json
+import os
 import re
+import secrets
 import threading
 import time
 import uuid
@@ -33,6 +36,22 @@ app = FastAPI(title="Quizclips")
 
 
 @app.middleware("http")
+async def password_gate(request: Request, call_next):
+    """When QC_PASSWORD is set (on a server), every request needs it: the browser shows a login box (any user name). Off on your own computer."""
+    pw = env("QC_PASSWORD")
+    if pw:
+        ok = False
+        try:
+            given = base64.b64decode(request.headers.get("authorization", "")[6:]).decode("utf-8").split(":", 1)[1]
+            ok = secrets.compare_digest(given.encode(), pw.encode())
+        except Exception:
+            ok = False
+        if not ok:
+            return Response("Password needed", status_code=401, headers={"WWW-Authenticate": 'Basic realm="Quizclips"'})
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def security_headers(request: Request, call_next):
     """Standard browser protections on every response."""
     resp = await call_next(request)
@@ -49,7 +68,7 @@ jobs: dict = {}
 current = {"id": None}
 lock = threading.Lock()
 
-
+print("hello")
 class GenerateRequest(BaseModel):
     kind: str = Field(default="trivia", pattern="^(trivia|personality|wyr|toplist|facts|story|odd|clip|missing)$")
     topic: str = Field(default="", max_length=80)  # for every type except trivia
@@ -112,6 +131,8 @@ PLATFORMS = {
     "facebook": "facebook.com/{}",
     "custom": "{}",
 }
+
+
 
 
 def watermark_text(req: GenerateRequest) -> str:
@@ -353,6 +374,8 @@ if __name__ == "__main__":
 
     print("Settings file:", ENV_STATUS["loaded_from"] or f"NOT FOUND (expected at {ENV_STATUS['path']})")
     print("Video API key:", "found" if has_video_key() else "MISSING")
-    threading.Timer(1.5, lambda: webbrowser.open("http://localhost:8000")).start()
+    host, port = env("QC_HOST", "127.0.0.1"), int(env("QC_PORT", "8000"))   # on a server: QC_HOST=0.0.0.0
+    if host in ("127.0.0.1", "localhost"):
+        threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{port}")).start()
     threading.Thread(target=tts.prewarm_previews, daemon=True).start()
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host=host, port=port)

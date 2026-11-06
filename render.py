@@ -828,8 +828,11 @@ BRAND_POS = (44, 1673)   # bottom left: clear of the answer bars, the number cir
 
 
 def make_overlay(kind, args):
-    if kind == "empty":   # nothing on the screen: only the background shows (the gap between two scenes)
-        return Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    if kind == "empty":   # nothing on the screen but the sticker: only the background shows (the gap between two scenes)
+        img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        if env("BRAND_MARK", "1") != "0":
+            img.alpha_composite(_brand_mark(), BRAND_POS)
+        return img
     if kind == "hook":
         img = draw_hook(**args)
     elif kind == "card":
@@ -976,7 +979,7 @@ def _safe_fit(src: str, bg: str, dst: str = "v") -> str:
             + f"[{src}]scale={fw}:{fh}:flags=bicubic,format=yuv420p[sff];[sfb]format=yuv420p[sfc];[sfc][sff]overlay={x}:{y}[{dst}]")
 
 
-def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=None, pixel=None, hide_clip=False):
+def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=None, pixel=None, hide_clip=False, skip=0.0):
     """frame_specs: list of (start_time, kind, args). Each overlay holds until the next one starts.
     clip: path of a stock video shown inside the frame, or None.
     Everything is placed on whole video frames: each overlay picture starts on a frame and lasts a whole number of them, and
@@ -1094,7 +1097,8 @@ def render_segment(clip, frame_specs, duration, out_path, tmp, full=None, look=N
                 vf += f"[px{k}]{tr}{scl},setsar=1[pz{k}];"
             vf += "".join(f"[pz{k}]" for k in range(n)) + f"concat=n={n}:v=1:a=0[bg];"
         elif full:
-            vf = ("[0:v]scale=1080:1920:force_original_aspect_ratio=increase:flags=bicubic,crop=1080:1920,setsar=1,"
+            cont = f"trim=start={skip:.4f},setpts=PTS-STARTPTS," if skip > 0 and not str(full).lower().endswith((".jpg", ".jpeg", ".png", ".webp")) else ""   # carries on from where the scene before stopped
+            vf = (f"[0:v]{cont}scale=1080:1920:force_original_aspect_ratio=increase:flags=bicubic,crop=1080:1920,setsar=1,"
                   "framerate=fps=30,eq=brightness=-0.10:saturation=0.9[bg];")
         else:
             vf = "[0:v]scale=1080:1920:flags=bicubic,setsar=1,framerate=fps=30[bg];"
