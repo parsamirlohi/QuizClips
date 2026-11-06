@@ -60,12 +60,14 @@ About 7,500 lines of Python.
 ## Run it locally
 
 1. Install Python 3.10 or newer.
-2. Get a free Pixabay key at [pixabay.com/api/docs](https://pixabay.com/api/docs/).
+2. Get your free keys:
+   - **Pixabay** (required, for the stock footage): [pixabay.com/api/docs](https://pixabay.com/api/docs/).
+   - **Gemini** (needed for every video type except trivia, and it makes the footage match better): [aistudio.google.com/apikey](https://aistudio.google.com/apikey), free and no card.
 3. Start the app:
    - **Mac:** double-click `run_mac.command` (or run `./run_mac.command`).
    - **Windows:** double-click `run_windows.bat`.
    - **Terminal:** `pip install -r requirements.txt`, then `python tools/set_key.py`, then `python app.py`.
-4. The first run asks for your key and saves it to `.env`. Your browser opens http://localhost:8000.
+4. The first run asks for your key and saves it to `.env`. To add the Gemini key afterwards, run `python tools/set_key.py` again and choose the Gemini option. Your browser opens http://localhost:8000.
 
 Videos are saved in `output/`. Optional keys (Gemini for the non-trivia types, Anthropic for better questions) and all other settings are in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
