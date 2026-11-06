@@ -6,7 +6,7 @@ from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
 # Everything the app writes (videos, caches, logs, sign-ups) lives under DATA_DIR. It is the project folder on your own
-# computer; on a server set DATA_DIR to a mounted volume so nothing is lost when the app is updated (see DEPLOY.md).
+# computer; on a server set DATA_DIR to a mounted volume so nothing is lost when the app is updated (see docs/DEPLOYMENT.md).
 DATA_DIR = Path(os.environ.get("DATA_DIR") or BASE)
 OUTPUT_DIR = DATA_DIR / "output"
 CACHE_DIR = DATA_DIR / "cache"

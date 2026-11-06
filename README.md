@@ -1,156 +1,103 @@
 # Quizclips
 
-Turn a topic into a finished vertical (1080x1920) quiz video for TikTok, Reels and Shorts. Pick a video type, type a topic (or leave it blank for a surprise) and click **Generate**. Quizclips writes the script, finds matching stock footage, records the narration, mixes the sound and renders the video.
+**Turn a topic into a finished vertical quiz video.** Pick a video type, type a topic (or leave it blank for a surprise) and click **Generate**. Quizclips writes the script, finds matching stock footage, records the narration, mixes the sound and renders a 1080x1920 MP4 ready for TikTok, Reels and Shorts.
 
-**Live site:** _coming soon_ (link goes here)
-**Demo video:** _coming soon_ (drag an `.mp4` into this file on GitHub to embed it here)
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![ffmpeg](https://img.shields.io/badge/ffmpeg-007808?logo=ffmpeg&logoColor=white)
+![Tests](https://github.com/parsamirlohi/QuizClips/actions/workflows/tests.yml/badge.svg)
+
+**Live site:** _coming soon_
+**Demo video:** _coming soon_ (an `.mp4` dragged into this file on GitHub plays right here)
+
+![Five of the 24 looks, each showing a trivia question](docs/images/looks.jpg)
 
 ## What it does
 
-- **Nine video types**: trivia, personality quiz, would you rather, quest ("choose your path" and "would you survive?"), rankings, fun facts, odd one out, guess the clip, and what's missing (see [Video types](#video-types)).
-- **Footage that fits the question**: an AI writes the footage searches, candidate clips are scored on their tags, and a vision model can reject clips that don't show the subject.
-- **Narration** with Microsoft's free neural voices, cleaned up and levelled.
-- **A sound mix desk** in the Studio page: separate levels for the narrator, choice sounds, correct-answer ding, whoosh and countdown timer, with presets and a live preview.
-- **24 looks** (backgrounds with matching header and answer-bar colours), with a phone preview that redraws as you change colours.
-- **Safety built in** for a public site: content rules, AI review of typed text, output checks, and per-visitor and per-site limits.
-- **Your own content**: every type has an editor, so you can write the questions yourself.
+- **Nine video types:** trivia, personality quiz, would you rather, quest, rankings, fun facts, odd one out, guess the clip and what's missing ([details](docs/VIDEO_TYPES.md)).
+- **Footage that fits each question.** Clips are scored against their own tags, optionally checked by a vision model, and swapped out when nothing fits.
+- **Narration** from Microsoft's free neural voices, cleaned and levelled.
+- **A sound mix desk** with separate levels for the voice, choice sounds, correct-answer ding, whoosh and timer, presets and a live preview.
+- **24 looks** with a phone preview that redraws as you change colours.
+- **Your own content:** every type has an editor for typing the questions yourself.
+- **Built for a public site:** content rules, AI review of typed text and per-visitor and per-site limits ([details](docs/SAFETY.md)).
 
 ## How it works
 
-1. **Script.** `content.py` asks a language model for the questions and the footage search terms, or uses Open Trivia DB for plain trivia.
-2. **Footage.** `videos.py` searches Pixabay (or Pexels), scores each clip's tags against the search, optionally asks a vision model to check candidates, and downloads the winner. Rounds with no good footage are swapped for ones that have it.
-3. **Voice.** `tts.py` synthesizes every line, and `audio.py` filters and levels it.
-4. **Scenes.** `render.py` draws each overlay with Pillow (question, answer bars, countdown, sticker) and uses ffmpeg to put it on the footage. Every scene is a whole number of frames, so the audio stays exactly in step.
-5. **Mix.** `audio.py` places every sound on its own track, applies the Mix levels, and limits the result.
-6. **Finish.** Scenes and transitions are joined, the audio is added, and the file is saved to `output/`.
+1. **Script.** `content.py` asks a language model for the questions and the footage searches (plain trivia comes from Open Trivia DB).
+2. **Footage.** `videos.py` searches Pixabay, scores each clip's tags against the search, and downloads the best match. Rounds without good footage are replaced by ones that have it.
+3. **Voice.** `tts.py` synthesizes every line and `audio.py` filters and levels it.
+4. **Scenes.** `render.py` draws each overlay with Pillow and composites it over the footage with ffmpeg.
+5. **Mix.** Every sound goes on its own track, the Mix levels are applied, and a limiter protects the result.
+6. **Finish.** The scenes are joined, the audio is added and the video is saved.
+
+The full picture, with a diagram, is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Engineering highlights
+
+- **Matching footage is the hard part.** Stock-video search is loose, so results are scored on whole-word tag matches, rejected when only a generic word matches, and checked by a vision model when one is configured. If an exact subject has no footage the round is dropped or falls back to the closest plain match, never a random clip.
+- **Frame-exact timing.** Every scene is a whole number of frames, so narration and sound effects stay in step with the picture across a two-minute video.
+- **A real sound mix.** Sounds are tagged by lever and mixed as true dB changes after one loudness fit, with a clean limiter.
+- **One pacing setting for every format.** The pause after an answer and the transition length are shared, so every video type feels the same.
+- **Safety by design.** Layered rules, review of typed text, a check of everything the AI writes, rate limits and a moderation log that never stores accepted text.
+- **Deployed, not just local.** It runs on an AWS server behind Caddy with HTTPS ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)).
 
 ## Tech
 
-Python, FastAPI and Uvicorn, ffmpeg (through `imageio-ffmpeg`), Pillow and NumPy for the graphics and audio, Edge TTS for the voices, Pixabay for footage, and Gemini or Claude for scripts and footage searches. The web pages are plain HTML, CSS and JavaScript with no build step.
+| Area | Used |
+| --- | --- |
+| Backend | Python, FastAPI, Uvicorn |
+| Video and graphics | ffmpeg (via `imageio-ffmpeg`), Pillow, NumPy |
+| Audio | Edge TTS voices, custom mixer and limiter in NumPy |
+| AI | Gemini or Claude for scripts and footage searches, optional vision check |
+| Footage | Pixabay (Pexels optional) |
+| Frontend | Plain HTML, CSS and JavaScript, no build step |
+| Hosting | AWS Lightsail (Ubuntu), systemd, Caddy |
+| Tests | `unittest`, run by GitHub Actions |
 
-## Quick start
+About 7,500 lines of Python.
 
-1. Install Python 3.10 or newer from python.org (Windows: tick "Add Python to PATH").
-2. Get your free Pixabay key: sign up at pixabay.com, then open https://pixabay.com/api/docs/ while logged in. The key is shown next to `key (required)`.
+## Run it locally
+
+1. Install Python 3.10 or newer.
+2. Get a free Pixabay key at [pixabay.com/api/docs](https://pixabay.com/api/docs/).
 3. Start the app:
-   - **Mac:** double-click `run_mac.command` (if macOS blocks it, right-click, Open; or run `chmod +x run_mac.command` first).
+   - **Mac:** double-click `run_mac.command` (or run `./run_mac.command`).
    - **Windows:** double-click `run_windows.bat`.
-4. The first time, it installs what it needs, asks you to paste your key, and saves it to a `.env` file for you.
-5. Your browser opens http://localhost:8000. Pick the number of questions and a voice, then click **Generate quiz video**.
+   - **Terminal:** `pip install -r requirements.txt`, then `python tools/set_key.py`, then `python app.py`.
+4. The first run asks for your key and saves it to `.env`. Your browser opens http://localhost:8000.
 
-Next time, just double-click the same launcher. Videos are saved in the `output` folder.
-A 5-question video is about 1.5 minutes long and takes a minute or two to render.
+Videos are saved in `output/`. Optional keys (Gemini for the non-trivia types, Anthropic for better questions) and all other settings are in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
-Prefer the terminal? `pip install -r requirements.txt`, then `python tools/set_key.py`, then `python app.py`
-(use `python3` / `pip3` on a Mac).
+## Tests
 
-## Troubleshooting
+```bash
+python3 -m unittest discover tests
+```
 
-- **Banner says no key / no settings file:** it shows exactly where it looks. The file must be named `.env`
-  (not `.env.example`) and sit next to `app.py`. Run `python tools/set_key.py` to create it correctly.
-  After changing it, stop the app (Ctrl+C) and start it again.
-- **"Pixabay error 400/401":** the key was pasted wrong. Run `python tools/set_key.py` again.
-- **"Could not fetch questions":** the free question site allows one request every few seconds. Wait a bit and retry.
-- **Narration fails:** the voices come from Microsoft's free service and need an internet connection.
+The tests need no network or keys. They cover the safety rules and limits.
 
-## Video types
+## Documentation
 
-Pick a type at the top of the Create page. Everything except Trivia needs a free `GEMINI_API_KEY` in `.env`, because Gemini writes the script from your topic.
+- [Architecture](docs/ARCHITECTURE.md)
+- [Video types](docs/VIDEO_TYPES.md)
+- [Configuration](docs/CONFIGURATION.md)
+- [Safety and limits](docs/SAFETY.md)
+- [Deployment](docs/DEPLOYMENT.md)
 
-- **Trivia quiz**: multiple-choice questions with a reveal (Open Trivia DB).
-- **Personality quiz**: "Which season are you?" Questions whose choices each lead to one of four results, shown as "Mostly A, B, C, D" at the end.
-- **Would you rather**: two options, a countdown, then what each pick says about you.
-- **Quest**: you are the hero. "Choose your path" shows where both options lead; "Would you survive?" hides a few deadly traps among the decisions.
-- **Rankings**: a countdown from the last place to number one, one clip per item.
-- **Fun facts**: short surprising facts, one clip per fact.
-- **Odd one out**: four things, three belong together, viewers spot the one that doesn't.
-- **Guess the clip**: stock footage starts as big blocks and gets sharper while viewers pick what it shows.
-- **What's missing**: a grid of pictures to memorize, then one disappears. The pictures are Twemoji (CC-BY 4.0, see `assets/emoji/LICENSE.txt`) and need no AI.
+## What I'd improve next
 
-Leave the topic blank for a surprise. `content.py` writes the scripts and `formats.py` builds the videos.
+- Move video generation to a proper job queue and store finished videos in object storage, instead of in-process threads and local files.
+- Package the app with Docker and deploy automatically from GitHub.
+- Add tests for the footage matching, audio mixing and timing, not only the safety rules.
+- Add user accounts and quotas.
+- Upload finished videos to TikTok as drafts through its API.
 
-Every type also has an **I'll write it** editor, so you can type your own content (What's missing lets you pick the pictures).
+## Credits and licenses
 
-Colors can be changed for every video type. The phone preview in Studio is redrawn by `previews.py` (through `/api/preview`) as the colors change; `preview_data.py` holds the examples it shows for each look.
+- Stock footage from [Pixabay](https://pixabay.com) (credited on the site).
+- Emoji graphics are [Twemoji](https://github.com/jdecked/twemoji), CC-BY 4.0 (`assets/emoji/LICENSE.txt`).
+- Fonts Bangers and Lilita One are under the SIL Open Font License (`assets/fonts/OFL.txt`).
+- Voices from Microsoft Edge's text-to-speech service through the `edge-tts` package.
 
-## Safety and limits
-
-Built for a public site, in `safety.py` (details and settings at the top of that file and in `.env.example`):
-
-1. **Rules**: a blocklist for sexual, hateful, violent / self-harm, illegal-instruction and child-safety content, plus personal data (emails, phone numbers, links) and attempts to hijack the AI. It sees through simple tricks such as `p0rn` or `f u c k` but leaves words like "Scunthorpe" or "naked mole rat" alone.
-2. **AI review** of what people type (topic, their own questions) when a Gemini key is set. If it fails, the rules still apply.
-3. **Output check**: what the AI writes is checked before it becomes a video, and written again once if it slips. Questions from Open Trivia DB are filtered too.
-4. **Limits** (off until you set them in `.env`, for when the site is public): videos per visitor per 10 minutes and per day, a daily cap for the whole site (budget protection), and a one hour pause after repeated blocked requests. Local requests are exempt unless `STRICT_LIMITS=1`. Behind a proxy set `TRUST_PROXY=1`. With accounts, the per-visitor limits become per-plan quotas.
-5. **Log**: blocked text goes to `logs/moderation.jsonl` (rule, place, short excerpt, hashed visitor id). Accepted text is never logged.
-
-Security headers are set on every response. Run the tests with `python3 -m unittest discover tests`.
-
-## Looks
-
-The page has a **Look** section with 24 styles (background + matching header/answer-bar colours); pick one, or
-"Surprise me" for a random one each video. Your choice is remembered in the browser.
-- Backgrounds are made once, the first time a look is used (a few seconds), into `assets/backgrounds/`. Run
-  `python3 tools/make_backgrounds.py` to make them all now. Delete that folder to regenerate.
-- The two "Blurred Clip" looks use each question's own footage, blurred, as the background.
-- `looks.py` lists every look; `styles.py` / `backgrounds.py` draw them. After adding or changing one, run
-  `python3 tools/make_look_thumbs.py` to refresh the pictures in the selector, then
-  `python3 tools/make_look_loops.py --all` to refresh the animated previews (the phone and the hover loops).
-
-## Options (all go in `.env`)
-
-- `ANTHROPIC_API_KEY=` Claude writes the questions and picks footage searches that fit the topic without
-  giving away the answer. Without it, questions come from the free Open Trivia DB.
-- `GEMINI_API_KEY=` Gemini writes the footage searches so each clip matches its question (free key at
-  aistudio.google.com/apikey; run `python tools/set_key.py` and choose 3). `FOOTAGE_LLM=gemini|claude|none` picks the
-  provider; `GEMINI_MODEL=` overrides the model.
-- `blocked_clips.json` (optional): a list of Pixabay clip ids to never use, e.g. `[12345, 67890]`. The id is the
-  number in the clip's filename in `cache` (`pixabay_12345.mp4`).
-- `THINK_SECONDS=7` length of the trivia countdown before each reveal. `THINK_PERSONALITY_SECONDS=10` is the time to pick an answer in personality quizzes.
-- `VIDEO_ENCODER=h264_videotoolbox` faster rendering on a Mac (`h264_nvenc` on an NVIDIA GPU).
-- `PEXELS_API_KEY=` use Pexels instead (sharper portrait video). If both keys are set, Pexels is used; force
-  one with `VIDEO_SOURCE=pixabay`.
-- Your own bing sound: put `bing.wav` (or .mp3) in the `assets` folder.
-- Test mode: `MOCK=1` runs offline with placeholder questions, backgrounds and voice.
-
-## Notes
-
-- Pixabay allows 100 requests per minute. Each video uses about one request per question, and results are cached.
-- Pixabay has no portrait filter, so its widescreen clips are center-cropped to vertical.
-- Pixabay asks that you credit them when showing search results; the page footer does this.
-- Downloaded clips are cached in `cache` so repeats don't re-download.
-- Only your newest 10 finished videos are kept in `output`; older ones are deleted after each new video. Change it with `MAX_KEEP_VIDEOS=` in `.env` (0 keeps everything). Download the ones you want to keep.
-- Keep your `.env` private. Don't share it or zip it.
-
-## Deploying
-
-Run it on any small Linux server (2 vCPUs and 4 GB of RAM is comfortable):
-
-1. Install `python3-venv`, `git`, `ffmpeg` and `caddy`, clone the repo, and run `python3 -m venv venv && ./venv/bin/pip install -r requirements.txt`.
-2. Copy `.env.example` to `.env` and fill in the keys. For a public demo set the limits (`LIMIT_BURST`, `LIMIT_DAILY`, `LIMIT_SITE_DAILY`) and `TRUST_PROXY=1`. To keep a site private instead, set `QC_PASSWORD` and visitors get a login box.
-3. Run `python app.py` as a service, with `QC_HOST=127.0.0.1` and `QC_PORT=8000`, and put Caddy in front: `your-domain.example { reverse_proxy 127.0.0.1:8000 }`. Caddy gets the HTTPS certificate by itself.
-
-## Files
-
-| File | What it does |
-| --- | --- |
-| `run_mac.command`, `run_windows.bat` | One-click launchers (install, set key on first run, start) |
-| `tools/set_key.py` | Asks for your key and saves the `.env` file |
-| `app.py` | Web server and the Generate button |
-| `pipeline.py` | Builds one video start to finish and sets the timing |
-| `questions.py` | Gets questions, shuffles answer letters, builds video search words |
-| `videos.py` | Searches and downloads background videos (Pixabay and Pexels) |
-| `tts.py` | AI narration |
-| `audio.py` | Mixing and the bing / tick / pop sounds |
-| `render.py` | Draws the quiz graphics and renders each scene with ffmpeg |
-| `safety.py` | Content rules, AI review, visitor limits and the moderation log |
-| `tests/` | Unit tests for the safety rules and limits |
-
-### Folders
-
-| Folder | What's in it |
-| --- | --- |
-| `static/` | The website and Studio pages, styles, fonts and the look previews: pictures in `looks/`, animated loops in `looks/loops/`, the sharp question graphics in `looks/overlay/` |
-| `assets/` | Fonts, backgrounds, logo and sounds the videos use |
-| `tools/` | Optional one-off scripts (set your key, make previews, check footage, export the waitlist). Run them from the project folder, e.g. `python3 tools/export_waitlist.py` |
-| `design/` | Unused logo and favicon options, kept for reference |
-| `output/`, `cache/`, `work/` | Made videos, downloaded clips, temporary files (not in git) |
+The code is not open source: all rights reserved unless a license file says otherwise.
